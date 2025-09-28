@@ -8,11 +8,6 @@ You can install the latest development version directly from GitHub:
 pip install "git+https://github.com/itemresponsewarehouse/Python-pkg.git"
 ```
 
-Or install from PyPI (when available):
-```bash
-pip install irw_py
-```
-
 ## IMPORTANT: Redivis Authentication
 
 ## Usage Examples
