@@ -40,6 +40,23 @@ class ExploreMixin:
         ------
         ValueError
             If both sim and comp are True.
+
+        Examples
+        --------
+        >>> from irw_py import IRW
+        >>> irw = IRW()
+        >>> 
+        >>> # List all available tables
+        >>> tables = irw.list_tables()
+        >>> 
+        >>> # List tables from simulation dataset
+        >>> sim_tables = irw.list_tables(sim=True)
+        
+        >>> # List tables from competitions dataset
+        >>> comp_tables = irw.list_tables(comp=True)
+        >>> 
+        >>> # Filter tables by size
+        >>> large_tables = tables[tables["numRows"] > 10000]
         """
         if sim and comp:
             raise ValueError("Cannot set both 'sim = True' and 'comp = True'. Please choose one source.")

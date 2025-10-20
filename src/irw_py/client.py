@@ -19,8 +19,8 @@ class IRW(FetchMixin, ExploreMixin):
     --------
     >>> from irw_py import IRW
     >>> irw = IRW()
-    >>> df = irw.fetch("abortion")
-    >>> dfs = irw.fetch(["abortion", "pks_probability"], dedup=True)
+    >>> df = irw.fetch("agn_kay_2025")
+    >>> dfs = irw.fetch(["agn_kay_2025", "pks_probability"], dedup=True)
     >>> tbls = irw.list_tables()
     """
 
@@ -102,6 +102,20 @@ class IRW(FetchMixin, ExploreMixin):
         -------
         Dict[str, Any]
             Dictionary containing dataset information including names and references.
+
+        Examples
+        --------
+        >>> from irw_py import IRW
+        >>> irw = IRW()
+        >>> 
+        >>> # Get dataset information
+        >>> info = irw.get_dataset_info()
+        >>> print(info)
+        >>> 
+        >>> # Access specific dataset references
+        >>> main_datasets = info["main_datasets"]
+        >>> sim_dataset = info["simulation_dataset"]
+        >>> comp_dataset = info["competitions_dataset"]
         """
         return {
             "main_datasets": [

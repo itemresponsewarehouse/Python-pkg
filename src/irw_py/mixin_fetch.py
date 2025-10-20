@@ -57,6 +57,26 @@ class FetchMixin:
             If name is empty or if both sim and comp are True.
         TypeError
             If name is not a string or iterable of strings.
+
+        Examples
+        --------
+        >>> from irw_py import IRW
+        >>> irw = IRW()
+        >>> 
+        >>> # Fetch a single table
+        >>> df = irw.fetch("agn_kay_2025")
+        >>> 
+        >>> # Fetch multiple tables
+        >>> dfs = irw.fetch(["agn_kay_2025", "pks_probability"])
+        >>> 
+        >>> # Fetch with deduplication
+        >>> df_dedup = irw.fetch("agn_kay_2025", dedup=True)
+        >>> 
+        >>> # Fetch from simulation dataset
+        >>> df_sim = irw.fetch("gilbert_meta_3", sim=True)
+        >>> 
+        >>> # Fetch from competitions dataset
+        >>> df_comp = irw.fetch("collegefb_2021and2022", comp=True)
         """
         if not name:
             raise ValueError("name cannot be empty")
