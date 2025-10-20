@@ -1,21 +1,11 @@
-from __future__ import annotations
-from typing import Any
+"""Internal Redivis table fetching utilities."""
+
+from typing import Any, Optional
 import warnings
-import redivis
 
 
-def init_dataset(user: str, ds_ref: str):
-    """Create a Redivis dataset handle and ensure metadata is loaded."""
-    ds = redivis.user(user).dataset(ds_ref)
-    ds.get()
-    
-    setattr(ds, "_user", user)
-    setattr(ds, "_id", ds_ref)
-    return ds
-
-
-def get_table(ds: Any, name: str):
-    """Get a table handle (suppressing the 'No reference id' warning) and ensure properties."""
+def _get_table(ds: Any, name: str) -> Any:
+    """Get a table handle and ensure properties are loaded."""
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message=".*No reference id was provided for the table.*")
         tbl = ds.table(name)
@@ -26,7 +16,7 @@ def get_table(ds: Any, name: str):
         return tbl
 
 
-def classify_error(err: Exception) -> str:
+def _classify_error(err: Exception) -> str:
     """Classify Redivis-style errors for control flow."""
     payload = None
     try:
@@ -48,7 +38,7 @@ def classify_error(err: Exception) -> str:
     return "unknown"
 
 
-def format_error(err: Exception | None) -> str:
+def _format_error(err: Exception | None) -> str:
     """Pretty-print Redivis JSON error payloads when available."""
     if err is None:
         return "not found"

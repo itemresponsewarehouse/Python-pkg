@@ -19,29 +19,39 @@ The IRW tables are hosted on [Redivis](https://redivis.com), a data management p
 
     2.  After signing in, click **Allow** to grant access for the Redivis Python Client.
 
-    3.  Once authentication is successful, close the browser window. You will see the message “Authentication was successful” in console.
+    3.  Once authentication is successful, close the browser window. You will see the message "Authentication was successful" in console.
 
 **Note:** You only need to authenticate once per session. For detailed instructions, refer to the [Redivis Python Client documentation](https://apidocs.redivis.com/client-libraries/redivis-python).
 
 
 ## Usage Examples
+
 ```python
-from irw_py import IRW
+from irw_py import IRW, IRWSim, IRWComp
 
-# Initiliaze
+# Initialize main IRW client
 irw = IRW()
+# Get database information
+irw.info()  
 
-# View available methods in IRW
-dir(irw)
+# View available tables 
+tables = irw.list_tables()
+tables_with_metadata = irw.list_tables(include_metadata = True) 
 
-# View available tables in IRW
-irw.list_tables()
+# Fetch tables
+df = irw.fetch("agn_kay_2025") 
+dfs = irw.fetch(["agn_kay_2025", "pks_probability"]) # Fetch multiple tables
 
-# Fetch IRW tables
-df = irw.fetch("swmd_mokken") 
-dfs = irw.fetch(["swmd_mokken", "pks_probability"]) # Fetch multiple tables
+# Fetch simulation data
+irw_sim = IRWSim() # initialize IRW simulation client
+sim_tables = irw_sim.list_tables()
+df_sim = irw_sim.fetch("gilbert_meta_3")
+
+# Fetch competition data
+irw_comp = IRWComp()
+comp_tables = irw_comp.list_tables()
+df_comp = irw_comp.fetch("collegefb_2021and2022")
 ```
-
 
 ## Development
 
