@@ -1,34 +1,13 @@
 from __future__ import annotations
-from typing import Any, Callable
-import time
+from typing import Any
 import warnings
 import redivis
-
-
-def retry(fn: Callable[[], Any], attempts: int = 5, base: float = 1.0):
-    """Retry helper with exponential backoff: base * 2^(attempt-1)."""
-    if attempts <= 0:
-        raise ValueError("attempts must be positive")
-    
-    last = None
-    for i in range(1, attempts + 1):
-        try:
-            return fn()
-        except Exception as e:
-            last = e
-            if i == attempts:
-                break
-            time.sleep(base * (2 ** (i - 1)))
-    
-    if last is None:
-        raise RuntimeError("No attempts made")
-    raise last
 
 
 def init_dataset(user: str, ds_ref: str):
     """Create a Redivis dataset handle and ensure metadata is loaded."""
     ds = redivis.user(user).dataset(ds_ref)
-    retry(lambda: ds.get())
+    ds.get()
     
     setattr(ds, "_user", user)
     setattr(ds, "_id", ds_ref)

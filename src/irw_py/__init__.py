@@ -5,15 +5,17 @@ This package provides programmatic access to the Item Response Warehouse (IRW),
 an open repository of harmonized item response data.
 """
 
+# exports the main IRW class as the main entry point
+from .client import IRW
+
+
+# Suppress known warnings
 import warnings
-# Suppress known upstream warnings from dependencies
 warnings.filterwarnings(
     "ignore",
     message=".*is deprecated as an API*",
     category=DeprecationWarning,
 )
-
-from .client import IRW
 
 warnings.filterwarnings(
     "ignore",
