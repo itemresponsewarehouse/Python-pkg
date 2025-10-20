@@ -13,13 +13,13 @@ The IRW tables are hosted on [Redivis](https://redivis.com), a data management p
 
 1.  Have a Redivis account (create one at <https://redivis.com/?createAccount> if you don't have one).
 
-2.  Authenticate using the Redivis R Client:
+2.  Authenticate using the Redivis Python Client:
 
     1.  When you first use a function in `irw` that connects to Redivis (e.g. `irw_info()`), a browser window will open, prompting you to sign in to your Redivis account.
 
-    2.  After signing in, click **Allow** to grant access for the Redivis R Client.
+    2.  After signing in, click **Allow** to grant access for the Redivis Python Client.
 
-    3.  Once authentication is successful, close the browser window. You will see the message “Authentication was successful” in the R console.
+    3.  Once authentication is successful, close the browser window. You will see the message “Authentication was successful” in console.
 
 **Note:** You only need to authenticate once per session. For detailed instructions, refer to the [Redivis Python Client documentation](https://apidocs.redivis.com/client-libraries/redivis-python).
 
