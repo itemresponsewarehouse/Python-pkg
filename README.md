@@ -15,7 +15,7 @@ The IRW tables are hosted on [Redivis](https://redivis.com), a data management p
 
 2.  Authenticate using the Redivis Python Client:
 
-    1.  When you first use a function in `irw` that connects to Redivis (e.g. `irw_info()`), a browser window will open, prompting you to sign in to your Redivis account.
+    1.  When you first use a function in `irw_py` that connects to Redivis (e.g. `list_tables()`), a browser window will open, prompting you to sign in to your Redivis account.
 
     2.  After signing in, click **Allow** to grant access for the Redivis Python Client.
 
