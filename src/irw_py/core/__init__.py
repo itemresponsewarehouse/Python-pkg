@@ -1,5 +1,5 @@
 """Core IRW classes."""
 
-from .specialized import IRW, IRWSim, IRWComp
+from .specialized import IRW
 
-__all__ = ["IRW", "IRWSim", "IRWComp"]
+__all__ = ["IRW"]

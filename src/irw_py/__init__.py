@@ -6,24 +6,22 @@ an open repository of harmonized item response data.
 
 Classes
 -------
-IRW : Main IRW datasets
-IRWSim : Simulation datasets  
-IRWComp : Competition datasets
+IRW : Unified IRW client for all dataset types
 
 Examples
 --------
->>> from irw_py import IRW, IRWSim, IRWComp
+>>> from irw_py import IRW
 >>> 
->>> # Main datasets
+>>> # Main datasets (default)
 >>> irw = IRW()
 >>> df = irw.fetch("agn_kay_2025")
 >>> 
 >>> # Simulation datasets
->>> irw_sim = IRWSim()
+>>> irw_sim = IRW(source="sim")
 >>> df_sim = irw_sim.fetch("gilbert_meta_3")
 >>> 
 >>> # Competition datasets
->>> irw_comp = IRWComp()
+>>> irw_comp = IRW(source="comp")
 >>> df_comp = irw_comp.fetch("collegefb_2021and2022")
 """
 
@@ -42,7 +40,7 @@ warnings.filterwarnings(
 )
 
 # Main exports
-from .core import IRW, IRWSim, IRWComp
+from .core import IRW
 
-__all__ = ["IRW", "IRWSim", "IRWComp"]
+__all__ = ["IRW"]
 __version__ = "0.0.1"

@@ -42,6 +42,7 @@ STATS_SET = {
     'responses_per_participant',
     'responses_per_item',
     'density',
+    'longitudinal',
 }
 
 TAGS_SET = {
@@ -161,7 +162,7 @@ def list_tables(datasets: List[Any]) -> pd.DataFrame:
 
         - Core: name
         - Stats: n_responses, n_participants, n_items, responses_per_participant,
-          responses_per_item, density
+          responses_per_item, density, longitudinal (whether the study is longitudinal)
         - Tags: construct_type, construct_name, age_range, child_age, sample,
           item_format, measurement_tool, n_categories, variables, language,
           source_redivis_dataset, has_item_text
@@ -175,6 +176,7 @@ def list_tables(datasets: List[Any]) -> pd.DataFrame:
     >>> tables = list_tables(irw._datasets)
     >>> large = tables[tables["n_responses"] > 10_000]
     >>> english = tables[tables["language"] == "English"]
+    >>> longitudinal_studies = tables[tables["longitudinal"] == True]
     """
     # Base table list from Redivis
     out = _build_base_table_list(datasets)
@@ -197,7 +199,7 @@ def list_tables_basic(datasets: List[Any]) -> pd.DataFrame:
     """
     List available tables with only Redivis base properties.
 
-    Intended for datasets without IRW metadata (e.g., IRWSim, IRWComp).
+    Intended for datasets without IRW metadata (e.g., simulation, competition datasets).
 
     Returns
     -------

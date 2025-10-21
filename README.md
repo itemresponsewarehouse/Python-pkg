@@ -27,10 +27,10 @@ The IRW tables are hosted on [Redivis](https://redivis.com), a data management p
 ## Usage Examples
 
 ```python
-from irw_py import IRW, IRWSim, IRWComp
+from irw_py import IRW
 
-# Initialize main IRW client
-irw = IRW()
+# Initialize main IRW client (default)
+irw = IRW()  # or IRW(source="main")
 # Get database information
 irw.info()  
 
@@ -43,12 +43,12 @@ df = irw.fetch("agn_kay_2025")
 dfs = irw.fetch(["agn_kay_2025", "pks_probability"]) # Fetch multiple tables
 
 # Fetch simulation data
-irw_sim = IRWSim() # initialize IRW simulation client
+irw_sim = IRW(source="sim")  # initialize IRW simulation client
 sim_tables = irw_sim.list_tables()
 df_sim = irw_sim.fetch("gilbert_meta_3")
 
 # Fetch competition data
-irw_comp = IRWComp()
+irw_comp = IRW(source="comp")
 comp_tables = irw_comp.list_tables()
 df_comp = irw_comp.fetch("collegefb_2021and2022")
 ```
