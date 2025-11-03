@@ -26,6 +26,8 @@ The IRW tables are hosted on [Redivis](https://redivis.com), a data management p
 
 ## Usage Examples
 
+You can see the `examples/` directory for complete working examples.
+
 ```python
 from irw_py import IRW
 
