@@ -34,6 +34,9 @@ irw.info()
 tables = irw.list_tables()
 tables_with_metadata = irw.list_tables(include_metadata=True)
 
+# Get table info
+irw.info("agn_kay_2025")  # Table metadata
+
 # Fetch a table
 df = irw.fetch("agn_kay_2025")
 # Convert to response matrix
@@ -47,12 +50,8 @@ irw.describe_filter('construct_type')  # Get values for a specific filter
 filtered = irw.filter(n_responses=[1000, None], construct_type="Affective/mental health")
 dfs = irw.fetch(filtered)
 
-# Get table info
-irw.info("agn_kay_2025")  # Table metadata
-
 # Get BibTeX citation
 irw.save_bibtex("agn_kay_2025")  # Returns BibTeX entry
-
 # Download table
 irw.download("agn_kay_2025", path="data.csv")
 ```
