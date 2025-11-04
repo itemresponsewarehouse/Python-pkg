@@ -81,3 +81,7 @@ irw.download("agn_kay_2025", path="data.csv")
    ```bash
    pip install -e .
    ```
+
+## Feedback and Contributions
+
+If you encounter issues or have suggestions for improving `irw`, please submit them on the [GitHub Issues page](https://github.com/itemresponsewarehouse/Python-pkg/issues). Contributions are welcome!
