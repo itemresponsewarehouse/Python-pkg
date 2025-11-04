@@ -6,7 +6,7 @@ This repository hosts the Python package `irw`, which provides programmatic acce
 
 You can install the latest development version directly from GitHub:
 ```bash
-pip install "git+https://github.com/itemresponsewarehouse/Python-pkg.git"
+python -m pip install "git+https://github.com/itemresponsewarehouse/Python-pkg.git"
 ```
 
 ## IMPORTANT: Redivis Authentication
