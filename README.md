@@ -22,8 +22,13 @@ The IRW tables are hosted on [Redivis](https://redivis.com), a data management p
 
 **Note:** You only need to authenticate once per session. For detailed instructions, refer to the [Redivis Python Client documentation](https://apidocs.redivis.com/client-libraries/redivis-python).
 
-## Quick Start
+## Usage Examples
 
+See the `examples/` directory:
+- `example.py` - Complete workflow example
+- `available_methods.md` - Reference guide for all available methods
+
+Example workflow:
 ```python
 import irw
 
@@ -55,13 +60,6 @@ irw.save_bibtex("agn_kay_2025")  # Returns BibTeX entry
 # Download table
 irw.download("agn_kay_2025", path="data.csv")
 ```
-
-## Usage Examples
-
-See the `examples/` directory:
-- `example.py` - Complete workflow example
-- `available_methods.md` - Reference guide for all available methods
-
 
 ## Development
 
