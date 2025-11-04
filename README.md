@@ -44,15 +44,10 @@ tables_with_metadata = irw.list_tables(include_metadata = True)
 df = irw.fetch("agn_kay_2025") 
 dfs = irw.fetch(["agn_kay_2025", "pks_probability"]) # Fetch multiple tables
 
-# Fetch simulation data
-irw_sim = IRW(source="sim")  # initialize IRW simulation client
-sim_tables = irw_sim.list_tables()
-df_sim = irw_sim.fetch("gilbert_meta_3")
+# Filter tables (main database only)
+filtered = irw.filter(construct_type="Affective/mental health", n_responses=[1000, None])
+dfs = irw.fetch(filtered)  # Fetch filtered results
 
-# Fetch competition data
-irw_comp = IRW(source="comp")
-comp_tables = irw_comp.list_tables()
-df_comp = irw_comp.fetch("collegefb_2021and2022")
 ```
 
 ## Development

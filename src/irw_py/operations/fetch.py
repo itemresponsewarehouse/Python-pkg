@@ -14,7 +14,7 @@ from ..utils.redivis import _get_table, _classify_error, _format_error
 logger = logging.getLogger(__name__)
 
 
-def fetch(datasets: List[Any], name: Union[str, Iterable[str]], *, dedup: bool = False) -> Union[pd.DataFrame, Dict[str, Optional[pd.DataFrame]], None]:
+def fetch(datasets: List[Any], name: Union[str, Iterable[str], pd.Series], *, dedup: bool = False) -> Union[pd.DataFrame, Dict[str, Optional[pd.DataFrame]], None]:
     """
     Fetch one or more IRW tables into a pandas DataFrame.
 
@@ -22,9 +22,10 @@ def fetch(datasets: List[Any], name: Union[str, Iterable[str]], *, dedup: bool =
     ----------
     datasets : List[Any]
         List of Redivis dataset objects to search through.
-    name : str | Iterable[str]
+    name : str | Iterable[str] | pandas.Series
         Single table id → returns DataFrame or None.
-        Multiple        → returns dict[name -> DataFrame | None].
+        Multiple (list, Series, etc.) → returns dict[name -> DataFrame | None].
+        Can also pass a pandas Series (e.g., from filter() method).
     dedup : bool, default False
         After fetch, keep one row per (id,item[,wave]).
 
@@ -33,13 +34,13 @@ def fetch(datasets: List[Any], name: Union[str, Iterable[str]], *, dedup: bool =
     pandas.DataFrame | dict[str, pandas.DataFrame | None] | None
         Single table name returns DataFrame or None.
         Multiple table names return dict mapping names to DataFrames or None.
-        
+
     Raises
     ------
     ValueError
         If name is empty.
     TypeError
-        If name is not a string or iterable of strings.
+        If name is not a string, iterable of strings, or pandas Series.
 
     Examples
     --------
@@ -53,22 +54,35 @@ def fetch(datasets: List[Any], name: Union[str, Iterable[str]], *, dedup: bool =
     >>> # Fetch multiple tables
     >>> dfs = fetch(irw._datasets, ["agn_kay_2025", "pks_probability"])
     >>> 
+    >>> # Fetch from filter results (pandas Series)
+    >>> filtered = irw.filter(construct_type="Affective/mental health")
+    >>> dfs = fetch(irw._datasets, filtered)
+    >>> 
     >>> # Fetch with deduplication
     >>> df_dedup = fetch(irw._datasets, "agn_kay_2025", dedup=True)
     """
+    # Handle pandas Series
+    if isinstance(name, pd.Series):
+        if name.empty:
+            raise ValueError("name Series cannot be empty")
+        name = name.tolist()
+    
+    # Check if empty (after Series conversion)
+    if isinstance(name, str):
+        if not name:
+            raise ValueError("name cannot be empty")
+        return _fetch_one_table(datasets, name, dedup=dedup)
+    
+    # Validate iterable
     if not name:
         raise ValueError("name cannot be empty")
-
-    if isinstance(name, str):
-        return _fetch_one_table(datasets, name, dedup=dedup)
-
-    # Validate iterable
+    
     try:
         name_list = list(name)
         if not name_list:
             raise ValueError("name iterable cannot be empty")
     except TypeError:
-        raise TypeError("name must be a string or iterable of strings")
+        raise TypeError("name must be a string, iterable of strings, or pandas Series")
 
     out: Dict[str, Optional[pd.DataFrame]] = {}
     for nm in name_list:

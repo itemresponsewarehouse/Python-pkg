@@ -1,15 +1,14 @@
-"""Public operations for IRW data.
+"""Internal operations for IRW data.
 
-This module contains all public operations that users can access
-through the IRW classes. These are organized by functionality.
+This module contains internal operation functions used by the IRW class.
+These are not part of the public API - users should use the IRW class methods instead.
 """
 
-from .fetch import fetch
-from .list_tables import list_tables
-from .info import info
+from .fetch import fetch  # Internal use only
+from .list_tables import list_tables  # Internal use only
+from .info import info  # Internal use only
+from .filter import filter_tables  # Internal use only
+from .filter_info import get_filters, describe_filter  # Internal use only
 
-__all__ = [
-    "fetch",
-    "list_tables",
-    "info"
-]
+# No public exports - all functions are internal
+__all__ = []
