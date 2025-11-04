@@ -14,17 +14,17 @@ FILTER_DESCRIPTIONS = {
     'n_items': 'Number of unique items',
     'responses_per_participant': 'Average number of responses per participant',
     'responses_per_item': 'Average number of responses per item',
-    'density': 'Matrix density (proportion of non-missing values)',
+    'density': 'Matrix density (proportion of cells with valid responses). A density of 1 means every person responded to every item (100% of cells have valid responses). Lower density indicates that some individuals did not respond to all items.',
     'var': 'Variable presence filter - filter by presence of specific variables',
     'age_range': 'Participant age group (e.g., "Adult (18+)")',
     'child_age': 'Child age subgroup (for child-focused studies)',
     'construct_type': 'High-level construct category (e.g., "Affective/mental health")',
     'construct_name': 'Specific construct name (e.g., "Big Five")',
-    'sample': 'Sample type or recruitment method (e.g., "Educational", "Clinical")',
+    'sample': 'Sample type (e.g., "Educational", "Clinical")',
     'measurement_tool': 'Instrument type (e.g., "Survey/questionnaire")',
     'item_format': 'Item format (e.g., "Likert Scale/selected response")',
     'language': 'Primary language used (e.g., "eng")',
-    'longitudinal': 'Whether the dataset is longitudinal (has wave or date variables)',
+    'longitudinal': 'Whether the dataset is longitudinal (i.e., has wave or date variables)',
     'license': 'Dataset license type (e.g., "CC BY 4.0")'
 }
 

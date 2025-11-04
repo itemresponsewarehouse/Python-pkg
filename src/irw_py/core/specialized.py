@@ -167,7 +167,10 @@ class IRW(_IRWBase):
             - List of length 2: range [min, max], use None for infinity
         
         density : float, int, list of length 1 or 2, or None, optional
-            Filter by matrix density. Default is [0.5, 1] to exclude sparse matrices.
+            Filter by matrix density (proportion of cells with valid responses).
+            A density of 1 means every person responded to every item (100% of cells have valid responses).
+            Lower density indicates that some individuals did not respond to all items.
+            Default is [0.5, 1] to exclude sparse matrices.
             - List of length 2: range [min, max], use None for infinity (e.g., density=[0.5, None] for >= 0.5)
             - Set to None to disable density filtering
         
