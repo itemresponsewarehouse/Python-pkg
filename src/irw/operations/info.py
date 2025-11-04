@@ -18,7 +18,7 @@ def info() -> None:
 
     Examples
     --------
-    >>> from irw_py.operations.info import info
+    >>> from irw.operations.info import info
     >>> info()
     """
     # Get the main IRW datasets

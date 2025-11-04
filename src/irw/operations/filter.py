@@ -233,6 +233,7 @@ def filter_tables(
     
     construct_type : str or list of str, optional
         Filter by high-level construct category (e.g., "Affective/mental health").
+        Can provide multiple values as a list for OR logic (e.g., ["Affective/mental health", "Cognitive"]).
     
     construct_name : str or list of str, optional
         Filter by specific construct (e.g., "Big Five").
@@ -257,6 +258,7 @@ def filter_tables(
     
     license : str or list of str, optional
         Filter datasets by license (e.g., "CC BY 4.0").
+        Can provide multiple values as a list for OR logic.
     
     Returns
     -------
@@ -266,8 +268,7 @@ def filter_tables(
     
     Examples
     --------
-    >>> from irw_py import IRW
-    >>> irw = IRW()  # source="main" by default
+    >>> import irw
     >>> 
     >>> # Numeric filters
     >>> filtered = irw.filter(n_responses=[1000, None], n_items=[10, 50])  # >= 1000 responses, 10-50 items
@@ -276,8 +277,12 @@ def filter_tables(
     >>> filtered = irw.filter(var="rt")
     >>> filtered = irw.filter(var=["wave", "cov_"])
     >>> 
-    >>> # Tag metadata filtering
+    >>> # Tag metadata filtering (single value)
     >>> filtered = irw.filter(construct_type="Affective/mental health", sample="Educational")
+    >>> 
+    >>> # Tag metadata filtering (multiple values with OR logic)
+    >>> filtered = irw.filter(construct_type=["Affective/mental health", "Cognitive"])
+    >>> filtered = irw.filter(sample=["Educational", "Clinical"])
     >>> 
     >>> # License filtering
     >>> filtered = irw.filter(license="CC BY 4.0")

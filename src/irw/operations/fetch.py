@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 def fetch(datasets: List[Any], name: Union[str, Iterable[str], pd.Series], *, dedup: bool = False) -> Union[pd.DataFrame, Dict[str, Optional[pd.DataFrame]], None]:
     """
-    Fetch one or more IRW tables into a pandas DataFrame.
-
+    Fetch one or more IRW tables.
+    
     Parameters
     ----------
     datasets : List[Any]
@@ -28,38 +28,39 @@ def fetch(datasets: List[Any], name: Union[str, Iterable[str], pd.Series], *, de
         Can also pass a pandas Series (e.g., from filter() method).
     dedup : bool, default False
         After fetch, keep one row per (id,item[,wave]).
-
+    
     Returns
     -------
-    pandas.DataFrame | dict[str, pandas.DataFrame | None] | None
+    pd.DataFrame | dict[str, pd.DataFrame | None] | None
         Single table name returns DataFrame or None.
-        Multiple table names return dict mapping names to DataFrames or None.
-
+        Multiple table names return dict mapping names to DataFrame or None.
+    
     Raises
     ------
     ValueError
         If name is empty.
     TypeError
         If name is not a string, iterable of strings, or pandas Series.
-
+    
     Examples
     --------
-    >>> from irw_py.operations.fetch import fetch
-    >>> from irw_py import IRW
-    >>> irw = IRW()
+    >>> import irw
+    >>> from irw.operations.fetch import fetch
+    >>> from irw.utils.redivis import _init_main_datasets
     >>> 
     >>> # Fetch a single table
-    >>> df = fetch(irw._datasets, "agn_kay_2025")
+    >>> datasets = _init_main_datasets()
+    >>> df = fetch(datasets, "agn_kay_2025")
     >>> 
     >>> # Fetch multiple tables
-    >>> dfs = fetch(irw._datasets, ["agn_kay_2025", "pks_probability"])
+    >>> tables = fetch(datasets, ["agn_kay_2025", "pks_probability"])
     >>> 
     >>> # Fetch from filter results (pandas Series)
     >>> filtered = irw.filter(construct_type="Affective/mental health")
-    >>> dfs = fetch(irw._datasets, filtered)
+    >>> tables = fetch(datasets, filtered)
     >>> 
     >>> # Fetch with deduplication
-    >>> df_dedup = fetch(irw._datasets, "agn_kay_2025", dedup=True)
+    >>> df_dedup = fetch(datasets, "agn_kay_2025", dedup=True)
     """
     # Handle pandas Series
     if isinstance(name, pd.Series):
@@ -159,7 +160,7 @@ def _fetch_one_table(datasets: List[Any], name: str, *, dedup: bool) -> Optional
                         logger.info(f"Deduplication not needed for dataset '{name}': no duplicate responses found.")
                 # else: if missing id/item, silently skip dedup (matches R spirit)
 
-            return df
+            return pd.DataFrame(df)
 
         except Exception as e:
             last_err = e

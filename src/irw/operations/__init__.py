@@ -1,7 +1,7 @@
 """Internal operations for IRW data.
 
-This module contains internal operation functions used by the IRW class.
-These are not part of the public API - users should use the IRW class methods instead.
+This module contains internal operation functions used by the public API.
+These are not part of the public API - users should use module-level functions instead.
 """
 
 from .fetch import fetch  # Internal use only

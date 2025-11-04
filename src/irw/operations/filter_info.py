@@ -2,67 +2,69 @@
 
 from typing import List, Dict, Any, Optional
 import pandas as pd
+import re
 from ..utils.redivis.table_metadata import get_metadata_table, get_tags_table, get_biblio_table
 from ..operations.list_tables import _build_base_table_list
 
 
-# Filter descriptions
+# Filter descriptions with usage instructions
 FILTER_DESCRIPTIONS = {
-    'n_responses': 'Total number of responses in the dataset',
-    'n_categories': 'Number of unique response categories',
-    'n_participants': 'Number of unique participants (id)',
-    'n_items': 'Number of unique items',
-    'responses_per_participant': 'Average number of responses per participant',
-    'responses_per_item': 'Average number of responses per item',
-    'density': 'Matrix density (proportion of cells with valid responses). A density of 1 means every person responded to every item (100% of cells have valid responses). Lower density indicates that some individuals did not respond to all items.',
-    'var': 'Variable presence filter - filter by presence of specific variables',
-    'age_range': 'Participant age group (e.g., "Adult (18+)")',
-    'child_age': 'Child age subgroup (for child-focused studies)',
-    'construct_type': 'High-level construct category (e.g., "Affective/mental health")',
-    'construct_name': 'Specific construct name (e.g., "Big Five")',
-    'sample': 'Sample type (e.g., "Educational", "Clinical")',
-    'measurement_tool': 'Instrument type (e.g., "Survey/questionnaire")',
-    'item_format': 'Item format (e.g., "Likert Scale/selected response")',
-    'language': 'Primary language used (e.g., "eng")',
-    'longitudinal': 'Whether the dataset is longitudinal (i.e., has wave or date variables)',
-    'license': 'Dataset license type (e.g., "CC BY 4.0")'
+    'n_responses': 'Total number of responses in the dataset. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit, e.g., [1000, None] for ≥1000).',
+    'n_categories': 'Number of unique response categories. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
+    'n_participants': 'Number of unique participants (id) in the dataset. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
+    'n_items': 'Number of unique items. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
+    'responses_per_participant': 'Average number of responses per participant. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
+    'responses_per_item': 'Average number of responses per item. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
+    'density': 'Matrix density (proportion of cells with valid responses). A density of 1 means every person responded to every item (100% of cells have valid responses). Lower density indicates that some individuals did not respond to all items. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit). Default is [0.5, 1] to exclude sparse matrices.',
+    'var': 'Filter by presence of specific variables in the dataset. Use exact variable names (e.g., "rt", "wave") or prefix matching (e.g., "cov_" matches any variable starting with "cov_"). Provide a single string or a list of strings. All specified variables must be present (AND logic).',
+    'age_range': 'Participant age group (e.g., "Adult (18+)"). Use a single string or a list of strings for OR logic (e.g., ["Adult (18+)", "Child"]).',
+    'child_age': 'Child age subgroup (for child-focused studies). Use a single string or a list of strings for OR logic.',
+    'construct_type': 'High-level construct category (e.g., "Affective/mental health"). Use a single string or a list of strings for OR logic (e.g., ["Affective/mental health", "Cognitive"]).',
+    'construct_name': 'Specific construct name (e.g., "Big Five"). Use a single string or a list of strings for OR logic.',
+    'sample': 'Sample type or recruitment method (e.g., "Educational", "Clinical"). Use a single string or a list of strings for OR logic.',
+    'measurement_tool': 'Instrument type (e.g., "Survey/questionnaire"). Use a single string or a list of strings for OR logic.',
+    'item_format': 'Item format (e.g., "Likert Scale/selected response"). Use a single string or a list of strings for OR logic.',
+    'language': 'Primary language used (e.g., "eng"). Use a single string or a list of strings for OR logic.',
+    'longitudinal': 'Whether the dataset is longitudinal (i.e., has wave or date variables). Use True to include only longitudinal datasets, False to exclude longitudinal datasets, or None for no filter.',
+    'license': 'Dataset license type (e.g., "CC BY 4.0"). Use a single string or a list of strings for OR logic.'
 }
 
 
 def get_filters() -> List[str]:
     """
-    Get the list of available filter argument names for the filter() method.
+    Get list of available filter parameter names.
     
     Returns
     -------
     list of str
-        List of all available filter parameter names that can be used with filter().
+        List of all available filter parameter names.
         
     Examples
     --------
-    >>> from irw_py import IRW
-    >>> irw = IRW()
+    >>> import irw
     >>> 
-    >>> # See what filters are available
+    >>> # Get list of available filters
     >>> filters = irw.get_filters()
-    >>> print(filters)
+    >>> print(filters)  # ['n_responses', 'n_participants', ...]
     """
     return list(FILTER_DESCRIPTIONS.keys())
 
 
 def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]]:
     """
-    Describe a specific filter and show its available values/statistics.
+    Describe a specific filter and show its available values.
     
-    For numeric filters, returns summary statistics (min, max, mean, median, etc.).
-    For categorical filters, returns value_counts Series.
-    For special filters (var, longitudinal), returns descriptive information.
+    Returns a dictionary with two keys:
+    - 'description': Explanation of what the filter is and how to use it
+    - 'values': Available values for the filter:
+              - Numeric filters: dict with summary statistics (min, max, mean, median, etc.)
+              - Categorical filters: pandas.Series with value_counts (sorted by count)
+              - 'var': pandas.Series with variable frequency counts (sorted by count)
+              - 'longitudinal': dict with counts for True/False
     
     **Performance Note:** This function only loads the necessary metadata (stats, tags, or
     bibliography) based on the filter type. For example, requesting 'n_responses' only loads
     the stats table, not tags or bibliography. All loaded data is cached for subsequent calls.
-    If you plan to explore multiple filters across different types, you can also call
-    list_tables(include_metadata=True) once and then access the DataFrame columns directly.
     
     Parameters
     ----------
@@ -74,33 +76,26 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
     Returns
     -------
     dict or None
-        Dictionary with keys:
-        - 'description': str describing what the filter does
-        - 'info': Additional information about available values:
-                  - For numeric filters: dict with summary statistics (min, max, mean, median, etc.)
-                  - For categorical filters: pandas.Series with value_counts
-                  - For special filters: dict with descriptive information
-        - None if filter not found or not available
+        Dictionary with keys 'description' and 'values', or None if filter not found.
         
     Examples
     --------
-    >>> from irw_py import IRW
-    >>> irw = IRW()
+    >>> import irw
     >>> 
-    >>> # Describe numeric filter (only loads stats metadata)
+    >>> # Describe numeric filter
     >>> info = irw.describe_filter('n_responses')
-    >>> print(info['description'])  # What the filter does
-    >>> print(info['info'])  # Summary statistics (min, max, mean, etc.)
+    >>> print(info['description'])  # What the filter is and how to use it
+    >>> print(info['values'])  # Summary statistics
     >>> 
-    >>> # Describe categorical filter (only loads tags metadata)
+    >>> # Describe categorical filter
     >>> info = irw.describe_filter('construct_type')
-    >>> print(info['description'])  # What the filter does
-    >>> print(info['info'])  # value_counts Series
+    >>> print(info['description'])  # What the filter is and how to use it
+    >>> print(info['values'])  # Available values with counts
     >>> 
     >>> # Describe variable filter
     >>> info = irw.describe_filter('var')
-    >>> print(info['description'])
-    >>> print(info['info'])  # Descriptive information
+    >>> print(info['description'])  # How to use variable filtering
+    >>> print(info['values'].head(10))  # Top 10 most common variables
     """
     # Check if filter name is valid
     if filter_name not in FILTER_DESCRIPTIONS:
@@ -139,7 +134,7 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
         series = merged[filter_name].dropna()
         if series.empty:
             return None
-        result['info'] = {
+        result['values'] = {
             'min': float(series.min()),
             'max': float(series.max()),
             'mean': float(series.mean()),
@@ -167,7 +162,7 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
         series = merged['n_categories'].dropna()
         if series.empty:
             return None
-        result['info'] = {
+        result['values'] = {
             'min': float(series.min()),
             'max': float(series.max()),
             'mean': float(series.mean()),
@@ -217,7 +212,7 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
         result_df = value_counts.reset_index()
         result_df.columns = ['value', 'count']
         result_df = result_df.sort_values(['count', 'value'], ascending=[False, True])
-        result['info'] = pd.Series(result_df['count'].values, index=result_df['value'].values, name=filter_name)
+        result['values'] = pd.Series(result_df['count'].values, index=result_df['value'].values, name=filter_name)
         return result
     
     # License filter - only need bibliography table
@@ -245,24 +240,40 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
     
     # Special filters
     if filter_name == 'var':
-        # Need tags table for variables column
-        tags_df = get_tags_table()
-        if tags_df.empty:
+        # Variables column is in metadata table, not tags table
+        metadata_df = get_metadata_table()
+        if metadata_df.empty:
             return None
         
-        tags_df['name_lower'] = tags_df['table'].str.lower()
+        # Merge with base
+        metadata_df['name_lower'] = metadata_df['table'].str.lower()
         base['name_lower'] = base['name'].str.lower()
-        merged = base.merge(tags_df, left_on='name_lower', right_on='name_lower', how='left')
+        merged = base.merge(metadata_df, left_on='name_lower', right_on='name_lower', how='left')
         
         if 'variables' not in merged.columns:
             return None
-        has_vars = merged['variables'].notna().sum()
-        result['info'] = {
-            'available': has_vars > 0,
-            'datasets_with_variables': int(has_vars),
-            'total_datasets': len(merged),
-            'usage': 'Filter by variable presence. Use exact names (e.g., "rt", "wave") or prefix matching (e.g., "cov_"). All specified variables must be present (AND logic).'
-        }
+        
+        # Extract variables and count frequency across datasets
+        var_counts = {}
+        for vars_str in merged['variables'].dropna():
+            if pd.isna(vars_str):
+                continue
+            if isinstance(vars_str, str):
+                # R uses pipe-separated: "var1|var2|var3"
+                vars_list = [v.strip() for v in re.split(r'\|\s*', str(vars_str)) if v.strip()]
+                for var in vars_list:
+                    var_counts[var] = var_counts.get(var, 0) + 1
+        
+        if not var_counts:
+            result['values'] = pd.Series(dtype=int)
+            return result
+        
+        # Convert to Series and sort by count (descending), then by variable name (ascending) for ties
+        var_series = pd.Series(var_counts)
+        # Sort by count descending, then by index (variable name) ascending for ties
+        var_series = var_series.sort_index().sort_values(ascending=False, kind='mergesort')
+        
+        result['values'] = var_series
         return result
     
     if filter_name == 'longitudinal':
@@ -278,12 +289,9 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
         if 'longitudinal' not in merged.columns:
             return None
         long_counts = merged['longitudinal'].value_counts(dropna=True)
-        result['info'] = {
-            'available': True,
-            'longitudinal_count': int(long_counts.get(True, 0)),
-            'non_longitudinal_count': int(long_counts.get(False, 0)),
-            'total': len(merged),
-            'usage': 'Filter by longitudinal status. Use True (only longitudinal), False (exclude longitudinal), or None (no filter).'
+        result['values'] = {
+            True: int(long_counts.get(True, 0)),
+            False: int(long_counts.get(False, 0))
         }
         return result
     

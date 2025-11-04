@@ -31,7 +31,22 @@ def _get_existing_tables() -> set[str]:
     existing_tables = set()
     
     for ds in ds_list:
-        tables = ds.list_tables()
+        # Use cached table list if available
+        ds_id = getattr(ds, "_id", None) or getattr(ds, "name", None)
+        cache_key = f"dataset_tables:{ds_id}" if ds_id else None
+        
+        cached_table_list = None
+        if cache_key:
+            cached_table_list = metadata_cache.get(cache_key)
+        
+        if cached_table_list is None:
+            tables = ds.list_tables()
+            # Cache the table list
+            if cache_key:
+                metadata_cache.set(cache_key, list(tables))
+        else:
+            tables = cached_table_list
+        
         for tbl in tables:
             existing_tables.add(tbl.name.lower())
     
@@ -141,17 +156,23 @@ def _table_info() -> pd.DataFrame:
     Returns a DataFrame with statistics, tags, and bibliography information
     for all tables in the main IRW dataset.
     
+    Uses cached individual tables (metadata, tags, biblio) which are already
+    cached with version checking. The combined result is also cached.
+    
     Returns
     -------
     pandas.DataFrame
         Combined table information with columns from stats, tags, and biblio.
     """
-    # Check if we have cached combined metadata
-    cached_combined = metadata_cache.get("combined_metadata")
+    dataset = _get_meta_dataset()
+    latest_version_tag = dataset.properties.get("version", {}).get("tag")
+    
+    # Check if we have cached combined metadata with version check
+    cached_combined = metadata_cache.get("combined_metadata", latest_version_tag)
     if cached_combined is not None:
         return cached_combined
     
-    # Get stats, tags, and biblio metadata sources
+    # Get stats, tags, and biblio metadata sources (these use cached versions)
     stats_df = get_metadata_table()
     tags_df = get_tags_table()
     biblio_df = get_biblio_table()
@@ -163,7 +184,7 @@ def _table_info() -> pd.DataFrame:
     if not biblio_df.empty:
         result = result.merge(biblio_df, on="table", how="left")
     
-    # Cache the combined result for faster access
-    metadata_cache.set("combined_metadata", result)
+    # Cache the combined result with version checking
+    metadata_cache.set("combined_metadata", result, latest_version_tag)
     
     return result

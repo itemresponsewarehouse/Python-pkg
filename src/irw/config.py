@@ -22,7 +22,7 @@ META_TABLES: ClassVar[dict[str, str]] = {
 }
 
 # Package metadata
-PACKAGE_NAME: str = "irw_py"
+PACKAGE_NAME: str = "irw"
 VERSION: str = "0.0.1"
 DESCRIPTION: str = "A Python package for the Item Response Warehouse (IRW)"
 

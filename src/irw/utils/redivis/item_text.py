@@ -30,7 +30,23 @@ def _list_itemtext_tables() -> Set[str]:
         return cached
 
     ds = _get_itemtext_dataset()
-    tables = ds.list_tables()
+    
+    # Use cached table list if available
+    ds_id = getattr(ds, "_id", None) or getattr(ds, "name", None)
+    cache_key = f"dataset_tables:{ds_id}" if ds_id else None
+    
+    cached_table_list = None
+    if cache_key:
+        cached_table_list = metadata_cache.get(cache_key)
+    
+    if cached_table_list is None:
+        tables = ds.list_tables()
+        # Cache the table list
+        if cache_key:
+            metadata_cache.set(cache_key, list(tables))
+    else:
+        tables = cached_table_list
+    
     available: Set[str] = set()
     for t in tables:
         name = getattr(t, "name", "") or ""

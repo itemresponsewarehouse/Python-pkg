@@ -1,7 +1,7 @@
 """Internal utilities for IRW operations.
 
-This module contains internal utilities that support the IRW classes.
-Users should not import from this module directly.
+This module contains internal utilities that support the IRW API.
+Users should not import from this module directly - use module-level functions instead.
 """
 
 # Internal Redivis operations

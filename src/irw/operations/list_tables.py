@@ -17,6 +17,7 @@ EXCLUDE_COLUMNS = {
     "name",
     "name_lower",
     "table",
+    "table_lower",
     "numRows",
     "variableCount",
 }
@@ -66,14 +67,32 @@ TAGS_SET = {
 # =====================
 
 def _build_base_table_list(datasets: List[Any]) -> pd.DataFrame:
+    """Build base table list from datasets, using cached table lists when possible."""
     rows: List[Dict[str, Any]] = []
     for ds in datasets:
-        try:
-            tables = ds.list_tables()
-        except Exception:
-            continue
+        # Create cache key based on dataset identifier
+        ds_id = getattr(ds, "_id", None) or getattr(ds, "name", None)
+        cache_key = f"dataset_tables:{ds_id}" if ds_id else None
+        
+        # Try to get cached table list
+        cached_tables = None
+        if cache_key:
+            cached_tables = metadata_cache.get(cache_key)
+        
+        if cached_tables is None:
+            try:
+                tables = ds.list_tables()
+                # Cache the table list if we have a cache key
+                if cache_key:
+                    metadata_cache.set(cache_key, list(tables))
+            except Exception:
+                continue
+        else:
+            tables = cached_tables
+        
         for t in tables:
             rows.append({"name": getattr(t, "name", None)})
+    
     if not rows:
         return pd.DataFrame(columns=["name"])  
     out = pd.DataFrame(rows)
@@ -102,7 +121,7 @@ def _merge_metadata(base: pd.DataFrame, datasets: List[Any]) -> pd.DataFrame:
         how='left',
         suffixes=('', '_meta')
     )
-    merged = merged.drop(columns=['name_lower', 'table'], errors='ignore')
+    merged = merged.drop(columns=['name_lower', 'table', 'table_lower'], errors='ignore')
 
     # Select all useful columns
     result_columns = ['name']
@@ -170,23 +189,35 @@ def list_tables(datasets: List[Any]) -> pd.DataFrame:
 
     Examples
     --------
-    >>> from irw_py.operations.list_tables import list_tables
-    >>> from irw_py import IRW
-    >>> irw = IRW()
-    >>> tables = list_tables(irw._datasets)
+    >>> import irw
+    >>> 
+    >>> # List tables with metadata
+    >>> tables = irw.list_tables(include_metadata=True)
     >>> large = tables[tables["n_responses"] > 10_000]
     >>> english = tables[tables["language"] == "English"]
     >>> longitudinal_studies = tables[tables["longitudinal"] == True]
     """
-    # Base table list from Redivis
+    # Cache key based on dataset names
+    ds_names = "|".join(sorted([(getattr(ds, "name", None) or "").lower() for ds in datasets]))
+    cache_key = f"list_tables_final:{ds_names}"
+    
+    # Check if final result is cached
+    cached_result = metadata_cache.get(cache_key)
+    if cached_result is not None:
+        return cached_result.copy()
+    
+    # Base table list from Redivis (uses cached table lists)
     out = _build_base_table_list(datasets)
     
     # Get metadata and merge
     try:
-        # Merge metadata and post-process
+        # Merge metadata and post-process (uses cached metadata)
         result = _merge_metadata(out, datasets)
-        result = _compute_item_text_flag(result)
+        result = _compute_item_text_flag(result)  # Uses cached itemtext_tables
         result = _order_columns(result)
+        
+        # Cache the final result
+        metadata_cache.set(cache_key, result)
         return result
         
     except Exception as e:
@@ -208,10 +239,25 @@ def list_tables_basic(datasets: List[Any]) -> pd.DataFrame:
     """
     rows: List[Dict[str, Any]] = []
     for ds in datasets:
-        try:
-            tables = ds.list_tables()
-        except Exception:
-            continue
+        # Create cache key based on dataset identifier
+        ds_id = getattr(ds, "_id", None) or getattr(ds, "name", None)
+        cache_key = f"dataset_tables:{ds_id}" if ds_id else None
+        
+        # Try to get cached table list
+        cached_tables = None
+        if cache_key:
+            cached_tables = metadata_cache.get(cache_key)
+        
+        if cached_tables is None:
+            try:
+                tables = ds.list_tables()
+                # Cache the table list if we have a cache key
+                if cache_key:
+                    metadata_cache.set(cache_key, list(tables))
+            except Exception:
+                continue
+        else:
+            tables = cached_tables
 
         for t in tables:
             props = getattr(t, "properties", {}) or {}
