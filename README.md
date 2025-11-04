@@ -36,12 +36,8 @@ tables_with_metadata = irw.list_tables(include_metadata=True)
 
 # Fetch a table
 df = irw.fetch("agn_kay_2025")
-
-# Fetch multiple tables
-dfs = irw.fetch(["agn_kay_2025", "pks_probability"])
-
-# Fetch directly in wide format (response matrix)
-df_wide = irw.fetch("agn_kay_2025", wide=True)
+# Convert to response matrix
+resp_matrix = irw.long2resp(df)
 
 # Explore available filters
 filters = irw.get_filters()  # Returns list of filter names
@@ -54,22 +50,11 @@ dfs = irw.fetch(filtered)
 # Get table info
 irw.info("agn_kay_2025")  # Table metadata
 
-# Get item text
-item_text = irw.itemtext("agn_kay_2025")
-
 # Get BibTeX citation
 irw.save_bibtex("agn_kay_2025")  # Returns BibTeX entry
-irw.save_bibtex("agn_kay_2025", "refs.bib")  # Save to file
-irw.save_bibtex(["table1", "table2"], "refs.bib")  # Save multiple tables
 
 # Download table
 irw.download("agn_kay_2025", path="data.csv")
-
-# Convert to response matrix
-df = irw.fetch("agn_kay_2025")
-resp_matrix = irw.long2resp(df)
-# or fetch directly in wide format
-resp_matrix = irw.fetch("agn_kay_2025", wide=True)
 ```
 
 ## Usage Examples
