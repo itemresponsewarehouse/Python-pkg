@@ -4,27 +4,24 @@ This repository hosts the Python package `irw`, which provides programmatic acce
 
 ## Installation
 
-You can install the latest development version directly from GitHub:
+**Recommended: Use a virtual environment** (prevents conflicts with other packages):
+
 ```bash
+# Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install the package
+python -m pip install --upgrade pip
 python -m pip install "git+https://github.com/itemresponsewarehouse/Python-pkg.git"
 ```
 
-### Troubleshooting Installation Issues
+### Requirements
 
-If you encounter errors during installation, try the following:
+- Python 3.9 or higher
+- pip 
 
-1. **Update pip, setuptools, and wheel**:
-   ```bash
-   python -m pip install --upgrade pip setuptools wheel
-   ```
-
-2. **Install in a clean virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   python -m pip install --upgrade pip setuptools wheel
-   python -m pip install "git+https://github.com/itemresponsewarehouse/Python-pkg.git"
-   ```
+If you encounter any installation issues, please [open an issue](https://github.com/itemresponsewarehouse/Python-pkg/issues).
 
 ## IMPORTANT: Redivis Authentication
 
