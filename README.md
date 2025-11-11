@@ -9,6 +9,23 @@ You can install the latest development version directly from GitHub:
 python -m pip install "git+https://github.com/itemresponsewarehouse/Python-pkg.git"
 ```
 
+### Troubleshooting Installation Issues
+
+If you encounter errors during installation, try the following:
+
+1. **Update pip, setuptools, and wheel**:
+   ```bash
+   python -m pip install --upgrade pip setuptools wheel
+   ```
+
+2. **Install in a clean virtual environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python -m pip install --upgrade pip setuptools wheel
+   python -m pip install "git+https://github.com/itemresponsewarehouse/Python-pkg.git"
+   ```
+
 ## IMPORTANT: Redivis Authentication
 
 The IRW tables are hosted on [Redivis](https://redivis.com), a data management platform. To access these datasets, you'll need to:
