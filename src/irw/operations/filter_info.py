@@ -235,7 +235,7 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
         result_df = value_counts.reset_index()
         result_df.columns = ['value', 'count']
         result_df = result_df.sort_values(['count', 'value'], ascending=[False, True])
-        result['info'] = pd.Series(result_df['count'].values, index=result_df['value'].values, name='license')
+        result['values'] = pd.Series(result_df['count'].values, index=result_df['value'].values, name='license')
         return result
     
     # Special filters
