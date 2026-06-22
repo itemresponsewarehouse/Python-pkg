@@ -3,9 +3,10 @@
 from typing import Tuple, ClassVar
 
 # Redivis dataset references
-MAIN_REFS: ClassVar[Tuple[Tuple[str, str], Tuple[str, str]]] = (
+MAIN_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "item_response_warehouse:as2e"),
     ("datapages", "item_response_warehouse_2:epbx"),
+    ("datapages", "item_response_warehouse_3:5xaj"),
 )
 SIM_REF: ClassVar[Tuple[str, str]] = ("bdomingu", "irw_simsyn:0btg")
 COMP_REF: ClassVar[Tuple[str, str]] = ("bdomingu", "irw_competitions:cmd7")
