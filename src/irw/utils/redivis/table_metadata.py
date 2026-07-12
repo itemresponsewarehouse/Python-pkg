@@ -5,7 +5,7 @@ import redivis
 from typing import Dict, Any
 from ...config import META_REF, META_TABLES
 from .cache import metadata_cache
-from .datasets import _init_main_datasets
+from .datasets import _init_main_datasets, _main_datasets_cache_key
 
 
 def _get_meta_dataset() -> Any:
@@ -23,7 +23,8 @@ def _get_meta_dataset() -> Any:
 
 def _get_existing_tables() -> set[str]:
     """Get set of existing table names from main IRW datasets."""
-    cached_tables = metadata_cache.get("existing_tables")
+    cache_key = "existing_tables:" + _main_datasets_cache_key()
+    cached_tables = metadata_cache.get(cache_key)
     if cached_tables is not None:
         return cached_tables
     
@@ -50,7 +51,7 @@ def _get_existing_tables() -> set[str]:
         for tbl in tables:
             existing_tables.add(tbl.name.lower())
     
-    metadata_cache.set("existing_tables", existing_tables)
+    metadata_cache.set(cache_key, existing_tables)
     return existing_tables
 
 

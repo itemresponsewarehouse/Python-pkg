@@ -6,6 +6,7 @@ import pandas as pd
 from ..utils.redivis.table_metadata import _table_info
 from ..utils.redivis.item_text import _list_itemtext_tables
 from ..utils.redivis.cache import metadata_cache
+from ..utils.redivis.datasets import _datasets_cache_key
 
 # =====================
 # Module-level constants
@@ -94,15 +95,13 @@ def _build_base_table_list(datasets: List[Any]) -> pd.DataFrame:
             rows.append({"name": getattr(t, "name", None)})
     
     if not rows:
-        return pd.DataFrame(columns=["name"])  
-    out = pd.DataFrame(rows)
+        return pd.DataFrame(columns=["name"])
+    out = pd.DataFrame(rows).drop_duplicates(subset=["name"], keep="first")
     return out.sort_values("name", kind="stable").reset_index(drop=True)
 
 
 def _merge_metadata(base: pd.DataFrame, datasets: List[Any]) -> pd.DataFrame:
-    # Cache key based on dataset names
-    ds_names = "|".join(sorted([(getattr(ds, "name", None) or "").lower() for ds in datasets]))
-    cache_key = f"list_tables:{ds_names}"
+    cache_key = f"list_tables:{_datasets_cache_key(datasets)}"
     cached = metadata_cache.get(cache_key)
     if cached is not None:
         return cached.copy()
@@ -197,9 +196,8 @@ def list_tables(datasets: List[Any]) -> pd.DataFrame:
     >>> english = tables[tables["language"] == "English"]
     >>> longitudinal_studies = tables[tables["longitudinal"] == True]
     """
-    # Cache key based on dataset names
-    ds_names = "|".join(sorted([(getattr(ds, "name", None) or "").lower() for ds in datasets]))
-    cache_key = f"list_tables_final:{ds_names}"
+    # Cache key based on dataset identifiers
+    cache_key = f"list_tables_final:{_datasets_cache_key(datasets)}"
     
     # Check if final result is cached
     cached_result = metadata_cache.get(cache_key)

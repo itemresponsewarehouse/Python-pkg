@@ -370,24 +370,32 @@ def download(table_name: str, path: Optional[str] = None, overwrite: bool = Fals
     str
         Path to saved file.
     """
-    from .utils.redivis.tables import _get_table
+    from .utils.redivis.tables import _get_table, _format_error, _search_datasets
     import os
-    
-    # Try to find table in main, sim, comp (using cached datasets)
+
+    all_datasets = []
     for source in ["main", "sim", "comp"]:
         datasets = _get_datasets(source)
-        for ds in (datasets if isinstance(datasets, list) else [datasets]):
-            try:
-                table_obj = _get_table(ds, table_name)
-                if hasattr(table_obj, 'download'):
-                    table_obj.download(path=path, overwrite=overwrite)
-                    if path is None:
-                        path = os.path.join(os.getcwd(), table_name)
-                    return path
-            except Exception:
-                continue
-    
-    raise ValueError(f"Table '{table_name}' not found or does not support downloading.")
+        all_datasets.extend(datasets if isinstance(datasets, list) else [datasets])
+
+    def _download_from(ds):
+        table_obj = _get_table(ds, table_name)
+        if not hasattr(table_obj, "download"):
+            raise ValueError(f"Table '{table_name}' does not support downloading.")
+        table_obj.download(path=path, overwrite=overwrite)
+        return path if path is not None else os.path.join(os.getcwd(), table_name)
+
+    saved_path, last_other, invalid_request = _search_datasets(all_datasets, _download_from)
+    if invalid_request is not None:
+        raise ValueError(f"Table '{table_name}' cannot be downloaded due to an invalid format.") from invalid_request
+    if saved_path is not None:
+        return saved_path
+
+    if last_other is not None:
+        raise ValueError(
+            f"Error downloading table '{table_name}': {_format_error(last_other)}"
+        ) from last_other
+    raise ValueError(f"Table '{table_name}' does not exist in the IRW database.")
 
 
 def long2resp(

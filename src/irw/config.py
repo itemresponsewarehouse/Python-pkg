@@ -1,8 +1,16 @@
-"""Configuration constants for IRW package."""
+"""Configuration constants for IRW package.
+
+To add another main IRW Redivis warehouse, append a (user, dataset_ref) tuple to
+MAIN_REFS below. All package operations (list_tables, fetch, filter, download,
+info, etc.) discover tables across every entry in MAIN_REFS automatically — no
+other code changes are required.
+
+See docs/DEVELOPERS.md for the full contributor checklist and test commands.
+"""
 
 from typing import Tuple, ClassVar
 
-# Redivis dataset references
+# Main IRW response-data warehouses on Redivis (searched in order during fetch).
 MAIN_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "item_response_warehouse:as2e"),
     ("datapages", "item_response_warehouse_2:epbx"),

@@ -28,6 +28,11 @@ warnings.filterwarnings(
     message=".*No reference id was provided for the table.*",
     category=UserWarning,
 )
+warnings.filterwarnings(
+    "ignore",
+    message=".*pkg_resources is deprecated.*",
+    category=UserWarning,
+)
 
 # Export all API functions
 from .api import (

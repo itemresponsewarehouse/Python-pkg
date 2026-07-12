@@ -34,6 +34,8 @@ api.py  (public surface — all user-facing functions)
 
 `config.py` holds dataset references for the three data sources: `"main"`, `"sim"` (simulations), and `"comp"` (competitions). The same public API works across all three.
 
+**Adding a main warehouse:** append a `(user, dataset_ref)` tuple to `MAIN_REFS` in `config.py` only. See `docs/DEVELOPERS.md` for details and test commands.
+
 ### Key design decisions
 
 - **Caching** (`utils/redivis/cache.py`): Redivis metadata tables are cached in-process to avoid redundant network calls. Cache is per-session only.
