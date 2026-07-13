@@ -12,7 +12,7 @@ from irw.utils.redivis.datasets import (
     _init_main_datasets,
     _main_datasets_cache_key,
 )
-from irw.utils.redivis.tables import _search_datasets
+from irw.utils.redivis.tables import _classify_error, _retry_transient, _search_datasets
 
 
 @pytest.fixture(autouse=True)
@@ -100,3 +100,25 @@ def test_config_main_refs_is_non_empty_tuple():
     assert isinstance(MAIN_REFS, tuple)
     assert len(MAIN_REFS) >= 1
     assert all(len(ref) == 2 for ref in MAIN_REFS)
+
+
+def test_classify_truncated_redivis_read_as_transient():
+    err = Exception(
+        "Expected to be able to read 159752 bytes for message body, got 12443"
+    )
+    assert _classify_error(err) == "transient"
+
+
+def test_retry_transient_retries_then_succeeds(monkeypatch):
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise Exception("Expected to be able to read 100 bytes for message body, got 10")
+        return "ok"
+
+    monkeypatch.setattr("irw.utils.redivis.tables.time.sleep", lambda _s: None)
+    assert _retry_transient(flaky, max_attempts=3) == "ok"
+    assert calls["n"] == 3
+

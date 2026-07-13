@@ -9,7 +9,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from ..utils.redivis import _get_table, _format_error, _search_datasets
+from ..utils.redivis import _get_table, _classify_error, _format_error, _search_datasets, _retry_transient
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ def _fetch_one_table(datasets: List[Any], name: str, *, dedup: bool) -> Optional
 
     def _load_table(ds: Any) -> pd.DataFrame:
         tbl = _get_table(ds, name)
-        df = tbl.to_pandas_dataframe()
+        df = _retry_transient(lambda: tbl.to_pandas_dataframe())
 
         # --- inline transforms needed only for fetch() ---
 
@@ -169,6 +169,13 @@ def _fetch_one_table(datasets: List[Any], name: str, *, dedup: bool) -> Optional
 
     if last_other is not None:
         logger.error(f"Error fetching dataset '{name}' : {_format_error(last_other)}")
+        if _classify_error(last_other) == "transient":
+            warnings.warn(
+                f"Transient error fetching '{name}' from Redivis after retries. "
+                "Try running the fetch again in a fresh session.",
+                UserWarning,
+                stacklevel=2,
+            )
     else:
         msg = f"Table '{name}' does not exist in the IRW database."
         warnings.warn(msg, UserWarning, stacklevel=2)
