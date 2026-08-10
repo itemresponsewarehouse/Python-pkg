@@ -15,6 +15,7 @@ MAIN_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "item_response_warehouse:as2e"),
     ("datapages", "item_response_warehouse_2:epbx"),
     ("datapages", "item_response_warehouse_3:5xaj"),
+    ("datapages", "item_response_warehouse_4:980f"),
 )
 SIM_REF: ClassVar[Tuple[str, str]] = ("bdomingu", "irw_simsyn:0btg")
 COMP_REF: ClassVar[Tuple[str, str]] = ("bdomingu", "irw_competitions:cmd7")
@@ -32,7 +33,7 @@ META_TABLES: ClassVar[dict[str, str]] = {
 
 # Package metadata
 PACKAGE_NAME: str = "irw"
-VERSION: str = "0.0.1"
+VERSION: str = "0.0.2"
 DESCRIPTION: str = "A Python package for the Item Response Warehouse (IRW)"
 
 __all__ = [
