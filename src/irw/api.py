@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Optional, Union, Dict, List, Literal
 import pandas as pd
 from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset
-from .utils.redivis.item_text import _list_itemtext_tables
+from .utils.redivis.item_text import _list_itemtext_tables, _itemtext_disclaimer
 from .utils.long2resp import long2resp as _long2resp
 from .operations.fetch import fetch as _fetch
 from .operations.list_tables import list_tables as _list_tables, list_tables_basic
@@ -211,7 +211,26 @@ def itemtext(table_name: str) -> Union[pd.DataFrame, str]:
     -------
     pandas.DataFrame or str
         DataFrame with item text if available, otherwise message string.
+
+    Notes
+    -----
+    IRW item text is reconstructed from published articles, codebooks, and
+    supplementary materials using a largely automated pipeline with partial
+    human review, and is provided **for research purposes only**. We make no
+    guarantee that the text is accurate, complete, or correctly aligned with
+    the ``item`` identifiers in the corresponding IRW response data; the
+    original source document is always authoritative. Users are responsible
+    for verifying item text against that source before drawing substantive
+    conclusions. Documented discrepancies are listed at
+    https://itemresponsewarehouse.org/itemtext_issues.html
+
+    Note also that the licenses recorded for IRW response data do not extend to
+    the instruments themselves. Inclusion of item text here implies no license
+    to reuse an instrument; copyright and related rights remain with the
+    original rights holders, and users are responsible for obtaining any
+    permissions their intended use requires.
     """
+    _itemtext_disclaimer()
     return _get_table_itemtext(table_name)
 
 
@@ -480,7 +499,26 @@ def list_tables_with_itemtext() -> List[str]:
     -------
     list of str
         Sorted list of table names with item text.
+
+    Notes
+    -----
+    IRW item text is reconstructed from published articles, codebooks, and
+    supplementary materials using a largely automated pipeline with partial
+    human review, and is provided **for research purposes only**. We make no
+    guarantee that the text is accurate, complete, or correctly aligned with
+    the ``item`` identifiers in the corresponding IRW response data; the
+    original source document is always authoritative. Users are responsible
+    for verifying item text against that source before drawing substantive
+    conclusions. Documented discrepancies are listed at
+    https://itemresponsewarehouse.org/itemtext_issues.html
+
+    Note also that the licenses recorded for IRW response data do not extend to
+    the instruments themselves. Inclusion of item text here implies no license
+    to reuse an instrument; copyright and related rights remain with the
+    original rights holders, and users are responsible for obtaining any
+    permissions their intended use requires.
     """
+    _itemtext_disclaimer()
     available_tables = _list_itemtext_tables()
     return sorted(list(available_tables))
 

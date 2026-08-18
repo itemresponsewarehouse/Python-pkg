@@ -1,6 +1,8 @@
 """Utilities for IRW item text availability on Redivis (internal)."""
 
 from typing import Set
+import warnings
+
 import redivis
 
 from ...config import ITEMTEXT_REF
@@ -58,3 +60,29 @@ def _list_itemtext_tables() -> Set[str]:
     return available
 
 
+
+_DISCLAIMER = (
+    "Note: IRW item text is reconstructed from published sources using a largely\n"
+    "automated pipeline and is provided for research purposes only. We make no\n"
+    "guarantee as to its accuracy, completeness, or alignment with the `item`\n"
+    "identifiers in the response data; verify against the original source.\n"
+    "Inclusion here implies no license to reuse an instrument; copyright remains\n"
+    "with the original rights holders.\n"
+    "See https://itemresponsewarehouse.org/itemtext_issues.html\n"
+    "(silence with irw.utils.redivis.item_text.disable_itemtext_disclaimer())"
+)
+
+_disclaimer_state = {"shown": False, "enabled": True}
+
+
+def disable_itemtext_disclaimer() -> None:
+    """Suppress the once-per-session item text disclaimer."""
+    _disclaimer_state["enabled"] = False
+
+
+def _itemtext_disclaimer() -> None:
+    """Emit the item text disclaimer once per session."""
+    if _disclaimer_state["shown"] or not _disclaimer_state["enabled"]:
+        return
+    _disclaimer_state["shown"] = True
+    warnings.warn(_DISCLAIMER, UserWarning, stacklevel=3)
