@@ -34,17 +34,17 @@ def _get_existing_tables() -> set[str]:
     for ds in ds_list:
         # Use cached table list if available
         ds_id = getattr(ds, "_id", None) or getattr(ds, "name", None)
-        cache_key = f"dataset_tables:{ds_id}" if ds_id else None
+        ds_cache_key = f"dataset_tables:{ds_id}" if ds_id else None
         
         cached_table_list = None
-        if cache_key:
-            cached_table_list = metadata_cache.get(cache_key)
+        if ds_cache_key:
+            cached_table_list = metadata_cache.get(ds_cache_key)
         
         if cached_table_list is None:
             tables = ds.list_tables()
             # Cache the table list
-            if cache_key:
-                metadata_cache.set(cache_key, list(tables))
+            if ds_cache_key:
+                metadata_cache.set(ds_cache_key, list(tables))
         else:
             tables = cached_table_list
         
