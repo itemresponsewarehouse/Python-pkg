@@ -10,12 +10,16 @@ See docs/DEVELOPERS.md for the full contributor checklist and test commands.
 
 from typing import Tuple, ClassVar
 
-# Main IRW response-data warehouses on Redivis (searched in order during fetch).
+# Main IRW response-data warehouses on Redivis.
+# Declared oldest-to-newest; fetch searches them newest-first, so a table present
+# in more than one warehouse resolves to its most recent copy.
 MAIN_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "item_response_warehouse:as2e"),
     ("datapages", "item_response_warehouse_2:epbx"),
     ("datapages", "item_response_warehouse_3:5xaj"),
     ("datapages", "item_response_warehouse_4:980f"),
+    ("datapages", "item_response_warehouse_5:3ykx"),
+    ("datapages", "item_response_warehouse_6:fpe6"),
 )
 SIM_REF: ClassVar[Tuple[str, str]] = ("bdomingu", "irw_simsyn:0btg")
 COMP_REF: ClassVar[Tuple[str, str]] = ("bdomingu", "irw_competitions:cmd7")

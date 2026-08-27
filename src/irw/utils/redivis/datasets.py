@@ -1,9 +1,12 @@
 """Internal Redivis dataset management utilities with lazy loading and caching."""
 
+import logging
 from typing import List, Any, Tuple
 from ...config import MAIN_REFS, SIM_REF, COMP_REF
 from .cache import metadata_cache
 import redivis
+
+logger = logging.getLogger(__name__)
 
 
 def _main_datasets_cache_key() -> str:
@@ -20,9 +23,52 @@ def _datasets_cache_key(datasets: List[Any]) -> str:
     return "|".join(labels)
 
 
-def _init_datasets_from_refs(refs: Tuple[Tuple[str, str], ...]) -> List[Any]:
-    """Initialize one Redivis dataset handle per (user, dataset_ref) entry."""
-    return [_init_dataset(user, ref) for user, ref in refs]
+def _init_datasets_from_refs(
+    refs: Tuple[Tuple[str, str], ...],
+    *,
+    skip_unavailable: bool = False,
+) -> List[Any]:
+    """Initialize one Redivis dataset handle per (user, dataset_ref) entry.
+
+    With ``skip_unavailable``, a warehouse that cannot be opened is dropped with
+    a warning instead of aborting. A warehouse that exists but has no released
+    version yet errors for read-only tokens, and one such warehouse must not
+    take down every IRW lookup. If no warehouse opens at all -- e.g. a bad token,
+    which fails for all of them -- the error is raised.
+    """
+    if not skip_unavailable:
+        return [_init_dataset(user, ref) for user, ref in refs]
+
+    datasets: List[Any] = []
+    failures: List[str] = []
+    for user, ref in refs:
+        try:
+            datasets.append(_init_dataset(user, ref))
+        except Exception as e:
+            failures.append(f"{ref}: {e}")
+            logger.warning(
+                "Skipping unavailable IRW warehouse %s (%s). Its tables are not "
+                "available in this session.",
+                ref,
+                e,
+            )
+
+    if not datasets:
+        raise RuntimeError(
+            "No IRW warehouse could be opened: " + "; ".join(failures)
+        )
+    return datasets
+
+
+def _order_main_datasets(datasets: List[Any]) -> List[Any]:
+    """Return main warehouses in search order: newest first.
+
+    MAIN_REFS is declared oldest-to-newest (mirroring the R package's
+    ``.irw_datasource_specs$core``), so reversing makes a table that exists in
+    more than one warehouse resolve to its most recent copy -- matching what the
+    R package's ``.irw_order_datasources`` does.
+    """
+    return list(reversed(datasets))
 
 
 def _init_dataset(user: str, ds_ref: str) -> Any:
@@ -42,7 +88,9 @@ def _init_main_datasets() -> List[Any]:
     if cached is not None:
         return cached
 
-    datasets = _init_datasets_from_refs(MAIN_REFS)
+    datasets = _order_main_datasets(
+        _init_datasets_from_refs(MAIN_REFS, skip_unavailable=True)
+    )
     metadata_cache.set(cache_key, datasets)
     return datasets
 
