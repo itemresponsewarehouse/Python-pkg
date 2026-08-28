@@ -21,12 +21,12 @@ MAIN_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "item_response_warehouse_5:3ykx"),
     ("datapages", "item_response_warehouse_6:fpe6"),
 )
-SIM_REF: ClassVar[Tuple[str, str]] = ("bdomingu", "irw_simsyn:0btg")
-COMP_REF: ClassVar[Tuple[str, str]] = ("bdomingu", "irw_competitions:cmd7")
+SIM_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_simsyn:0btg")
+COMP_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_competitions:cmd7")
 
 # Main IRW metadata dataset references (only for main IRW)
-META_REF: ClassVar[Tuple[str, str]] = ("bdomingu", "irw_meta:bdxt")
-ITEMTEXT_REF: ClassVar[Tuple[str, str]] = ("bdomingu", "irw_text:07b6")
+META_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_meta:bdxt")
+ITEMTEXT_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_text:07b6")
 
 # Main IRW metadata table references
 META_TABLES: ClassVar[dict[str, str]] = {

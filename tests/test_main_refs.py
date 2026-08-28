@@ -206,7 +206,7 @@ def test_init_datasets_from_refs_raises_when_no_warehouse_opens():
 
 def test_init_datasets_from_refs_still_raises_by_default():
     """Non-main sources (sim/comp/nom) have a single dataset; failure is fatal."""
-    refs = (("bdomingu", "irw_simsyn:0btg"),)
+    refs = (("datapages", "irw_simsyn:0btg"),)
 
     with patch(
         "irw.utils.redivis.datasets._init_dataset", side_effect=Exception("boom")
