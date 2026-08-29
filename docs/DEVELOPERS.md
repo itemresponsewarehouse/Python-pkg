@@ -46,3 +46,34 @@ RUN_REDIVIS_TESTS=1 python -m pytest tests/test_redivis_integration.py -v
 ```
 
 After releasing or sharing the update, ask users to **restart their Python session** so in-process caches pick up the new warehouse list.
+
+
+## Collections (issue #1633)
+
+Labelled groupings of IRW tables — study designs (`rct`, `q_matrix`), instrument
+families (`big_five`), constructs (`depression`). A table can be in several.
+
+Two Redivis tables in `irw_meta`, registered in `config.py`'s `META_TABLES`:
+`collections:va83` (the registry, one row per collection) and
+`collection_members:j7rp` (long, one row per `(table, collection)`).
+
+Public surface: `irw.collections()`, `irw.collection(name)`,
+`irw.collection_members()`, and `collection=` on `irw.filter()`.
+
+Three things to know before changing any of it:
+
+- **`get_collections_table()` is deliberately not filtered to existing tables.**
+  The registry has no `table` column; filtering would empty it.
+- **Membership is joined into `_table_info()` as a *list* column**, not merged
+  directly — a plain merge on a long table multiplies rows per table.
+  `_apply_tag_filter` handles list values, so no new filter primitive exists.
+  (It did not handle them until 2026-08-29: `pd.isna()` raises on a list, which
+  made the `isinstance(row_value, (list, tuple))` branch unreachable. Fixed;
+  `tests/test_collections.py` pins both the list and string paths.)
+- **`n_tables` is recomputed** in `irw.collections()` from live membership
+  rather than read from the published registry column, which is a build-time
+  count taken before live filtering.
+
+Adding a collection needs no change here at all — it is one line in
+`src/collections/registry.csv` in the main repo. That is the point of the long
+format. See `Rpkg/inst/developer/collections.md`.

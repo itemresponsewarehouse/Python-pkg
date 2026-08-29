@@ -118,6 +118,68 @@ def get_tags_table() -> pd.DataFrame:
     return filtered_tags
 
 
+def get_collections_table() -> pd.DataFrame:
+    """
+    Get the IRW collections registry: one row per collection.
+
+    Note this table has NO `table` column, so unlike every other metadata table
+    here it is deliberately NOT filtered to existing tables -- doing so would
+    empty it.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: collection, label, kind, definition, rule, coverage, basis,
+        n_tables, maintainer, added.
+    """
+    dataset = _get_meta_dataset()
+    latest_version_tag = dataset.properties.get("version", {}).get("tag")
+
+    cached_data = metadata_cache.get("collections", latest_version_tag)
+    if cached_data is not None:
+        return cached_data
+
+    table = dataset.table(META_TABLES["collections"])
+    df = table.to_pandas_dataframe()
+    df = df.replace("NA", pd.NA)
+    if "n_tables" in df.columns:
+        df["n_tables"] = pd.to_numeric(df["n_tables"], errors="coerce").astype("Int64")
+
+    metadata_cache.set("collections", df, latest_version_tag)
+    return df
+
+
+def get_collection_members_table() -> pd.DataFrame:
+    """
+    Get IRW collection membership: one row per (table, collection) pair.
+
+    Long format -- `table` repeats, by design, because a table can belong to
+    many collections at once. Filtered to tables that currently exist.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: table, collection, basis.
+    """
+    dataset = _get_meta_dataset()
+    latest_version_tag = dataset.properties.get("version", {}).get("tag")
+
+    cached_data = metadata_cache.get("collection_members", latest_version_tag)
+    if cached_data is not None:
+        return cached_data
+
+    table = dataset.table(META_TABLES["collection_members"])
+    df = table.to_pandas_dataframe()
+
+    existing_tables = _get_existing_tables()
+    df["table_lower"] = df["table"].str.lower()
+    filtered = df[df["table_lower"].isin(existing_tables)].copy()
+    filtered.drop("table_lower", axis=1, inplace=True)
+
+    metadata_cache.set("collection_members", filtered, latest_version_tag)
+    return filtered
+
+
 def get_biblio_table() -> pd.DataFrame:
     """
     Get the IRW bibliography table (bibliography info for each table).
@@ -184,7 +246,25 @@ def _table_info() -> pd.DataFrame:
     # Add all biblio fields
     if not biblio_df.empty:
         result = result.merge(biblio_df, on="table", how="left")
-    
+
+    # Collections (issue #1633). collection_members is LONG -- a plain merge
+    # would multiply rows per table. Group to a list first, then join one
+    # column, so `collections` is list-valued and _apply_tag_filter handles it
+    # unchanged (it already accepts list/tuple row values).
+    try:
+        members_df = get_collection_members_table()
+    except Exception:
+        members_df = pd.DataFrame(columns=["table", "collection"])
+    if not members_df.empty:
+        colls = (members_df.groupby("table")["collection"]
+                 .apply(list).rename("collections"))
+        result = result.merge(colls, left_on="table", right_index=True, how="left")
+        result["collections"] = result["collections"].apply(
+            lambda v: v if isinstance(v, list) else []
+        )
+    else:
+        result["collections"] = [[] for _ in range(len(result))]
+
     # Cache the combined result with version checking
     metadata_cache.set("combined_metadata", result, latest_version_tag)
     

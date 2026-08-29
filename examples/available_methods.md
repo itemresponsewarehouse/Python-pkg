@@ -31,3 +31,30 @@
 
 ## Example Workflow
 See `examples/example.py` for a complete workflow example.
+
+
+## Collections
+
+```python
+import irw
+
+irw.collections()                      # 22 collections: kind, definition, coverage, n_tables
+irw.collections(kind="instrument")
+
+tabs = irw.collection("depression")    # -> list of table names, prints coverage
+dat  = irw.fetch(tabs)                 # dict keyed by table name
+
+irw.filter(collection="rct")                                  # 178
+irw.filter(collection="depression", n_participants=[500, None])
+irw.filter(collection=["rct", "response_time"])               # union, not intersection
+
+# Cross-collection: math assessments administered in booklets
+sorted(set(irw.collection("math", quiet=True)) &
+       set(irw.collection("multistage", quiet=True)))
+
+irw.collection_members(tables="frac20")   # what collections is this table in?
+```
+
+Note the `coverage` column. Collections derived from tags searched only ~62% of
+tables, so they are not exhaustive — `irw.collection()` says so when that
+applies.
