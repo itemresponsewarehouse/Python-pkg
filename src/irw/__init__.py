@@ -47,6 +47,9 @@ from .api import (
     get_filters,
     describe_filter,
     list_tables_with_itemtext,
+    collections,
+    collection,
+    collection_members,
 )
 
 __all__ = [
@@ -61,6 +64,9 @@ __all__ = [
     "get_filters",
     "describe_filter",
     "list_tables_with_itemtext",
+    "collections",
+    "collection",
+    "collection_members",
 ]
 
 __version__ = "0.0.1"

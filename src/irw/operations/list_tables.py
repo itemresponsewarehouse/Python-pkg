@@ -60,6 +60,7 @@ TAGS_SET = {
     'language',
     'source_redivis_dataset',
     'has_item_text',
+    'collections',  # issue #1633; list-valued, one entry per collection the table is in
 }
 
 
@@ -183,7 +184,7 @@ def list_tables(datasets: List[Any]) -> pd.DataFrame:
           responses_per_item, density, longitudinal (whether the study is longitudinal)
         - Tags: construct_type, construct_name, age_range, child_age, sample,
           item_format, measurement_tool, n_categories, variables, language,
-          source_redivis_dataset, has_item_text
+          source_redivis_dataset, has_item_text, collections
         - Bib: reference, doi, url, license, bibtex
 
     Examples

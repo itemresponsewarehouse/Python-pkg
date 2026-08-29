@@ -29,6 +29,10 @@ from .operations.list_tables import list_tables as _list_tables, list_tables_bas
 from .operations.info import info_for
 from .operations.filter import filter_tables
 from .operations.filter_info import get_filters as _get_filters_func, describe_filter as _describe_filter
+from .utils.redivis.table_metadata import (
+    get_collections_table as _get_collections_table,
+    get_collection_members_table as _get_collection_members_table,
+)
 from .utils.table_helpers import (
     _get_table_info_dict,
     _get_table_bibtex,
@@ -522,3 +526,162 @@ def list_tables_with_itemtext() -> List[str]:
     available_tables = _list_itemtext_tables()
     return sorted(list(available_tables))
 
+
+
+def collections(kind: Optional[Union[str, List[str]]] = None) -> pd.DataFrame:
+    """
+    List IRW collections: labelled groupings of tables.
+
+    Collections cover study designs ("rct", "clustered", "q_matrix"), instrument
+    families ("big_five", "promis") and constructs ("depression", "math"). A
+    table can belong to several at once.
+
+    The ``coverage`` column says how much of the warehouse each collection's
+    rule actually searched, and it matters whenever you need *all* of
+    something:
+
+    - ``metadata-complete``  — searched every documented table.
+    - ``tagged-subset-only`` — searched only the ~62% of tables that carry tag
+      annotations, and coverage is far lower in the newer warehouses. Not
+      exhaustive; do not describe these as "all".
+    - ``curated-only``       — every member chosen by hand.
+
+    Parameters
+    ----------
+    kind : str or list of str, optional
+        Restrict to "design", "instrument" and/or "construct".
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per collection.
+
+    Examples
+    --------
+    >>> import irw
+    >>> irw.collections()
+    >>> irw.collections(kind="instrument")
+    """
+    reg = _get_collections_table().copy()
+
+    # n_tables in the published registry is the build-time count. Membership is
+    # filtered to live tables on fetch, so recompute rather than hand back a
+    # number that may overstate what can actually be retrieved.
+    #
+    # If membership cannot be fetched, keep the published counts rather than
+    # failing: the registry is useful on its own, and this is the only part of
+    # collections() that needs the large table.
+    try:
+        members = _get_collection_members_table()
+    except Exception:
+        members = pd.DataFrame(columns=["table", "collection"])
+    if not members.empty:
+        live = members.groupby("collection")["table"].nunique()
+        reg["n_tables"] = reg["collection"].map(live).fillna(0).astype("Int64")
+
+    if kind is not None:
+        want = [kind] if isinstance(kind, str) else list(kind)
+        valid = set(reg["kind"].dropna().unique())
+        unknown = [k for k in want if k not in valid]
+        if unknown:
+            raise ValueError(
+                f"Unknown kind(s): {unknown}. Valid: {sorted(valid)}."
+            )
+        reg = reg[reg["kind"].isin(want)]
+
+    return reg.sort_values(["kind", "collection"]).reset_index(drop=True)
+
+
+def collection(name: str, quiet: bool = False) -> List[str]:
+    """
+    Get the table names in one IRW collection.
+
+    The result can be passed straight to :func:`fetch` or :func:`save_bibtex`.
+
+    Prints the collection's definition and, when it does not cover the whole
+    warehouse, says so — see the ``coverage`` note in :func:`collections`.
+
+    Parameters
+    ----------
+    name : str
+        A single collection name, e.g. "big_five".
+    quiet : bool, default False
+        Suppress the definition/coverage message.
+
+    Returns
+    -------
+    list of str
+        Sorted table names.
+
+    Examples
+    --------
+    >>> import irw
+    >>> tabs = irw.collection("depression")
+    >>> dat = irw.fetch(tabs)
+    >>> # Cross-collection: math assessments administered in booklets
+    >>> sorted(set(irw.collection("math")) & set(irw.collection("multistage")))
+    """
+    if not isinstance(name, str):
+        raise ValueError("`name` must be a single collection name. See irw.collections().")
+
+    reg = _get_collections_table()
+    known = list(reg["collection"])
+    if name not in known:
+        import difflib
+        near = difflib.get_close_matches(name, known, n=3, cutoff=0.6)
+        hint = (f" Did you mean: {near}?" if near
+                else f" See irw.collections() for the {len(known)} available.")
+        raise ValueError(f'No collection named "{name}".{hint}')
+
+    members = _get_collection_members_table()
+    tables = sorted(set(members.loc[members["collection"] == name, "table"]))
+
+    if not quiet:
+        row = reg[reg["collection"] == name].iloc[0]
+        print(f"{name}: {len(tables)} table{'' if len(tables) == 1 else 's'}")
+        if pd.notna(row.get("definition")):
+            print(f"  {row['definition']}")
+        if row.get("coverage") != "metadata-complete":
+            print(f"  Coverage: {row.get('coverage')} -- this collection does not "
+                  f"search the whole warehouse; see irw.collections().")
+
+    return tables
+
+
+def collection_members(
+    tables: Optional[Union[str, List[str]]] = None,
+    collection: Optional[Union[str, List[str]]] = None,
+) -> pd.DataFrame:
+    """
+    IRW collection membership, one row per (table, collection) pair.
+
+    Use this for the inverse question: what collections is a given table in?
+
+    Parameters
+    ----------
+    tables : str or list of str, optional
+        Restrict to these table names (case-insensitive).
+    collection : str or list of str, optional
+        Restrict to these collections.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns: table, collection, basis.
+
+    Examples
+    --------
+    >>> import irw
+    >>> irw.collection_members(tables="frac20")
+    """
+    df = _get_collection_members_table().copy()
+
+    if tables is not None:
+        want = [tables] if isinstance(tables, str) else list(tables)
+        want_lower = {t.lower() for t in want}
+        df = df[df["table"].str.lower().isin(want_lower)]
+    if collection is not None:
+        want = [collection] if isinstance(collection, str) else list(collection)
+        df = df[df["collection"].isin(want)]
+
+    return df.sort_values(["table", "collection"]).reset_index(drop=True)

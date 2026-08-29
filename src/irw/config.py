@@ -33,6 +33,10 @@ META_TABLES: ClassVar[dict[str, str]] = {
     "metadata": "metadata:h5gs",
     "tags": "tags:7nkh", 
     "biblio": "biblio:qahg",
+    # Collections (issue #1633). `collections` is the registry, one row per
+    # collection; `collection_members` is long, one row per (table, collection).
+    "collections": "collections:va83",
+    "collection_members": "collection_members:j7rp",
 }
 
 # Package metadata

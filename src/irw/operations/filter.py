@@ -63,7 +63,16 @@ def _apply_tag_filter(
     
     for idx in df.index:
         row_value = df.loc[idx, column]
-        
+
+        # List/tuple must be tested BEFORE pd.isna(): on a list, pd.isna()
+        # returns an elementwise array and `if` on it raises "truth value of an
+        # array is ambiguous". That made the isinstance branch below
+        # unreachable for list-valued columns such as `collections`.
+        if isinstance(row_value, (list, tuple)):
+            tag_list = [str(v).strip() for v in row_value if v is not None and str(v).strip()]
+            mask.loc[idx] = any(tag in values for tag in tag_list)
+            continue
+
         if pd.isna(row_value):
             continue
         
@@ -176,6 +185,7 @@ def filter_tables(
     language: Optional[Union[str, List[str]]] = None,
     longitudinal: Optional[bool] = None,
     license: Optional[Union[str, List[str]]] = None,
+    collection: Optional[Union[str, List[str]]] = None,
 ) -> pd.Series:
     """
     Filter IRW tables based on metadata criteria.
@@ -259,7 +269,14 @@ def filter_tables(
     license : str or list of str, optional
         Filter datasets by license (e.g., "CC BY 4.0").
         Can provide multiple values as a list for OR logic.
-    
+
+    collection : str or list of str, optional
+        Filter datasets by collection membership (e.g., "rct", "big_five",
+        "depression"). OR within the argument: ["rct", "response_time"] returns
+        the union, not the intersection -- for that, intersect two
+        irw.collection() results. Raises ValueError on an unknown name.
+        See irw.collections() for what exists and how complete each one is.
+
     Returns
     -------
     pandas.Series
@@ -342,6 +359,20 @@ def filter_tables(
         df = _apply_tag_filter(df, 'construct_type', construct_type)
     if construct_name is not None:
         df = _apply_tag_filter(df, 'construct_name', construct_name)
+    if collection is not None:
+        # Singular arg name (matches R's `collection=`), plural column name
+        # (matches the list-valued content). _apply_tag_filter already handles
+        # list row values with OR semantics, so no new primitive is needed.
+        _known = {c for v in df['collections'] for c in (v if isinstance(v, list) else [])} \
+            if 'collections' in df.columns else set()
+        _want = [collection] if isinstance(collection, str) else list(collection)
+        _unknown = [c for c in _want if c not in _known]
+        if _unknown:
+            raise ValueError(
+                f"Unknown collection(s): {_unknown}. "
+                f"See irw.collections() for the {len(_known)} available."
+            )
+        df = _apply_tag_filter(df, 'collections', collection)
     if sample is not None:
         df = _apply_tag_filter(df, 'sample', sample)
     if measurement_tool is not None:
