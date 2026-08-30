@@ -6,6 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `irw` is a Python client for the [Item Response Warehouse (IRW)](https://itemresponsewarehouse.org/), a harmonized repository of item response data (survey responses, test scores) hosted on Redivis. It lets researchers discover, filter, download, and reformat psychometric datasets.
 
+Project map: [`ARCHITECTURE.md`](https://github.com/ben-domingue/irw/blob/main/ARCHITECTURE.md) in `ben-domingue/irw` — which repo owns
+what, where the data lives, and which document is authoritative when two disagree.
+
 ## Installation & Setup
 
 ```bash
