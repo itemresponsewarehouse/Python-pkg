@@ -75,21 +75,34 @@ def _apply_tag_filter(
 
         if pd.isna(row_value):
             continue
-        
-        # Handle comma-separated values in tag column
-        if isinstance(row_value, str):
-            # Split on comma and strip whitespace
-            tag_list = [v.strip() for v in row_value.split(',') if v.strip()]
-        elif isinstance(row_value, (list, tuple)):
-            tag_list = [str(v).strip() for v in row_value if v]
-        else:
-            tag_list = [str(row_value).strip()]
-        
-        # Check if any value in tag_list matches any filter value
-        matches = any(tag in values for tag in tag_list)
-        mask.loc[idx] = matches
-    
+
+        mask.loc[idx] = any(tag in values for tag in _split_tags(row_value))
+
     return df[mask].copy()
+
+
+def _split_tags(cell) -> List[str]:
+    """Split a multi-select tag cell into its atoms.
+
+    Tag columns such as ``sample`` and ``construct type`` are multi-select,
+    stored as one comma-joined string. ``03_tags.R`` in the pipeline repo
+    normalizes them on export (issue #1720): stray quotes are removed, atoms
+    are sorted into canonical order, and no tag value contains a comma -- the
+    one that did, ``"Internet-based (Mturkers, etc)"``, was renamed to
+    ``"Internet-based"``. That is what makes a plain split correct here.
+
+    Before that normalization this split was wrong: the comma inside that value
+    broke it into ``"Internet-based (Mturkers"`` and ``"etc)"``, so
+    ``filter(sample="Internet-based (Mturkers, etc)")`` silently matched
+    nothing across ~450 tables. R carried a 34-line quote-aware parser to cope;
+    Python carried none. Both now do a plain split, deliberately.
+
+    Do not reintroduce quote handling here -- fix the vocabulary instead, so
+    that no tag value ever contains the delimiter.
+    """
+    if isinstance(cell, (list, tuple)):
+        return [str(v).strip() for v in cell if v is not None and str(v).strip()]
+    return [v.strip() for v in str(cell).split(',') if v.strip()]
 
 
 def _apply_variable_filter(
