@@ -50,6 +50,7 @@ from .api import (
     collections,
     collection,
     collection_members,
+    version,
 )
 
 __all__ = [
@@ -67,6 +68,7 @@ __all__ = [
     "collections",
     "collection",
     "collection_members",
+    "version",
 ]
 
 __version__ = "0.0.1"
