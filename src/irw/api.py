@@ -19,6 +19,7 @@ Usage:
 """
 
 from __future__ import annotations
+import datetime
 from typing import Optional, Union, Dict, List, Literal
 import pandas as pd
 from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset
@@ -29,6 +30,7 @@ from .operations.list_tables import list_tables as _list_tables, list_tables_bas
 from .operations.info import info_for
 from .operations.filter import filter_tables
 from .operations.filter_info import get_filters as _get_filters_func, describe_filter as _describe_filter
+from .operations.version import version as _version
 from .utils.redivis.table_metadata import (
     get_collections_table as _get_collections_table,
     get_collection_members_table as _get_collection_members_table,
@@ -685,3 +687,40 @@ def collection_members(
         df = df[df["collection"].isin(want)]
 
     return df.sort_values(["table", "collection"]).reset_index(drop=True)
+
+
+def version(date: Optional[Union[str, datetime.date, datetime.datetime]] = None) -> pd.DataFrame:
+    """
+    Which IRW version was live, and the Redivis version of every dataset in it.
+
+    IRW is eleven Redivis datasets versioned independently, so no Redivis
+    version describes the corpus. The IRW version number does: it increments
+    whenever any dataset is published and names one exact combination of the
+    eleven, so a paper can cite it and a reader can reconstruct the data.
+
+    Parameters
+    ----------
+    date : str, date, or datetime, optional
+        Report the version that was live then, e.g. ``"2026-08-01"``. Defaults
+        to the newest version.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns ``dataset``, ``version``, ``released_at``, ``approximate``;
+        one row per dataset. The IRW version number is in
+        ``.attrs["irw_version"]``.
+
+    Notes
+    -----
+    Date lookups before 2026-07-21 are approximate and warn. Redivis overwrote
+    its own release timestamps for the older warehouse shards during a platform
+    migration, so 142 of the corpus\' 332 released versions cannot be dated
+    exactly; the manifest brackets those rather than asserting them.
+
+    Examples
+    --------
+    >>> irw.version()                     # doctest: +SKIP
+    >>> irw.version("2026-08-01")         # doctest: +SKIP
+    """
+    return _version(date)
