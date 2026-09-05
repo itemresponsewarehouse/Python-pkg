@@ -22,7 +22,7 @@ from __future__ import annotations
 import datetime
 from typing import Optional, Union, Dict, List, Literal
 import pandas as pd
-from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset
+from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset
 from .utils.redivis.item_text import _list_itemtext_tables, _itemtext_disclaimer
 from .utils.long2resp import long2resp as _long2resp
 from .operations.fetch import fetch as _fetch
@@ -51,8 +51,10 @@ def _get_datasets(source: str = "main"):
         return [_init_sim_dataset()]
     elif source == "comp":
         return [_init_comp_dataset()]
+    elif source == "nom":
+        return [_init_nom_dataset()]
     else:
-        raise ValueError(f"Unknown source '{source}'. Must be one of: 'main', 'sim', 'comp'")
+        raise ValueError(f"Unknown source '{source}'. Must be one of: 'main', 'sim', 'comp', 'nom'")
 
 
 def list_tables(source: str = "main", include_metadata: bool = False) -> pd.DataFrame:
@@ -62,7 +64,7 @@ def list_tables(source: str = "main", include_metadata: bool = False) -> pd.Data
     Parameters
     ----------
     source : str, default "main"
-        Dataset source to use. Options: "main", "sim", "comp"
+        Dataset source to use. Options: "main", "sim", "comp", "nom"
     include_metadata : bool, default False
         If True and source="main", return enriched IRW metadata.
         If False, return basic Redivis properties.
@@ -124,7 +126,8 @@ def info(table_name: Optional[str] = None, source: str = "main", return_dict: bo
         title = {
             "main": "IRW Database Information",
             "sim": "IRW Simulation Database Information",
-            "comp": "IRW Competition Database Information"
+            "comp": "IRW Competition Database Information",
+            "nom": "IRW Nominal Response Database Information"
         }.get(source, "IRW Database Information")
         return info_for(datasets, title=title)
     else:
@@ -163,7 +166,7 @@ def fetch(
     table_name : str or list of str
         Single table name or list of table names.
     source : str, default "main"
-        Dataset source to use.
+        Dataset source to use. Options: "main", "sim", "comp", "nom".
     dedup : bool, default False
         Apply deduplication to responses.
     wide : bool, default False
@@ -399,7 +402,7 @@ def download(table_name: str, path: Optional[str] = None, overwrite: bool = Fals
     import os
 
     all_datasets = []
-    for source in ["main", "sim", "comp"]:
+    for source in ["main", "sim", "comp", "nom"]:
         datasets = _get_datasets(source)
         all_datasets.extend(datasets if isinstance(datasets, list) else [datasets])
 

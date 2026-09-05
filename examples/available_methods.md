@@ -3,6 +3,7 @@
 ## Database Operations
 
 - **`list_tables(source="main", include_metadata=False)`** - List available tables
+  - `source`: `"main"`, `"sim"`, `"comp"` or `"nom"` (nominal responses)
 - **`filter(...)`** - Filter tables by metadata criteria (main IRW only)
 - **`info()`** - Print database information summary
 - **`info(table_name, return_dict=False)`** - Get metadata information for a table
@@ -14,6 +15,7 @@
 ## Table Operations
 
 - **`fetch(table_name, source="main", dedup=False, wide=False)`** - Fetch one or more IRW tables
+  - `source`: `"main"`, `"sim"`, `"comp"` or `"nom"` (nominal responses)
   - Single table → returns `pandas.DataFrame`
   - Multiple tables → returns `dict[str, pandas.DataFrame]`
   - `wide=True`: Automatically convert to wide-format response matrix

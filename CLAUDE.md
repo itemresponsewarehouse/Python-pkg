@@ -42,8 +42,11 @@ response-data warehouses), `SIM_REF` (simulations), `COMP_REF` (competitions),
 Redivis caps a dataset at 1000 tables. The same public API works across the
 data sources.
 
-The `nom` source (`irw_nominal`) that both R configs define is **missing here** —
-see issue #9. Do not read the list above as complete.
+`NOM_REF` (`irw_nominal`) is the nominal-response source, added in #9 to match
+both R configs. It is tagged like `main` but has no collections, so
+`collections()` errors for it rather than returning an empty frame — the same
+rule as `Rpkg/R/redivis-config.R`. Note the naming difference across the two
+clients: R calls the main source `"core"`, Python calls it `"main"`.
 
 **Adding a main warehouse:** append a `(user, dataset_ref)` tuple to `MAIN_REFS` in `config.py` only. See `docs/DEVELOPERS.md` for details and test commands.
 

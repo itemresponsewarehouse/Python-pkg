@@ -25,6 +25,11 @@ MAIN_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
 SIM_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_simsyn:0btg")
 COMP_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_competitions:cmd7")
 
+# The nominal-response warehouse. Unlike sim and comp, this source is tagged --
+# Rpkg's .irw_tag_sources is c("core", "nom") -- but it has no collections, so
+# collections() must keep erroring for it rather than returning an empty frame.
+NOM_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_nominal:614n")
+
 # Main IRW metadata dataset references (only for main IRW)
 META_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_meta:bdxt")
 
@@ -74,6 +79,7 @@ __all__ = [
     "MAIN_REFS",
     "SIM_REF", 
     "COMP_REF",
+    "NOM_REF",
     "META_REF",
     "ITEMTEXT_REFS",
     "META_TABLES",
