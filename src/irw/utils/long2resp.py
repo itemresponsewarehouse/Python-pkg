@@ -78,12 +78,17 @@ def long2resp(
     # `myitem_x` was prefixed to `item_myitem_x` and came back as `myx`. Keep
     # the mapping instead of trying to reconstruct the original by string
     # surgery.
+    #
+    # Prefix UNCONDITIONALLY, including items already called `item_x`. Skipping
+    # those made the mapping non-injective: `a` and `item_a` both became
+    # `item_a`, so the pivot treated two distinct items as one and averaged
+    # their responses together, reporting it as duplicate (id, item) pairs in
+    # the user's data rather than as a collision this function created. The
+    # doubled name (`item_item_a`) is internal and never reaches the caller.
     original_item_name = {}
 
     def _prefixed(value):
-        name = str(value)
-        if not name.startswith("item_"):
-            name = f"item_{name}"
+        name = f"item_{value}"
         original_item_name[name] = str(value)
         return name
 

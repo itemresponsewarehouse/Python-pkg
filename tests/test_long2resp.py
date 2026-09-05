@@ -66,6 +66,32 @@ def test_an_item_name_containing_item_underscore_survives_the_round_trip():
     assert "myx" not in wide.columns
 
 
+def test_an_item_named_item_x_does_not_merge_with_an_item_named_x():
+    """Regression: `a` and `item_a` were pivoted as one item.
+
+    The prefix was applied only to items that did not already start with
+    `item_`, so `a` became `item_a` and a genuine `item_a` was left alone.
+    Both then keyed the same column and agg_method averaged responses from two
+    different questions -- reported to the user as duplicate (id, item) pairs
+    in their own data, not as a collision long2resp had created.
+    """
+    df = _long([
+        ("p1", "item_a", 1), ("p1", "a", 0),
+        ("p2", "item_a", 1), ("p2", "a", 1),
+    ])
+    wide = long2resp(df, id_density_threshold=None)
+
+    assert "a" in wide.columns
+    assert "item_a" in wide.columns
+    assert "item_item_a" not in wide.columns  # the doubled name stays internal
+
+    wide = wide.set_index("id")
+    assert wide.loc["p1", "item_a"] == 1
+    assert wide.loc["p1", "a"] == 0        # was 0.5, the mean of the two
+    assert wide.loc["p2", "item_a"] == 1
+    assert wide.loc["p2", "a"] == 1
+
+
 def test_numeric_item_ids_become_string_columns_not_integers():
     df = _long([("p1", 3, 1), ("p1", 7, 0), ("p2", 3, 0), ("p2", 7, 1)])
     wide = long2resp(df, id_density_threshold=None)
