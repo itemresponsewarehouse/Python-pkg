@@ -2,7 +2,7 @@
 
 import logging
 from typing import List, Any, Tuple
-from ...config import MAIN_REFS, SIM_REF, COMP_REF
+from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF
 from .cache import metadata_cache
 import redivis
 
@@ -114,4 +114,15 @@ def _init_comp_dataset() -> Any:
     
     dataset = _init_dataset(*COMP_REF)
     metadata_cache.set("comp_dataset", dataset)
+    return dataset
+
+
+def _init_nom_dataset() -> Any:
+    """Initialize nominal-response dataset (cached)."""
+    cached = metadata_cache.get("nom_dataset")
+    if cached is not None:
+        return cached
+    
+    dataset = _init_dataset(*NOM_REF)
+    metadata_cache.set("nom_dataset", dataset)
     return dataset
