@@ -70,10 +70,24 @@ def long2resp(
         else:
             messages.append(f"Wave {wave} not found in data. No filtering applied.")
     
-    # Ensure item names have "item_" prefix
-    df["item"] = df["item"].apply(
-        lambda x: x if str(x).startswith("item_") else f"item_{x}"
-    )
+    # Ensure item names have "item_" prefix, remembering what each one was.
+    #
+    # The prefix is added so numeric item ids do not become numeric column
+    # labels, and is stripped again after the pivot. Stripping it by
+    # `col.replace("item_", "")` removed EVERY occurrence, so an item named
+    # `myitem_x` was prefixed to `item_myitem_x` and came back as `myx`. Keep
+    # the mapping instead of trying to reconstruct the original by string
+    # surgery.
+    original_item_name = {}
+
+    def _prefixed(value):
+        name = str(value)
+        if not name.startswith("item_"):
+            name = f"item_{name}"
+        original_item_name[name] = str(value)
+        return name
+
+    df["item"] = df["item"].apply(_prefixed)
     
     # Convert response values to numeric
     df["resp"] = pd.to_numeric(df["resp"], errors="coerce")
@@ -164,8 +178,10 @@ def long2resp(
     # Convert to wide format
     wide_df = df.pivot(index="id", columns="item", values="resp").reset_index()
     
-    # Remove "item_" prefix from column names (keep "id" as is)
-    wide_df.columns = [col.replace("item_", "") if col != "id" else col for col in wide_df.columns]
+    # Restore the original item names (keep "id" as is)
+    wide_df.columns = [
+        col if col == "id" else original_item_name[col] for col in wide_df.columns
+    ]
     
     # Print messages at the end
     if messages:
