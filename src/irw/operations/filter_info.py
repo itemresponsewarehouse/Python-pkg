@@ -5,6 +5,7 @@ import pandas as pd
 import re
 from ..utils.redivis.table_metadata import get_metadata_table, get_tags_table, get_biblio_table
 from ..operations.list_tables import _build_base_table_list
+from ..operations.filter import _split_tags
 
 
 # Filter descriptions with usage instructions
@@ -206,7 +207,21 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
         
         if col_name not in merged.columns:
             return None
-        value_counts = merged[col_name].value_counts(dropna=True)
+        # Count tag ATOMS, not whole cells. `sample` and `construct type` are
+        # multi-select and stored as one comma-joined string, so counting
+        # cells reported the ~37 combinations as if each were a value --
+        # while filter() matches on atoms via _split_tags(). The function that
+        # tells you the valid inputs disagreed with the one that consumes
+        # them: a user copying "General/non-specific, Internet-based" out of
+        # describe_filter() and into filter() got zero matches.
+        #
+        # Applied to every categorical column rather than a multi-select
+        # allowlist: splitting a comma-free cell is a no-op, so single-valued
+        # columns such as `item format` and `age range` are unaffected. R does
+        # the same -- irw_tag_options() and the filter path share one
+        # .irw_split_tags().
+        atoms = merged[col_name].dropna().apply(_split_tags).explode().dropna()
+        value_counts = atoms.value_counts()
         if value_counts.empty:
             return None
         # Sort by count (descending), then by value (ascending)
