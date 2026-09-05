@@ -23,6 +23,9 @@ Usage:
 
 # Suppress known warnings
 import warnings
+# Redivis suggests qualifying every table as `name:refid`. We deliberately do
+# not for the IRW metadata tables: reference ids are reminted on every release,
+# so a pinned id stops resolving in the next version. See config.META_TABLES.
 warnings.filterwarnings(
     "ignore",
     message=".*No reference id was provided for the table.*",
@@ -52,8 +55,10 @@ from .api import (
     collection_members,
     version,
 )
+from .operations.list_tables import IRWMetadataUnavailable
 
 __all__ = [
+    "IRWMetadataUnavailable",
     "list_tables",
     "filter",
     "info",

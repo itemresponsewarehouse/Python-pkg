@@ -135,9 +135,12 @@ def test_apply_tag_filter_string_behaviour_unchanged():
     })
     assert list(filter_mod._apply_tag_filter(df, "construct_type", "Personality")["name"]) == ["a", "b"]
     assert list(filter_mod._apply_tag_filter(df, "construct_type", "Behavioral")["name"]) == ["b", "c"]
-    # NaN never matches, and an absent column is a no-op rather than an error
+    # NaN never matches.
     assert "d" not in list(filter_mod._apply_tag_filter(df, "construct_type", "Personality")["name"])
-    assert len(filter_mod._apply_tag_filter(df, "no_such_column", "x")) == 4
+    # An absent column is now an error, not a no-op: skipping the filter used to
+    # widen the result to every table and look like a legitimate answer.
+    with pytest.raises(filter_mod.IRWMetadataUnavailable):
+        filter_mod._apply_tag_filter(df, "no_such_column", "x")
     # None values -> unchanged frame
     assert len(filter_mod._apply_tag_filter(df, "construct_type", None)) == 4
 
