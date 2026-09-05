@@ -2,7 +2,7 @@
 
 import pandas as pd
 import redivis
-from typing import Dict, Any
+from typing import Any
 from ...config import META_REF, META_TABLES
 from .cache import metadata_cache
 from .datasets import _init_main_datasets, _main_datasets_cache_key

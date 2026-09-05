@@ -173,7 +173,7 @@ def long2resp(
     elif agg_method == "first":
         df = df.drop_duplicates(subset=["id", "item"], keep="first")
     else:
-        raise ValueError(f"Invalid `agg_method`. Choose from 'mode', 'mean', 'median', or 'first'.")
+        raise ValueError("Invalid `agg_method`. Choose from 'mode', 'mean', 'median', or 'first'.")
     
     # Convert to wide format
     wide_df = df.pivot(index="id", columns="item", values="resp").reset_index()
