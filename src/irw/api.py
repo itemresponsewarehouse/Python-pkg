@@ -395,7 +395,12 @@ def download(table_name: str, path: Optional[str] = None, overwrite: bool = Fals
     str
         Path to saved file.
     """
-    from .utils.redivis.tables import _get_table, _format_error, _search_datasets
+    from .utils.redivis.tables import (
+        _get_table,
+        _format_error,
+        _search_datasets,
+        _terminal_error_message,
+    )
     import os
 
     all_datasets = []
@@ -410,9 +415,11 @@ def download(table_name: str, path: Optional[str] = None, overwrite: bool = Fals
         table_obj.download(path=path, overwrite=overwrite)
         return path if path is not None else os.path.join(os.getcwd(), table_name)
 
-    saved_path, last_other, invalid_request = _search_datasets(all_datasets, _download_from)
-    if invalid_request is not None:
-        raise ValueError(f"Table '{table_name}' cannot be downloaded due to an invalid format.") from invalid_request
+    saved_path, last_other, terminal = _search_datasets(all_datasets, _download_from)
+    if terminal is not None:
+        # download() is the path most likely to hit the export quota, and it is
+        # where "invalid format" was most misleading.
+        raise ValueError(_terminal_error_message(terminal, table_name)) from terminal
     if saved_path is not None:
         return saved_path
 
