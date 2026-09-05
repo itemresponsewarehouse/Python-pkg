@@ -76,6 +76,15 @@ dfs = irw.fetch(filtered)
 irw.save_bibtex("agn_kay_2025")  # Returns BibTeX entry
 # Download table
 irw.download("agn_kay_2025", path="data.csv")
+
+# Browse collections: labelled groupings of tables
+irw.collections()                     # all collections, with coverage and table counts
+tabs = irw.collection("depression")   # the table names in one collection
+irw.collection_members(tables="frac20")  # which collections is this table in?
+
+# Which version of IRW is this? (cite this number)
+irw.version()                         # newest IRW version and its dataset pins
+irw.version("2026-08-01")             # what was live on that date
 ```
 
 ## Development

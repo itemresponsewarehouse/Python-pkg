@@ -11,6 +11,18 @@
   - Returns: `list[str]`
 - **`describe_filter(filter_name)`** - Describe a filter and show available values
 - **`list_tables_with_itemtext()`** - List tables with item-level text available
+- **`collections(kind=None)`** - List IRW collections: labelled groupings of tables
+  - Returns: `pandas.DataFrame` with `kind`, `definition`, `coverage`, `n_tables`
+- **`collection(name, quiet=False)`** - Get the table names in one collection
+  - Returns: `list[str]`; prints the collection's coverage unless `quiet=True`
+- **`collection_members(tables=None, collection=None)`** - Look up collection membership
+  - By table (which collections is this table in?) or by collection
+- **`version(date=None)`** - Which IRW version is live, and the Redivis version of every dataset in it
+  - `version()` - the newest IRW version and its dataset pins
+  - `version("2026-08-01")` - what was live on that date
+  - Returns: `pandas.DataFrame`; the IRW version number is in `.attrs["irw_version"]`
+
+See `## Collections` below for worked examples of the collection methods.
 
 ## Table Operations
 
