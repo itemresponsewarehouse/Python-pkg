@@ -56,7 +56,16 @@ api.py  (public surface — all user-facing functions)
 
 ## Testing
 
-There is currently no test suite. When adding tests, use `pytest` and place them in a `tests/` directory at the repo root.
+Tests live in `tests/` at the repo root and run with `pytest`:
+
+```bash
+pip install pytest
+python -m pytest tests/ -q
+```
+
+They are offline — Redivis is mocked — so no credentials are needed.
+`tests/test_main_refs.py` and `tests/test_itemtext_refs.py` are the templates to
+follow when adding a warehouse or an item-text shard.
 
 ## Code Style
 
