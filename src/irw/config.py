@@ -35,6 +35,7 @@ META_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_meta:bdxt")
 # See Rpkg/inst/developer/warehouses.md for the checklist to add one.
 ITEMTEXT_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "irw_text:07b6"),
+    ("datapages", "irw_text_2:ae47"),
 )
 
 # Main IRW metadata table references.
