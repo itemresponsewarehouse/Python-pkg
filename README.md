@@ -1,6 +1,6 @@
 # `irw`: A Python Package for the Item Response Warehouse
 
-This repository hosts the Python package `irw`, which provides programmatic access to the [Item Response Warehouse (IRW)](https://datapages.github.io/irw/), an open repository of harmonized item response data hosted on Redivis.
+This repository hosts the Python package `irw`, which provides programmatic access to the [Item Response Warehouse (IRW)](https://itemresponsewarehouse.org/), an open repository of harmonized item response data hosted on Redivis.
 
 Project map: [`ARCHITECTURE.md`](https://github.com/ben-domingue/irw/blob/main/ARCHITECTURE.md) in `ben-domingue/irw` — which repo owns
 what, where the data lives, and which document is authoritative when two disagree.

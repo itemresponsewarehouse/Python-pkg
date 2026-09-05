@@ -35,7 +35,15 @@ api.py  (public surface — all user-facing functions)
         └── redivis/            (Redivis API integration: datasets, tables, metadata, item_text, cache)
 ```
 
-`config.py` holds dataset references for the three data sources: `"main"`, `"sim"` (simulations), and `"comp"` (competitions). The same public API works across all three.
+`config.py` holds every Redivis reference the package has: `MAIN_REFS` (the
+response-data warehouses), `SIM_REF` (simulations), `COMP_REF` (competitions),
+`META_REF` plus `META_TABLES` (metadata, tags, bibliography, collections), and
+`ITEMTEXT_REFS` (item text). `MAIN_REFS` and `ITEMTEXT_REFS` are lists because
+Redivis caps a dataset at 1000 tables. The same public API works across the
+data sources.
+
+The `nom` source (`irw_nominal`) that both R configs define is **missing here** —
+see issue #9. Do not read the list above as complete.
 
 **Adding a main warehouse:** append a `(user, dataset_ref)` tuple to `MAIN_REFS` in `config.py` only. See `docs/DEVELOPERS.md` for details and test commands.
 
@@ -69,4 +77,11 @@ follow when adding a warehouse or an item-text shard.
 
 ## Code Style
 
-No linter or formatter is configured. Follow existing style: no type annotations, plain docstrings, internal helpers prefixed with `_`.
+No linter or formatter is configured. Follow existing style: numpydoc-style
+docstrings, and internal helpers prefixed with `_`.
+
+Type annotations are used — `config.py` and `operations/version.py` are fully
+annotated and every public signature in `api.py` is. One constraint on them:
+the package supports Python 3.9, so PEP 604 unions (`Exception | None`) need
+`from __future__ import annotations` at the top of the file. A missing one
+broke `import irw` on 3.9; `tests/test_metadata_refs.py` now checks for it.
