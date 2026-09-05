@@ -1,0 +1,49 @@
+# The package claims Python 3.9-3.13 in pyproject.toml. This is what checks it.
+#
+# Both jobs run the same matrix on purpose. `test` runs the suite; `import` does
+# nothing but `import irw`. That is not redundant: the suite has a static grep
+# (tests/test_metadata_refs.py::test_no_pep604_annotations_without_future_import)
+# standing in for an interpreter we never actually ran, added after a PEP 604
+# union broke `import irw` on 3.9. Running 3.9 is strictly stronger than
+# grepping for the one syntax we remembered to grep for.
+#
+# No secrets. The suite mocks Redivis, so RUN_REDIVIS_TESTS stays unset and the
+# five live-Redivis tests in tests/test_redivis_integration.py skip.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e . pytest
+      - run: python -m pytest tests/ -q
+
+  import:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e .
+      - run: python -c "import irw; print(irw.__version__)"
