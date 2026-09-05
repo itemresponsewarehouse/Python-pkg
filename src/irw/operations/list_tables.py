@@ -14,6 +14,15 @@ from ..utils.redivis.datasets import _datasets_cache_key
 
 logger = logging.getLogger(__name__)
 
+
+class IRWMetadataUnavailable(RuntimeError):
+    """Raised when IRW metadata cannot be loaded.
+
+    Metadata-dependent calls must fail rather than degrade: `filter()` ignores
+    any criterion whose column is missing, so a quiet fallback to names-only
+    returns the entire catalogue and looks like a legitimate result.
+    """
+
 EXCLUDE_COLUMNS = {
     "name",
     "name_lower",
@@ -109,7 +118,10 @@ def _merge_metadata(base: pd.DataFrame, datasets: List[Any]) -> pd.DataFrame:
 
     metadata = _table_info()
     if metadata.empty:
-        return base
+        raise IRWMetadataUnavailable(
+            "IRW metadata is empty: the metadata tables resolved but returned no "
+            "rows, so no table statistics, tags or bibliography are available."
+        )
 
     metadata['name_lower'] = metadata['table'].str.lower()
     base['name_lower'] = base['name'].str.lower()
@@ -219,10 +231,18 @@ def list_tables(datasets: List[Any]) -> pd.DataFrame:
         metadata_cache.set(cache_key, result)
         return result
         
+    except IRWMetadataUnavailable:
+        raise
     except Exception as e:
-        # If metadata merge fails, return basic table info
-        logger.info(f"list_tables metadata merge failed; returning basic info: {e}")
-        return out
+        # Fail loudly. Returning names-only here used to look like success while
+        # silently disarming every metadata-dependent caller: filter() skips any
+        # filter whose column is absent, so a broken metadata fetch turned
+        # `irw.filter(n_responses=[0, 1e6])` into "return the whole catalogue".
+        raise IRWMetadataUnavailable(
+            f"IRW metadata could not be loaded, so list_tables(include_metadata=True) "
+            f"cannot return statistics, tags or bibliography: {e}. "
+            f"Use irw.list_tables() without include_metadata for names only."
+        ) from e
 
 
 def list_tables_basic(datasets: List[Any]) -> pd.DataFrame:

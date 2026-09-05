@@ -1,5 +1,10 @@
 """Internal Redivis table fetching utilities."""
 
+# Required for the `Exception | None` annotations below: PEP 604 unions are
+# 3.10+, and the package supports 3.9 (see pyproject requires-python). Without
+# this, `import irw` raises TypeError on 3.9.
+from __future__ import annotations
+
 import time
 from typing import Any, Callable, List, Optional, Tuple, TypeVar
 import warnings

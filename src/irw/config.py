@@ -28,15 +28,25 @@ COMP_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_competitions:cmd7")
 META_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_meta:bdxt")
 ITEMTEXT_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_text:07b6")
 
-# Main IRW metadata table references
+# Main IRW metadata table references.
+#
+# Address these by BARE NAME, never by the qualified `name:refid` form. Redivis
+# mints a fresh reference id for every table on every release, so a hardcoded id
+# stops resolving inside the next version: v19.3 had metadata:h5gs, v21.0 has
+# metadata:hb7q. The package always asks for the latest version tag, so a stale
+# id yields "Not found" and every metadata-dependent call degrades -- info()
+# raises, and list_tables(include_metadata=True) and filter() silently fall back
+# to names only. The redivis client warns you to prefer the qualified reference;
+# for these tables, do not. (The R package addresses tables by name and was
+# never affected.)
 META_TABLES: ClassVar[dict[str, str]] = {
-    "metadata": "metadata:h5gs",
-    "tags": "tags:7nkh", 
-    "biblio": "biblio:qahg",
+    "metadata": "metadata",
+    "tags": "tags",
+    "biblio": "biblio",
     # Collections (issue #1633). `collections` is the registry, one row per
     # collection; `collection_members` is long, one row per (table, collection).
-    "collections": "collections:va83",
-    "collection_members": "collection_members:j7rp",
+    "collections": "collections",
+    "collection_members": "collection_members",
 }
 
 # Package metadata

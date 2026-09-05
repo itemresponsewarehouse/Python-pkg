@@ -4,7 +4,22 @@ from typing import List, Optional, Union
 import re
 import pandas as pd
 import numpy as np
-from ..operations.list_tables import list_tables
+from ..operations.list_tables import list_tables, IRWMetadataUnavailable
+
+
+def _require_column(df: pd.DataFrame, column: str) -> None:
+    """Refuse to silently skip a filter whose metadata column is missing.
+
+    Every filter below is a no-op when its column is absent, so a metadata
+    outage would quietly widen the result to the entire catalogue instead of
+    narrowing it. Fail instead.
+    """
+    if column not in df.columns:
+        raise IRWMetadataUnavailable(
+            f"Cannot filter on '{column}': that column is missing from the IRW "
+            f"metadata, so the filter would be silently ignored and every table "
+            f"returned. This usually means the metadata tables could not be loaded."
+        )
 
 
 def _apply_numeric_filter(
@@ -19,8 +34,9 @@ def _apply_numeric_filter(
     - List of length 1: exact match
     - List of length 2: range [min, max], where None means infinity
     """
-    if value is None or column not in df.columns:
+    if value is None:
         return df
+    _require_column(df, column)
     
     if isinstance(value, (int, float)):
         # Exact match
@@ -52,8 +68,9 @@ def _apply_tag_filter(
     Handles comma-separated values in tag columns (e.g., "value1, value2").
     Matches if any value in the comma-separated list matches any filter value.
     """
-    if values is None or column not in df.columns:
+    if values is None:
         return df
+    _require_column(df, column)
     
     if isinstance(values, str):
         values = [values]
@@ -114,8 +131,9 @@ def _apply_variable_filter(
     ALL variables in the filter list must be present (AND logic).
     Variables containing '_' are treated as prefix matches.
     """
-    if variables is None or 'variables' not in df.columns:
+    if variables is None:
         return df
+    _require_column(df, 'variables')
     
     if isinstance(variables, str):
         variables = [variables]
@@ -171,8 +189,9 @@ def _apply_longitudinal_filter(
     longitudinal: Optional[bool]
 ) -> pd.DataFrame:
     """Apply longitudinal filter."""
-    if longitudinal is None or 'longitudinal' not in df.columns:
+    if longitudinal is None:
         return df
+    _require_column(df, 'longitudinal')
     
     mask = df['longitudinal'] == longitudinal
     return df[mask].copy()
@@ -376,8 +395,8 @@ def filter_tables(
         # Singular arg name (matches R's `collection=`), plural column name
         # (matches the list-valued content). _apply_tag_filter already handles
         # list row values with OR semantics, so no new primitive is needed.
-        _known = {c for v in df['collections'] for c in (v if isinstance(v, list) else [])} \
-            if 'collections' in df.columns else set()
+        _require_column(df, 'collections')
+        _known = {c for v in df['collections'] for c in (v if isinstance(v, list) else [])}
         _want = [collection] if isinstance(collection, str) else list(collection)
         _unknown = [c for c in _want if c not in _known]
         if _unknown:
