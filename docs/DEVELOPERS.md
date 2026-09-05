@@ -2,6 +2,14 @@
 
 Internal documentation for contributors to the `irw` Python package.
 
+## Sharding, and why these are lists
+
+**Redivis caps any dataset at 1000 tables.** That is the only reason IRW spans
+several datasets, and it applies to item text as well as response data. So there
+are two shard lists in `src/irw/config.py`, `MAIN_REFS` and `ITEMTEXT_REFS`, and
+they behave identically: declared oldest-to-newest, searched newest-first, an
+unopenable shard skipped rather than fatal.
+
 ## Adding a main IRW Redivis warehouse
 
 Main IRW response tables can span multiple Redivis datasets ("warehouses"). To add another one (e.g. a 7th warehouse), **only update `MAIN_REFS` in `src/irw/config.py`**:
@@ -33,13 +41,40 @@ No other code changes are needed. The package automatically:
   shipping a new `MAIN_REFS` entry** or its tables will silently be missing. If
   no warehouse opens at all, `_init_datasets_from_refs` raises.
 
+## Adding an item text shard
+
+Identical in shape, on `ITEMTEXT_REFS`:
+
+```python
+ITEMTEXT_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
+    ("datapages", "irw_text:07b6"),
+    ("datapages", "irw_text_2:xxxx"),  # new shard
+)
+```
+
+No other code changes are needed. `_get_itemtext_datasets()` opens and orders
+them, `_list_itemtext_tables()` returns the union, and `_get_itemtext_table()`
+searches newest-first — so `itemtext()` keeps working for a table in any shard.
+
+The same trap applies, and it is the one that bites: **publish a release of the
+new shard on Redivis before shipping the config entry.** An unreleased dataset
+is unreadable with a read-only token, and the package skips it with a logged
+warning rather than an error, so its tables are simply missing and nobody sees
+a failure.
+
+Two things must ship together with this: `IRW_TEXT_DATASETS` in
+`src/metadata/redivis_config.R` (the `ben-domingue/irw` repo) and
+`.irw_itemtext_specs` in the R package. A config naming a shard the other two do
+not is the drift recorded as `ben-domingue/irw#1733`. The full runbook lives in
+`Rpkg/inst/developer/warehouses.md`.
+
 ### Verify the change
 
 ```bash
 pip install pytest
 
 # Fast, offline checks (mocked Redivis)
-python -m pytest tests/test_main_refs.py -v
+python -m pytest tests/test_main_refs.py tests/test_itemtext_refs.py -v
 
 # Live Redivis checks (network + auth required)
 RUN_REDIVIS_TESTS=1 python -m pytest tests/test_redivis_integration.py -v
