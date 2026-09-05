@@ -3,8 +3,7 @@
 from typing import Optional, Dict, Any, Union
 import pandas as pd
 from ..utils.redivis.table_metadata import _table_info
-from ..utils.redivis.item_text import _get_itemtext_dataset, _list_itemtext_tables
-from ..utils.redivis.tables import _get_table
+from ..utils.redivis.item_text import _get_itemtext_table, _list_itemtext_tables
 
 
 def _get_table_metadata(table_name: str) -> Dict[str, Any]:
@@ -85,22 +84,16 @@ def _get_table_itemtext(table_name: str) -> Union[pd.DataFrame, str]:
     if table_name.lower() not in available_tables:
         return f"Item-level text is not available for table '{table_name}'."
     
-    # Item text is available, fetch it
+    # Item text is available, fetch it. Item text is a shard list, so this
+    # searches the shards newest-first rather than asking a single dataset --
+    # see _get_itemtext_table.
     try:
-        # Get itemtext dataset
-        itemtext_dataset = _get_itemtext_dataset()
-        
-        # Item text tables are named as "{table_name}__items"
-        itemtext_table_name = f"{table_name}__items"
-        
-        # Get the table
-        itemtext_table = _get_table(itemtext_dataset, itemtext_table_name)
-        
-        # Fetch as DataFrame
-        itemtext_df = itemtext_table.to_pandas_dataframe()
-        
-        return itemtext_df
-        
+        itemtext_table = _get_itemtext_table(table_name)
+        if itemtext_table is None:
+            return f"Item-level text is not available for table '{table_name}'."
+
+        return itemtext_table.to_pandas_dataframe()
+
     except Exception:
         # If fetching fails, return message
         return f"Item-level text is not available for table '{table_name}'."
