@@ -60,7 +60,13 @@ META_TABLES: ClassVar[dict[str, str]] = {
 
 # Package metadata
 PACKAGE_NAME: str = "irw"
-VERSION: str = "0.0.2"
+# The one place the package version is written in Python. `irw.__version__`
+# re-exports this, and tests/test_version_string.py asserts it matches
+# pyproject.toml. Bump it whenever a change needs to reach existing installs:
+# the briefing's `pip install git+...` line resolves the version, sees it
+# already installed and SKIPS -- even with --upgrade -- so an unchanged version
+# string means users silently keep the old code.
+VERSION: str = "0.1.0"
 DESCRIPTION: str = "A Python package for the Item Response Warehouse (IRW)"
 
 __all__ = [

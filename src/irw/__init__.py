@@ -76,4 +76,6 @@ __all__ = [
     "version",
 ]
 
-__version__ = "0.0.1"
+# Single source of truth is config.VERSION -- these two literals had drifted
+# apart (0.0.1 here, 0.0.2 there), so a user could not tell what they had.
+from .config import VERSION as __version__
