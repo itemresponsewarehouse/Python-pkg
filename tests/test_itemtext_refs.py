@@ -123,3 +123,34 @@ def test_fetch_prefers_the_newest_shard_holding_the_table(mock_init, monkeypatch
     with patch("irw.utils.redivis.tables._get_table",
                side_effect=lambda ds, name: f"table<{name}@{ds._id}>"):
         assert it._get_itemtext_table("shared") == "table<shared__items@irw_text_2:2>"
+
+
+@patch("irw.utils.redivis.item_text._init_datasets_from_refs")
+def test_mixed_case_name_resolves_to_the_stored_lowercase_table(mock_init, monkeypatch):
+    """Item text is lower-cased on upload; response tables often are not.
+
+    `HEARD_Roch_2022_K6` is stored as `heard_roch_2022_k6__items`. Redivis'
+    lookup happens to be case-insensitive, so this pins the resolution we
+    perform ourselves rather than the server behaviour we would otherwise be
+    depending on.
+    """
+    monkeypatch.setattr("irw.utils.redivis.item_text.ITEMTEXT_REFS",
+                        (("u", "irw_text:1"),))
+    mock_init.return_value = [fake_shard("irw_text:1", ["heard_roch_2022_k6"])]
+
+    assert it._itemtext_name_index()["heard_roch_2022_k6"] == "heard_roch_2022_k6"
+    asked = []
+    with patch("irw.utils.redivis.tables._get_table",
+               side_effect=lambda ds, name: asked.append(name) or "tbl"):
+        assert it._get_itemtext_table("HEARD_Roch_2022_K6") == "tbl"
+    assert asked == ["heard_roch_2022_k6__items"], asked
+
+
+@patch("irw.utils.redivis.item_text._init_datasets_from_refs")
+def test_name_index_prefers_the_newest_shard(mock_init, monkeypatch):
+    monkeypatch.setattr("irw.utils.redivis.item_text.ITEMTEXT_REFS",
+                        (("u", "irw_text:1"), ("u", "irw_text_2:2")))
+    mock_init.return_value = [fake_shard("irw_text:1", ["Shared"]),
+                              fake_shard("irw_text_2:2", ["shared"])]
+    # Reversed to newest-first inside _get_itemtext_datasets, so shard 2 wins.
+    assert it._itemtext_name_index()["shared"] == "shared"

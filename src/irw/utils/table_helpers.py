@@ -79,9 +79,10 @@ def _get_table_bibtex(table_name: str) -> Optional[str]:
 
 def _get_table_itemtext(table_name: str) -> Union[pd.DataFrame, str]:
     """Get item-level text for a table by name."""
-    # Check itemtext availability using cached itemtext_tables
-    available_tables = _list_itemtext_tables()
-    if table_name.lower() not in available_tables:
+    # Availability is tested case-insensitively because item text tables are
+    # lower-cased on upload; the fetch below resolves to the stored name rather
+    # than leaning on Redivis' undocumented case-insensitive table lookup.
+    if table_name.lower() not in _list_itemtext_tables():
         return f"Item-level text is not available for table '{table_name}'."
     
     # Item text is available, fetch it. Item text is a shard list, so this
