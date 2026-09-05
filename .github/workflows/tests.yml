@@ -33,6 +33,20 @@ jobs:
       - run: pip install -e . pytest
       - run: python -m pytest tests/ -q
 
+  lint:
+    # Lint only, no formatter -- see the [tool.ruff] comment in pyproject.toml
+    # for why (#33). One version is enough: ruff reads target-version from
+    # pyproject, so the matrix the other two jobs run adds nothing here.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip
+      - run: pip install ruff
+      - run: ruff check src/ tests/ examples/
+
   import:
     runs-on: ubuntu-latest
     strategy:

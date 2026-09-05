@@ -191,9 +191,9 @@ def _format_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
     lines.append(f"  License: {license}" if license else "  License: N/A")
     bibtex = biblio.get('bibtex')
     if bibtex:
-        lines.append(f"  BibTeX: Available (use save_bibtex() to save)")
+        lines.append("  BibTeX: Available (use save_bibtex() to save)")
     else:
-        lines.append(f"  BibTeX: N/A")
+        lines.append("  BibTeX: N/A")
     
     # Additional info
     lines.append("\nAdditional Information:")

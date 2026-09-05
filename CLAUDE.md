@@ -77,8 +77,15 @@ follow when adding a warehouse or an item-text shard.
 
 ## Code Style
 
-No linter or formatter is configured. Follow existing style: numpydoc-style
-docstrings, and internal helpers prefixed with `_`.
+Linting is `ruff check` (configured in `pyproject.toml`, run as a CI job).
+There is deliberately **no formatter** -- reflowing every file would cost the
+whole package's `git blame` for a style win, and that trade was declined
+(#33). The rule set is ruff's non-formatting default (`E4`, `E7`, `E9`, `F`):
+real problems, not style. Adding a rule means owning the churn it causes, so
+weigh that before widening it.
+
+Follow existing style otherwise: numpydoc-style docstrings, and internal
+helpers prefixed with `_`.
 
 Type annotations are used — `config.py` and `operations/version.py` are fully
 annotated and every public signature in `api.py` is. One constraint on them:

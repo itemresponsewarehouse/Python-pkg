@@ -48,3 +48,27 @@ where = ["src"]
 [project.urls]
 Homepage = "https://itemresponsewarehouse.org/"
 Issues = "https://github.com/itemresponsewarehouse/Python-pkg/issues"
+
+# Lint only -- there is deliberately no formatter here. A formatter reflows
+# every file at once, which makes `git blame` less useful across the whole
+# package and turns any in-flight branch into a conflict; the value was not
+# judged worth that. See issue #33.
+#
+# The rule set is ruff's non-formatting default (E4/E7/E9 + F): real problems
+# such as undefined names and dead imports. Style rules that would churn the
+# tree are deliberately out -- E501 (line-too-long) alone flagged 126 lines
+# and I001 (import sorting) 23 files. Add a rule only with the churn it costs
+# in view.
+[tool.ruff]
+target-version = "py39"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# Both files import after top-level statements on purpose: __init__.py installs
+# warning filters that must be in place before the Redivis client is imported,
+# and the integration tests set a module-level skipif before importing irw.
+"src/irw/__init__.py" = ["E402"]
+"tests/test_redivis_integration.py" = ["E402"]

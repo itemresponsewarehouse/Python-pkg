@@ -37,7 +37,6 @@ from .utils.redivis.table_metadata import (
 )
 from .utils.table_helpers import (
     _get_table_info_dict,
-    _get_table_bibtex,
     _get_table_itemtext,
     _format_table_info
 )
