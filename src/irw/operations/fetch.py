@@ -9,7 +9,14 @@ import logging
 import numpy as np
 import pandas as pd
 
-from ..utils.redivis import _get_table, _classify_error, _format_error, _search_datasets, _retry_transient
+from ..utils.redivis.tables import (
+    _get_table,
+    _classify_error,
+    _format_error,
+    _search_datasets,
+    _retry_transient,
+    _terminal_error_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +106,12 @@ def _fetch_one_table(datasets: List[Any], name: str, *, dedup: bool) -> Optional
     Internal: fetch a single table using the provided datasets.
     """
     if not isinstance(name, str) or name == "":
-        logger.warning(f"Table '{name}' cannot be fetched due to an invalid format.")
+        # Not a Redivis condition at all -- this is a bad argument. It shared
+        # the "invalid format" wording with the Redivis path, which made the
+        # two indistinguishable in a log.
+        logger.warning(
+            f"Table name must be a non-empty string; got {name!r}. Nothing was fetched."
+        )
         return None
 
     def _load_table(ds: Any) -> pd.DataFrame:
@@ -160,9 +172,14 @@ def _fetch_one_table(datasets: List[Any], name: str, *, dedup: bool) -> Optional
 
         return pd.DataFrame(df)
 
-    result, last_other, invalid_request = _search_datasets(datasets, _load_table)
-    if invalid_request is not None:
-        logger.warning(f"Table '{name}' cannot be fetched due to an invalid format.")
+    result, last_other, terminal = _search_datasets(datasets, _load_table)
+    if terminal is not None:
+        # Names the actual condition -- quota exhaustion used to be reported
+        # here as an invalid format. warn-and-return-None is kept deliberately:
+        # R stops(), Python's fetch path has always returned None.
+        message = _terminal_error_message(terminal, name)
+        logger.warning(message)
+        warnings.warn(message, UserWarning, stacklevel=2)
         return None
     if result is not None:
         return result
