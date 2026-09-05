@@ -9,7 +9,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from ..utils.redivis import (
+from ..utils.redivis.tables import (
     _get_table,
     _classify_error,
     _format_error,
