@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, Union
 import pandas as pd
 from ..utils.redivis.table_metadata import _table_info
 from ..utils.redivis.item_text import _get_itemtext_table, _list_itemtext_tables
+from ..operations.version import current_version
 
 
 def _get_table_metadata(table_name: str) -> Dict[str, Any]:
@@ -105,6 +106,14 @@ def _format_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
     lines = []
     lines.append(f"\n{'='*60}")
     lines.append(f"IRW Table: {table_name}")
+    # Which version of IRW the numbers below describe. Nothing said so before,
+    # which meant summary statistics copied out of info() could not be tied to
+    # a citable corpus version (issue #3). Quiet and non-raising: an
+    # unreachable manifest drops the line rather than failing info().
+    stamp = current_version()
+    if stamp is not None:
+        number, released = stamp
+        lines.append(f"IRW version: v{number} (released {released})")
     lines.append(f"{'='*60}")
     
     # Description section (if available)

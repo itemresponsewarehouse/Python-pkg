@@ -24,7 +24,7 @@ import io
 import urllib.error
 import urllib.request
 import warnings
-from typing import Optional, Union
+from typing import Optional, Tuple, Union
 
 import pandas as pd
 
@@ -129,6 +129,27 @@ def load_manifest(refresh: bool = False) -> pd.DataFrame:
     frame["released"] = [_parse_utc(v) for v in frame["irw_released_at"]]
     _MANIFEST = frame
     return frame
+
+
+def current_version() -> Optional[Tuple[int, str]]:
+    """The newest IRW version and its release date, or None if unavailable.
+
+    A quiet, non-raising counterpart to ``version()`` for callers that want to
+    stamp output with a version but must not fail or print because of it --
+    ``info()`` is the case this exists for. The manifest is cached for the
+    session, so the cost is one download per process, not one per call.
+    """
+    try:
+        manifest = load_manifest()
+        number = int(manifest["irw_version"].max())
+        released = manifest.loc[
+            manifest["irw_version"] == number, "irw_released_at"
+        ].iloc[0]
+        return number, str(released)
+    except Exception:
+        # Offline, or the manifest moved. The caller's own output is worth more
+        # than the version stamp, so degrade rather than raise.
+        return None
 
 
 def version(date: Optional[Union[str, dt.date, dt.datetime]] = None

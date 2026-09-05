@@ -125,3 +125,30 @@ def test_a_manifest_with_unexpected_columns_is_rejected():
                                    "redivis_released_before"])
     with pytest.raises(RuntimeError, match="expected columns"):
         mod._check_columns(broken)
+
+
+# --- current_version(): the quiet stamp info() uses ------------------------
+
+def test_current_version_reports_the_newest_version_and_its_date():
+    assert mod.current_version() == (3, "2026-08-15T00:00:00Z")
+
+
+def test_current_version_does_not_print():
+    """version() prints a summary line as a side effect; info() must not."""
+    import io
+    import contextlib
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        mod.current_version()
+    assert buf.getvalue() == ""
+
+
+def test_current_version_returns_none_when_the_manifest_is_unreachable(monkeypatch):
+    """Offline, info() should still print everything else it knows."""
+    monkeypatch.setattr(mod, "_MANIFEST", None)
+    monkeypatch.setattr(
+        mod, "load_manifest",
+        lambda refresh=False: (_ for _ in ()).throw(RuntimeError("no network")),
+    )
+    assert mod.current_version() is None
