@@ -100,6 +100,10 @@ irw.collections()                     # all collections, with coverage and table
 tabs = irw.collection("depression")   # the table names in one collection
 irw.collection_members(tables="frac20")  # which collections is this table in?
 
+# Simulate IRW-shaped data (no network, no Redivis quota)
+sim = irw.simdata(n_id=500, n_item=20, model="2PL", seed=1)   # id / item / resp
+pairs = irw.simdata_comp(n_agent=100, n_pairs=10000, nu=0.1)  # agent_a / agent_b / winner
+
 # Which version of IRW is this? (cite this number)
 irw.version()                         # newest IRW version and its dataset pins
 irw.version("2026-08-01")             # what was live on that date
