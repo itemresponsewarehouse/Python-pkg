@@ -251,7 +251,17 @@ def itemtext(table_name: str) -> Union[pd.DataFrame, str]:
     Returns
     -------
     pandas.DataFrame or str
-        DataFrame with item text if available, otherwise message string.
+        DataFrame with item text if available, otherwise a message string
+        saying IRW has none for this table.
+
+    Raises
+    ------
+    Exception
+        If the lookup or download fails. A failure is deliberately not
+        reported as absence: the two are indistinguishable to a caller that
+        branches on the return type, so a transient Redivis fault used to
+        become a factual claim that IRW ships no item text for the table
+        (issue #42). Callers that want the quiet behaviour should catch.
 
     Notes
     -----
