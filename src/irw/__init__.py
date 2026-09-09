@@ -54,6 +54,8 @@ from .api import (
     collection,
     collection_members,
     version,
+    simdata,
+    simdata_comp,
 )
 from .operations.list_tables import IRWMetadataUnavailable
 
@@ -74,6 +76,8 @@ __all__ = [
     "collection",
     "collection_members",
     "version",
+    "simdata",
+    "simdata_comp",
 ]
 
 # Single source of truth is config.VERSION -- these two literals had drifted
