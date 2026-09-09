@@ -87,6 +87,62 @@ RUN_REDIVIS_TESTS=1 python -m pytest tests/test_redivis_integration.py -v
 
 After releasing or sharing the update, ask users to **restart their Python session** so in-process caches pick up the new warehouse list.
 
+## MCP server (issue #1713)
+
+The optional MCP server lives in `src/irw/mcp.py` and is deliberately separate
+from the core API. Install it with `pip install "irw[mcp]"` on Python 3.10 or
+newer. The server uses the official MCP Python SDK over stdio and registers the
+eight read-only tools documented in the package README. Every response is
+stamped with `irw_version` / `irw_released_at` from `current_version()`; a
+manifest failure degrades to an unpinned result with a warning, never an error.
+
+Two sources feed the tools. `PackageBackend` wraps the public `irw` API for
+everything on Redivis. `GitHubSource` reads public files with no login and no
+quota: the `data/` script listing and headers (`get_processing_notes`), the
+per-table notes embedded in the site's `itemtext_issues.qmd` (the `rights`
+object on `get_itemtext`), and `processing_notes/validator_overrides.csv`.
+Both are injectable, which is how the offline tests run without a network.
+
+Guards happen before the call that would cost something. Missing Redivis
+credentials are a structured `authentication_required` error, not a hang: the
+SDK's fallback is an interactive browser login that can never complete inside
+a stdio server, so `PackageBackend.ensure_ready` checks for `REDIVIS_API_TOKEN`
+or `~/.redivis/python_credentials` first.
+
+`fetch_table` bounds its window on the wire: it passes `max_rows` and
+`columns` to `irw.fetch()`, which forwards both to Redivis's read session, so
+the rows outside the page are never sent. The `FETCH_MAX_RESPONSES` guard
+(1,000,000, the same number as `llms.txt` section 3) survives only for
+`wide=true` and `dedup=true`, which describe the whole table and so cannot be
+expressed as a page; for those it reads `n_responses` from the catalogue and
+refuses before downloading.
+
+**Do not reimplement the package inside the adapter.** `search_tables` takes a
+`filters` object, validates the names against `irw.get_filters()` and passes
+it to `irw.filter()`; the tool description and the per-filter caveats are
+generated from `FILTER_DESCRIPTIONS`, not `describe_filter()`, because the
+latter loads the metadata tables to compute each filter's values and must
+not run at server startup. The first version of the server filtered
+over `list_tables()` by hand, accepted five filters where the package had
+nineteen, and dropped the coverage caveats `FILTER_DESCRIPTIONS` already
+carried -- which is how "no match" starts reading as "no data". If a filter is
+missing, add it to `irw.filter()` (see `has_item_text`), not to the adapter.
+
+Keep stdout clean: MCP protocol messages use stdout, while diagnostics belong
+on stderr. The adapter captures human-readable output and warnings emitted by
+the existing package APIs and returns warnings in the structured tool result.
+Do not add OpenAI or other model-provider dependencies to this package.
+
+Tests use a fake backend and a fake GitHub source and do not require Redivis
+credentials or a network. The live machine checks in `tests/test_mcp_live.py`
+follow `briefing-check/` in the site repository -- every assertion is one a
+silent no-op cannot satisfy -- and are opt-in:
+
+```bash
+RUN_REDIVIS_TESTS=1 python -m pytest tests/test_mcp_live.py -v
+```
+
+They download one 72-row table and nothing else.
 
 ## Collections (issue #1633)
 
