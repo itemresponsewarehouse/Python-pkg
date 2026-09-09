@@ -5,7 +5,12 @@ import warnings
 
 from ...config import ITEMTEXT_REFS
 from .cache import metadata_cache
-from .datasets import _init_datasets_from_refs
+from .datasets import (
+    _cache_version,
+    _dataset_table_list,
+    _datasets_version_tag,
+    _init_datasets_from_refs,
+)
 
 
 def _itemtext_datasets_cache_key() -> str:
@@ -77,37 +82,29 @@ def _itemtext_name_index() -> Dict[str, str]:
 
     Populated newest-shard-first, so a name present in more than one shard --
     including two that differ only in case -- resolves to its most recent copy.
+
+    Keyed on the shards' current version tags, not just on ITEMTEXT_REFS. The
+    refs alone make a *config* change a cache miss; they say nothing about a
+    *release*, and a release is what withdraws item text. Without the version a
+    long-running process kept resolving and serving wording that a rights
+    ruling had removed (issue #51).
     """
+    datasets = _get_itemtext_datasets()
     index_key = _itemtext_datasets_cache_key() + ":index"
-    cached = metadata_cache.get(index_key)
+    version = _cache_version(_datasets_version_tag(datasets))
+    cached = metadata_cache.get(index_key, version)
     if cached is not None:
         return cached
 
     index: Dict[str, str] = {}
-    for ds in _get_itemtext_datasets():
-        # Use cached table list if available. `_init_dataset` sets `_id`, so
-        # this key is per-shard and stays correct as shards are added.
-        ds_id = getattr(ds, "_id", None) or getattr(ds, "name", None)
-        cache_key = f"dataset_tables:{ds_id}" if ds_id else None
-
-        cached_table_list = None
-        if cache_key:
-            cached_table_list = metadata_cache.get(cache_key)
-
-        if cached_table_list is None:
-            tables = ds.list_tables()
-            if cache_key:
-                metadata_cache.set(cache_key, list(tables))
-        else:
-            tables = cached_table_list
-
-        for t in tables:
+    for ds in datasets:
+        for t in _dataset_table_list(ds):
             name = getattr(t, "name", "") or ""
             if name.endswith("__items"):
                 base = name[: -len("__items")]
                 index.setdefault(base.lower(), base)
 
-    metadata_cache.set(index_key, index)
+    metadata_cache.set(index_key, index, version)
     return index
 
 

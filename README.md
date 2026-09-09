@@ -109,6 +109,27 @@ irw.version()                         # newest IRW version and its dataset pins
 irw.version("2026-08-01")             # what was live on that date
 ```
 
+## Caching and releases
+
+Table listings and metadata are cached in memory so repeated calls do not
+re-query Redivis. The cache is keyed on each dataset's current version tag, so
+a release invalidates it: a process that has been running since before a
+release does not go on serving what the release withdrew. That matters most
+for item text, where withdrawals are how IRW stops distributing instrument
+wording it may not distribute.
+
+Version tags are re-checked at most once every 300 seconds per dataset. Set
+`IRW_VERSION_TTL_SECONDS` to change that window -- `0` re-checks on every
+lookup, at the cost of one small metadata request each time. To drop
+everything cached in the current process:
+
+```python
+from irw.utils.redivis.cache import metadata_cache
+metadata_cache.clear()
+```
+
+Nothing is cached on disk, so a new process starts cold.
+
 ## MCP server
 
 IRW can run as a local, read-only Model Context Protocol server for an

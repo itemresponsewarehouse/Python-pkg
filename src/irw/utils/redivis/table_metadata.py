@@ -5,11 +5,24 @@ import redivis
 from typing import Any
 from ...config import META_REF, META_TABLES
 from .cache import metadata_cache
-from .datasets import _init_main_datasets, _main_datasets_cache_key
+from .datasets import (
+    _cache_version,
+    _dataset_table_list,
+    _dataset_version_tag,
+    _datasets_version_tag,
+    _init_main_datasets,
+    _main_datasets_cache_key,
+)
 
 
 def _get_meta_dataset() -> Any:
-    """Get the IRW metadata dataset object."""
+    """Get the IRW metadata dataset object.
+
+    The handle is cached for the life of the process, which is fine: it is a
+    handle, not data. What must not be trusted is the `properties` frozen on
+    it at `.get()` time -- see `_dataset_version_tag`, which is how every
+    caller below resolves the current version.
+    """
     cached_dataset = metadata_cache.get("meta_dataset")
     if cached_dataset is not None:
         return cached_dataset
@@ -22,36 +35,25 @@ def _get_meta_dataset() -> Any:
 
 
 def _get_existing_tables() -> set[str]:
-    """Get set of existing table names from main IRW datasets."""
+    """Get set of existing table names from main IRW datasets.
+
+    Keyed on the warehouses' current version tags: this set is what filters
+    every metadata frame down to tables that still exist, so if it cannot
+    notice a release then neither can they (issue #51).
+    """
+    ds_list = _init_main_datasets()
     cache_key = "existing_tables:" + _main_datasets_cache_key()
-    cached_tables = metadata_cache.get(cache_key)
+    version = _cache_version(_datasets_version_tag(ds_list))
+    cached_tables = metadata_cache.get(cache_key, version)
     if cached_tables is not None:
         return cached_tables
-    
-    ds_list = _init_main_datasets()
+
     existing_tables = set()
-    
     for ds in ds_list:
-        # Use cached table list if available
-        ds_id = getattr(ds, "_id", None) or getattr(ds, "name", None)
-        ds_cache_key = f"dataset_tables:{ds_id}" if ds_id else None
-        
-        cached_table_list = None
-        if ds_cache_key:
-            cached_table_list = metadata_cache.get(ds_cache_key)
-        
-        if cached_table_list is None:
-            tables = ds.list_tables()
-            # Cache the table list
-            if ds_cache_key:
-                metadata_cache.set(ds_cache_key, list(tables))
-        else:
-            tables = cached_table_list
-        
-        for tbl in tables:
+        for tbl in _dataset_table_list(ds):
             existing_tables.add(tbl.name.lower())
-    
-    metadata_cache.set(cache_key, existing_tables)
+
+    metadata_cache.set(cache_key, existing_tables, version)
     return existing_tables
 
 
@@ -65,7 +67,7 @@ def get_metadata_table() -> pd.DataFrame:
         Metadata information for IRW tables.
     """
     dataset = _get_meta_dataset()
-    latest_version_tag = dataset.properties.get("version", {}).get("tag")
+    latest_version_tag = _cache_version(_dataset_version_tag(dataset))
     
     # Check cache
     cached_data = metadata_cache.get("metadata", latest_version_tag)
@@ -92,7 +94,7 @@ def get_tags_table() -> pd.DataFrame:
         Tags information for IRW tables.
     """
     dataset = _get_meta_dataset()
-    latest_version_tag = dataset.properties.get("version", {}).get("tag")
+    latest_version_tag = _cache_version(_dataset_version_tag(dataset))
     
     # Check cache
     cached_data = metadata_cache.get("tags", latest_version_tag)
@@ -133,7 +135,7 @@ def get_collections_table() -> pd.DataFrame:
         n_tables, maintainer, added.
     """
     dataset = _get_meta_dataset()
-    latest_version_tag = dataset.properties.get("version", {}).get("tag")
+    latest_version_tag = _cache_version(_dataset_version_tag(dataset))
 
     cached_data = metadata_cache.get("collections", latest_version_tag)
     if cached_data is not None:
@@ -162,7 +164,7 @@ def get_collection_members_table() -> pd.DataFrame:
         Columns: table, collection, basis.
     """
     dataset = _get_meta_dataset()
-    latest_version_tag = dataset.properties.get("version", {}).get("tag")
+    latest_version_tag = _cache_version(_dataset_version_tag(dataset))
 
     cached_data = metadata_cache.get("collection_members", latest_version_tag)
     if cached_data is not None:
@@ -190,7 +192,7 @@ def get_biblio_table() -> pd.DataFrame:
         Bibliography information for IRW tables.
     """
     dataset = _get_meta_dataset()
-    latest_version_tag = dataset.properties.get("version", {}).get("tag")
+    latest_version_tag = _cache_version(_dataset_version_tag(dataset))
     
     # Check cache
     cached_data = metadata_cache.get("biblio", latest_version_tag)
@@ -228,7 +230,7 @@ def _table_info() -> pd.DataFrame:
         Combined table information with columns from stats, tags, and biblio.
     """
     dataset = _get_meta_dataset()
-    latest_version_tag = dataset.properties.get("version", {}).get("tag")
+    latest_version_tag = _cache_version(_dataset_version_tag(dataset))
     
     # Check if we have cached combined metadata with version check
     cached_combined = metadata_cache.get("combined_metadata", latest_version_tag)

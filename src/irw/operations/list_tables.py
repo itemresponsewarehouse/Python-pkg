@@ -6,6 +6,11 @@ import pandas as pd
 from ..utils.redivis.table_metadata import _table_info
 from ..utils.redivis.item_text import _list_itemtext_tables
 from ..utils.redivis.cache import metadata_cache
+from ..utils.redivis.datasets import (
+    _cache_version,
+    _dataset_table_list,
+    _datasets_version_tag,
+)
 from ..utils.redivis.datasets import _datasets_cache_key
 
 # =====================
@@ -78,29 +83,18 @@ TAGS_SET = {
 # =====================
 
 def _build_base_table_list(datasets: List[Any]) -> pd.DataFrame:
-    """Build base table list from datasets, using cached table lists when possible."""
+    """Build base table list from datasets, using cached table lists when possible.
+
+    A warehouse that cannot be listed is skipped rather than aborting the
+    catalogue, matching `_init_datasets_from_refs(skip_unavailable=True)`.
+    """
     rows: List[Dict[str, Any]] = []
     for ds in datasets:
-        # Create cache key based on dataset identifier
-        ds_id = getattr(ds, "_id", None) or getattr(ds, "name", None)
-        cache_key = f"dataset_tables:{ds_id}" if ds_id else None
-        
-        # Try to get cached table list
-        cached_tables = None
-        if cache_key:
-            cached_tables = metadata_cache.get(cache_key)
-        
-        if cached_tables is None:
-            try:
-                tables = ds.list_tables()
-                # Cache the table list if we have a cache key
-                if cache_key:
-                    metadata_cache.set(cache_key, list(tables))
-            except Exception:
-                continue
-        else:
-            tables = cached_tables
-        
+        try:
+            tables = _dataset_table_list(ds)
+        except Exception:
+            continue
+
         for t in tables:
             rows.append({"name": getattr(t, "name", None)})
     
@@ -112,7 +106,8 @@ def _build_base_table_list(datasets: List[Any]) -> pd.DataFrame:
 
 def _merge_metadata(base: pd.DataFrame, datasets: List[Any]) -> pd.DataFrame:
     cache_key = f"list_tables:{_datasets_cache_key(datasets)}"
-    cached = metadata_cache.get(cache_key)
+    version = _cache_version(_datasets_version_tag(datasets))
+    cached = metadata_cache.get(cache_key, version)
     if cached is not None:
         return cached.copy()
 
@@ -148,7 +143,7 @@ def _merge_metadata(base: pd.DataFrame, datasets: List[Any]) -> pd.DataFrame:
     result = result.rename(columns={k: v for k, v in RENAME_MAP.items() if k in result.columns})
 
     # Cache and return
-    metadata_cache.set(cache_key, result)
+    metadata_cache.set(cache_key, result, version)
     return result.copy()
 
 
@@ -211,9 +206,10 @@ def list_tables(datasets: List[Any]) -> pd.DataFrame:
     """
     # Cache key based on dataset identifiers
     cache_key = f"list_tables_final:{_datasets_cache_key(datasets)}"
-    
+    version = _cache_version(_datasets_version_tag(datasets))
+
     # Check if final result is cached
-    cached_result = metadata_cache.get(cache_key)
+    cached_result = metadata_cache.get(cache_key, version)
     if cached_result is not None:
         return cached_result.copy()
     
@@ -228,7 +224,7 @@ def list_tables(datasets: List[Any]) -> pd.DataFrame:
         result = _order_columns(result)
         
         # Cache the final result
-        metadata_cache.set(cache_key, result)
+        metadata_cache.set(cache_key, result, version)
         return result
         
     except IRWMetadataUnavailable:
@@ -258,25 +254,10 @@ def list_tables_basic(datasets: List[Any]) -> pd.DataFrame:
     """
     rows: List[Dict[str, Any]] = []
     for ds in datasets:
-        # Create cache key based on dataset identifier
-        ds_id = getattr(ds, "_id", None) or getattr(ds, "name", None)
-        cache_key = f"dataset_tables:{ds_id}" if ds_id else None
-        
-        # Try to get cached table list
-        cached_tables = None
-        if cache_key:
-            cached_tables = metadata_cache.get(cache_key)
-        
-        if cached_tables is None:
-            try:
-                tables = ds.list_tables()
-                # Cache the table list if we have a cache key
-                if cache_key:
-                    metadata_cache.set(cache_key, list(tables))
-            except Exception:
-                continue
-        else:
-            tables = cached_tables
+        try:
+            tables = _dataset_table_list(ds)
+        except Exception:
+            continue
 
         for t in tables:
             props = getattr(t, "properties", {}) or {}
