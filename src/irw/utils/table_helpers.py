@@ -4,6 +4,12 @@ from typing import Optional, Dict, Any, Union
 import pandas as pd
 from ..utils.redivis.table_metadata import _table_info
 from ..utils.redivis.item_text import _get_itemtext_table, _list_itemtext_tables
+from ..utils.redivis.tables import (
+    _classify_error,
+    _retry_transient,
+    _terminal_error_message,
+    _TERMINAL_ERROR_KINDS,
+)
 from ..operations.version import current_version
 
 
@@ -79,26 +85,49 @@ def _get_table_bibtex(table_name: str) -> Optional[str]:
 
 
 def _get_table_itemtext(table_name: str) -> Union[pd.DataFrame, str]:
-    """Get item-level text for a table by name."""
+    """Get item-level text for a table by name.
+
+    The return type is the contract: a DataFrame means item text, a `str` means
+    IRW does not have any for this table. A failure is neither, and must not be
+    reported as absence -- this function used to end in a bare
+    `except Exception` that returned the absence sentence for network timeouts,
+    quota exhaustion and auth failures alike, so a Redivis hiccup became a
+    factual claim about the corpus that no caller could tell from the real
+    thing (issue #42). Only a minority of IRW tables have item text, which is
+    what made the wrong answer plausible enough to go uninvestigated.
+
+    Failures now raise. Callers that want the quiet behaviour can catch, which
+    is the right default -- the same reasoning that stopped `list_tables()`
+    returning names-only on a metadata failure.
+    """
     # Availability is tested case-insensitively because item text tables are
     # lower-cased on upload; the fetch below resolves to the stored name rather
     # than leaning on Redivis' undocumented case-insensitive table lookup.
     if table_name.lower() not in _list_itemtext_tables():
         return f"Item-level text is not available for table '{table_name}'."
-    
+
     # Item text is available, fetch it. Item text is a shard list, so this
     # searches the shards newest-first rather than asking a single dataset --
-    # see _get_itemtext_table.
-    try:
-        itemtext_table = _get_itemtext_table(table_name)
-        if itemtext_table is None:
-            return f"Item-level text is not available for table '{table_name}'."
-
-        return itemtext_table.to_pandas_dataframe()
-
-    except Exception:
-        # If fetching fails, return message
+    # see _get_itemtext_table. It raises terminal errors (quota, auth, invalid
+    # format) rather than swallowing them.
+    itemtext_table = _get_itemtext_table(table_name)
+    if itemtext_table is None:
+        # The name index said yes and the shard search said no. That is genuine
+        # absence from the caller's point of view: the usual cause is an index
+        # cached from before a release withdrew the table (issue #51).
         return f"Item-level text is not available for table '{table_name}'."
+
+    try:
+        return _retry_transient(itemtext_table.to_pandas_dataframe)
+    except Exception as e:
+        # Name the condition rather than letting a raw Redivis payload out.
+        # Quota in particular arrives looking like an invalid request, which is
+        # why classification happens here and not at the call site.
+        if _classify_error(e) in _TERMINAL_ERROR_KINDS:
+            raise RuntimeError(
+                _terminal_error_message(e, table_name).lstrip("\n")
+            ) from e
+        raise
 
 
 def _format_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
