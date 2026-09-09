@@ -13,6 +13,7 @@ from .info import info as info
 from .filter import filter_tables as filter_tables
 from .filter_info import get_filters as get_filters, describe_filter as describe_filter
 from .simulate import simdata as simdata, simdata_comp as simdata_comp
+from .validate import validate as validate
 
 # No public exports - all functions are internal
 __all__ = []

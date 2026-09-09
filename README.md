@@ -104,6 +104,10 @@ irw.collection_members(tables="frac20")  # which collections is this table in?
 sim = irw.simdata(n_id=500, n_item=20, model="2PL", seed=1)   # id / item / resp
 pairs = irw.simdata_comp(n_agent=100, n_pairs=10000, nu=0.1)  # agent_a / agent_b / winner
 
+# Check your own table against the IRW format before depositing it
+report = irw.validate("my_table.csv")  # needs `pip install irw-validate`
+report.ok                              # False if anything blocks
+
 # Which version of IRW is this? (cite this number)
 irw.version()                         # newest IRW version and its dataset pins
 irw.version("2026-08-01")             # what was live on that date
@@ -129,6 +133,36 @@ metadata_cache.clear()
 ```
 
 Nothing is cached on disk, so a new process starts cold.
+## Validating your own data
+
+`irw.validate()` checks a table against the IRW format standard — the rules in
+`datastandard.md` — and reports what would block a deposit. It uploads nothing
+and contacts nothing.
+
+```python
+import irw, irw_validate
+
+report = irw.validate("my_table.csv")     # or a DataFrame
+report.ok                                  # False if anything blocks
+print(irw_validate.format_report(report))
+```
+
+The checks live in a separate package, `irw-validate`, which is not installed
+with this one:
+
+```
+pip install irw-validate
+```
+
+It is kept separate on purpose. This package is a read client and most of its
+users never deposit anything, so the checker is fetched only by those who need
+it — and it needs pandas and nothing else: no Redivis account, no credentials,
+no network. `irw.validate()` raises an `ImportError` naming that command if it
+is missing.
+
+Severity depends on the profile: `profile="upload"` (the default) is the
+deposit gate, and `profile="core"` is the five-check subset that IRW's
+standalone R script implements, for agreement between the two.
 
 ## MCP server
 
