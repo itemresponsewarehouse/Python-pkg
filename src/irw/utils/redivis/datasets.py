@@ -1,7 +1,9 @@
 """Internal Redivis dataset management utilities with lazy loading and caching."""
 
 import logging
-from typing import List, Any, Tuple
+import os
+import time
+from typing import Any, List, Optional, Tuple
 from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF
 from .cache import metadata_cache
 import redivis
@@ -59,6 +61,154 @@ def _init_datasets_from_refs(
         )
     return datasets
 
+
+
+# =====================
+# Release awareness
+# =====================
+#
+# Every cache below a dataset handle has to be able to notice a release, or a
+# long-running process serves what the release withdrew. That is not a general
+# freshness preference: item-text withdrawals are how IRW stops distributing
+# instrument wording it has been ruled it may not distribute, and a withdrawal
+# that does not reach a consumer is not a withdrawal (issue #51).
+#
+# Noticing a release means asking Redivis for the current version tag, and that
+# is where the previous approach quietly failed. `redivis.Dataset.properties`
+# is a plain attribute assigned by `.get()` -- it does not refetch. The dataset
+# handles are themselves cached here forever, so `ds.properties["version"]`
+# returns the tag as of the first call for the life of the process, and the
+# version checks in `table_metadata.py` that look correct could never fire.
+#
+# So the tag has to come from a handle that is actually re-`get()`. That is one
+# small metadata request, and doing it per lookup would be wasteful, so it is
+# bounded by a TTL: worst-case staleness is the TTL, not the process lifetime.
+
+_DEFAULT_VERSION_TTL_SECONDS = 300.0
+
+
+def _version_ttl_seconds() -> float:
+    """Seconds a cached version tag is trusted before the handle is refreshed.
+
+    Read from the environment on each call rather than at import so a caller
+    can tighten it -- `IRW_VERSION_TTL_SECONDS=0` refreshes on every lookup --
+    without restarting. An unparseable or negative value falls back to the
+    default rather than disabling caching by accident.
+    """
+    raw = os.environ.get("IRW_VERSION_TTL_SECONDS")
+    if raw is None:
+        return _DEFAULT_VERSION_TTL_SECONDS
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Ignoring unparseable IRW_VERSION_TTL_SECONDS=%r; using %s seconds.",
+            raw,
+            _DEFAULT_VERSION_TTL_SECONDS,
+        )
+        return _DEFAULT_VERSION_TTL_SECONDS
+    if value < 0:
+        return _DEFAULT_VERSION_TTL_SECONDS
+    return value
+
+
+def _dataset_label(ds: Any) -> str:
+    """Stable per-dataset cache label."""
+    return (getattr(ds, "_id", None) or getattr(ds, "name", None) or "").lower()
+
+
+def _dataset_version_tag(ds: Any) -> Optional[str]:
+    """Current released version tag for `ds`, refreshed at most once per TTL.
+
+    Returns None when the tag cannot be determined -- an unversioned dataset,
+    or a metadata request that failed. None is a cache key like any other: it
+    is stable, so it does not cause churn, and it does not match a real tag, so
+    a later successful read invalidates.
+
+    A failed refresh keeps the last known tag rather than dropping every cache
+    that depends on it. A metadata blip should not turn into a corpus-wide
+    refetch on a token that is already rate limited.
+    """
+    key = f"version_tag:{_dataset_label(ds)}"
+    now = time.monotonic()
+    stamped = metadata_cache.get(key)
+    if stamped is not None and (now - stamped[0]) < _version_ttl_seconds():
+        return stamped[1]
+
+    try:
+        ds.get()
+    except Exception as e:
+        logger.debug("Could not refresh version for %s: %s", _dataset_label(ds), e)
+        if stamped is not None:
+            # Re-stamp so a persistent outage is not one request per lookup.
+            metadata_cache.set(key, (now, stamped[1]))
+            return stamped[1]
+        return None
+
+    properties = getattr(ds, "properties", None) or {}
+    tag = (properties.get("version") or {}).get("tag")
+    metadata_cache.set(key, (now, tag))
+    return tag
+
+
+def _datasets_version_tag(datasets: List[Any]) -> Optional[str]:
+    """One cache-version string for a group of datasets, or None if unknown.
+
+    Any shard moving invalidates a cache built across all of them, which is
+    what an index spanning shards needs: a table withdrawn from shard 2 has to
+    drop out of an index that also covers shard 1.
+
+    None if any member's tag is unknown, because a group version that cannot
+    see one shard cannot promise anything about the group.
+    """
+    parts = []
+    for ds in datasets:
+        tag = _dataset_version_tag(ds)
+        if tag is None:
+            return None
+        parts.append(f"{_dataset_label(ds)}={tag}")
+    return "|".join(parts)
+
+
+def _cache_version(tag: Optional[str]) -> str:
+    """Turn a version tag into a cache version that is never wrongly trusted.
+
+    `MetadataCache.get(key)` with no version means "no check", which is the
+    stale-forever behaviour. An unknown tag must therefore not be passed
+    through as None: it becomes a value that cannot match anything stored, so
+    an unknown version is a miss rather than a free pass.
+    """
+    return tag if tag is not None else f"unknown:{time.monotonic()!r}"
+
+
+def _dataset_table_list(ds: Any) -> List[Any]:
+    """`ds.list_tables()`, cached per dataset and keyed on its version tag.
+
+    This was written out four times -- twice in `operations/list_tables.py`,
+    once each in `table_metadata.py` and `item_text.py` -- all four sharing the
+    same `dataset_tables:{id}` key with no version, so a release could not
+    invalidate any of them. One copy, version-keyed, fixes all four call sites.
+    """
+    label = _dataset_label(ds)
+    if not label:
+        return list(ds.list_tables())
+
+    version = _dataset_version_tag(ds)
+    if version is None:
+        # No tag means no way to tell a stale list from a current one, so the
+        # list is not cached at all. This costs a request per call for a
+        # dataset with no released version -- rare, and the alternative is the
+        # stale-forever behaviour this whole change exists to remove.
+        return list(ds.list_tables())
+
+    cache_key = f"dataset_tables:{label}"
+    cached = metadata_cache.get(cache_key, version)
+    if cached is not None:
+        return cached
+
+    tables = list(ds.list_tables())
+    metadata_cache.set(cache_key, tables, version)
+    return tables
 
 def _order_main_datasets(datasets: List[Any]) -> List[Any]:
     """Return main warehouses in search order: newest first.
