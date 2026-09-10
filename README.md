@@ -82,6 +82,9 @@ df = irw.fetch("agn_kay_2025")
 # Convert to response matrix
 resp_matrix = irw.long2resp(df)
 
+# Item and response sets without downloading (no export quota)
+sets = irw.table_sets("agn_kay_2025")  # dict: table, n_rows, items, resp, per_item
+
 # Explore available filters
 filters = irw.get_filters()  # Returns list of filter names
 irw.describe_filter('construct_type')  # Get values for a specific filter

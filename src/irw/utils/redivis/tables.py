@@ -172,10 +172,9 @@ def _terminal_error_message(err: Exception, table_name: str) -> str:
     Every one of these used to be reported as "invalid format", including
     export-quota exhaustion -- so a user who had hit the 30-day cap went
     looking for a problem in the warehouse that does not exist. Text mirrors
-    Rpkg/R/redivis-errors.R:97-143 so the two clients say the same thing, with
-    one deliberate divergence: R points at `irw_table_sets()` as the
-    quota-free alternative and Python has no such function yet, so the Python
-    text points at a server-side query instead.
+    Rpkg/R/redivis-errors.R:97-143 so the two clients say the same thing; the
+    quota text points at `irw.table_sets()`, the port of R's
+    `irw_table_sets()` (#55), as the quota-free alternative.
     """
     kind = _classify_error(err)
     detail = _sanitize_error(_format_error(err))
@@ -186,10 +185,9 @@ def _terminal_error_message(err: Exception, table_name: str) -> str:
             "downloaded.\n"
             "This is an account-wide limit on exported bytes, not a problem with the "
             "table.\n"
-            "It resets as the rolling window rolls over; to get results sooner, run a "
-            "server-side\n"
-            "query in the Redivis web interface, which does not count against the "
-            "export quota.\n"
+            "Use `irw.table_sets()` for item/response value sets and per-item "
+            "summaries: it runs a\n"
+            "server-side query and does not count against the export quota.\n"
             f"Underlying error: {detail}"
         )
     if kind == "auth":
