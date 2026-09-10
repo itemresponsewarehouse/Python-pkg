@@ -1085,8 +1085,15 @@ class IRWTools:
         ensure_ready = getattr(self.backend, "ensure_ready", None)
         with self._capture_lock:
             with redirect_stdout(io.StringIO()) as captured_stdout:
+                # record=True on its own. The package installs "ignore" filters
+                # on purpose (irw/__init__.py: the Redivis pinned-id advice and
+                # the pkg_resources deprecation), and a simplefilter("always")
+                # here put itself in front of them, so a session's first
+                # response carried the pinned-id advice once per metadata
+                # table. catch_warnings() invalidates the once-per-location
+                # registry on entry, so a warning the package did not silence
+                # still surfaces on every call.
                 with warnings.catch_warnings(record=True) as caught:
-                    warnings.simplefilter("always")
                     try:
                         if requires_auth and ensure_ready is not None:
                             ensure_ready()
