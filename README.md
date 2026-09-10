@@ -151,7 +151,7 @@ The checks live in a separate package, `irw-validate`, which is not installed
 with this one:
 
 ```
-pip install irw-validate
+pip install irw-validate          # or: pip install irw[validate]
 ```
 
 It is kept separate on purpose. This package is a read client and most of its

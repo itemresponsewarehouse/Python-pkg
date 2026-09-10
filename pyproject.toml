@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "irw"
-version = "0.1.5"
+version = "0.1.6"
 authors = [
   { name="Hansol Lee", email="hansol@stanford.edu" },
   { name="Ben Domingue", email="bdomingu@stanford.edu" }
@@ -51,6 +51,12 @@ mcp = [
     "mcp>=2.1,<3; python_version >= '3.10'",
     "PyYAML>=6,<7; python_version >= '3.10'",
 ]
+# irw.validate(). Kept out of the core dependencies because this is a read
+# client and most of its users never deposit anything -- and because the
+# checker needs pandas alone, so it is a small ask for the users who do.
+# It could not be declared until irw-validate reached PyPI (2026-09-10): an
+# advertised extra that cannot resolve is worse than none.
+validate = ["irw-validate>=1.0.0"]
 
 [project.scripts]
 irw-mcp = "irw.mcp:main"
