@@ -207,8 +207,8 @@ python3 -m venv .venv
 ```
 
 These commands install the local checkout. For an index installation, use
-`"irw[mcp]>=0.1.4"` only after that release is published; 0.1.3 does not include
-this server. On Windows, use `.venv\Scripts\python.exe` instead.
+`pip install "irw[mcp]>=0.1.4"` -- 0.1.4 is the first release that includes this
+server. On Windows, use `.venv\Scripts\python.exe` instead.
 
 Authenticate with Redivis **before** first use. The Redivis SDK's interactive
 browser login cannot complete inside an MCP server, so the server refuses to
