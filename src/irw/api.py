@@ -34,6 +34,7 @@ from .operations.filter_info import get_filters as _get_filters_func, describe_f
 from .operations.version import version as _version
 from .operations.simulate import simdata as simdata, simdata_comp as simdata_comp
 from .operations.validate import validate as validate
+from .operations.recode import recode as recode, decode as decode
 from .utils.redivis.table_metadata import (
     get_collections_table as _get_collections_table,
     get_collection_members_table as _get_collection_members_table,
