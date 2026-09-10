@@ -81,6 +81,8 @@ irw.info("agn_kay_2025")  # Table metadata
 df = irw.fetch("agn_kay_2025")
 # Convert to response matrix
 resp_matrix = irw.long2resp(df)
+checks = irw.check_resp(df)            # single-category items, sparse categories
+df_again = irw.resp2long(resp_matrix)  # and back to long format
 
 # Explore available filters
 filters = irw.get_filters()  # Returns list of filter names

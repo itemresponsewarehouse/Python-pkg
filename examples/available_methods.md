@@ -40,8 +40,14 @@ See `## Collections` below for worked examples of the collection methods.
   - Updates BibTeX keys to match table names
   - Returns list of saved BibTeX entries
 - **`download(table_name, path=None, overwrite=False)`** - Download table using Redivis's native download
-- **`long2resp(df, wave=None, id_density_threshold=0.1, agg_method="mean")`** - Convert long-format DataFrame to response matrix
+- **`long2resp(df, wave=None, id_density_threshold=0.1, agg_method=None, check_resp=False, resp_col="resp")`** - Convert long-format DataFrame to response matrix
   - Takes a DataFrame (from `fetch()`) and converts to wide format
+  - `resp_col`: the response column, e.g. `"text"` for nominal labels
+  - `check_resp=True`: returns `(wide, checks)`, with `checks` as `check_resp()` returns it
+- **`resp2long(x, id=True)`** - Convert a wide response matrix (DataFrame or array) back to long format
+  - `id=False`: generate positional ids `1..n` for a matrix with no `id` column
+- **`check_resp(x, min_count=5, min_prop=0.01, resp_col="resp")`** - Flag single-category items and sparse categories in long data
+  - Returns: `dict` with `single_category_items` (list) and `sparse_category_items` (dict of DataFrames)
 
 ## Example Workflow
 See `examples/example.py` for a complete workflow example.
