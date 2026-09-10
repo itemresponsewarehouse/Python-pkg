@@ -177,8 +177,28 @@ def _cache_version(tag: Optional[str]) -> str:
     stale-forever behaviour. An unknown tag must therefore not be passed
     through as None: it becomes a value that cannot match anything stored, so
     an unknown version is a miss rather than a free pass.
+
+    But a miss on *every* call is its own hazard, and a worse one. The caches
+    this guards are not cheap to refill: the metadata frames are Redivis table
+    downloads, which are charged against the account-wide 30-day export cap
+    (issue #21), and the table listings are ~43 paginated requests across the
+    six warehouses. A first version of this returned a fresh instant, so an
+    unknown tag meant re-downloading four metadata tables on every single
+    lookup -- in a long-running MCP server answering an assistant's questions,
+    that turns one unresolvable version into sustained export traffic against
+    a shared quota.
+
+    So the unknown case is bounded by time instead of by version: refills at
+    most once per TTL window, which is the same staleness bound the known case
+    already promises. `IRW_VERSION_TTL_SECONDS=0` still means "refresh every
+    lookup", because there it is what the caller explicitly asked for.
     """
-    return tag if tag is not None else f"unknown:{time.monotonic()!r}"
+    if tag is not None:
+        return tag
+    ttl = _version_ttl_seconds()
+    if ttl <= 0:
+        return f"unknown:{time.monotonic()!r}"
+    return f"unknown-window:{int(time.monotonic() // ttl)}"
 
 
 def _dataset_table_list(ds: Any) -> List[Any]:
@@ -193,13 +213,10 @@ def _dataset_table_list(ds: Any) -> List[Any]:
     if not label:
         return list(ds.list_tables())
 
-    version = _dataset_version_tag(ds)
-    if version is None:
-        # No tag means no way to tell a stale list from a current one, so the
-        # list is not cached at all. This costs a request per call for a
-        # dataset with no released version -- rare, and the alternative is the
-        # stale-forever behaviour this whole change exists to remove.
-        return list(ds.list_tables())
+    # `_cache_version` handles the unknown-tag case: a value that cannot match
+    # a stored entry, but stable within a TTL window, so an unresolvable
+    # version costs one listing per window rather than one per call.
+    version = _cache_version(_dataset_version_tag(ds))
 
     cache_key = f"dataset_tables:{label}"
     cached = metadata_cache.get(cache_key, version)
