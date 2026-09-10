@@ -19,12 +19,9 @@ honest.
 of its users never deposit anything, so the checker is fetched only by those
 who need it.
 
-No `[validate]` extra is declared in pyproject.toml yet, deliberately:
-`irw-validate` is not on PyPI until ben-domingue/irw#2135 lands and is
-released, and an advertised extra that cannot resolve is worse than none. Once
-it is published this becomes a two-line addition and
-`pip install irw[validate]` works; until then the ImportError below names the
-command, which will be correct either way.
+`pip install irw[validate]` pulls it in; so does `pip install irw-validate`,
+which is what the ImportError below names, because it is the command that
+works whether or not this package is what someone installed.
 """
 
 from __future__ import annotations
@@ -36,7 +33,7 @@ import pandas as pd
 _INSTALL_HINT = (
     "irw.validate() needs the `irw-validate` package, which is not installed.\n"
     "\n"
-    "    pip install irw-validate\n"
+    "    pip install irw-validate        (or: pip install irw[validate])\n"
     "\n"
     "It is kept separate on purpose: it is the only part of IRW tooling that "
     "checks data you have not deposited yet, and most users of this package "
@@ -95,6 +92,7 @@ def validate(
     ------
     ImportError
         If `irw-validate` is not installed, with the command to install it.
+        `pip install irw[validate]` pulls it in as well.
 
     Examples
     --------
