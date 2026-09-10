@@ -11,6 +11,7 @@ from .datasets import (
     _datasets_version_tag,
     _init_datasets_from_refs,
 )
+from .pins import _pins_fingerprint
 
 
 def _itemtext_datasets_cache_key() -> str:
@@ -18,9 +19,10 @@ def _itemtext_datasets_cache_key() -> str:
 
     Mirrors `_main_datasets_cache_key()`: the refs are *in* the key, so a config
     change is a cache miss by construction rather than something to remember to
-    invalidate.
+    invalidate. The session's version pins are in the key for the same reason.
     """
-    return "itemtext_datasets:" + "|".join(f"{u}/{r}" for u, r in ITEMTEXT_REFS)
+    return ("itemtext_datasets:" + "|".join(f"{u}/{r}" for u, r in ITEMTEXT_REFS)
+            + _pins_fingerprint(ITEMTEXT_REFS))
 
 
 def _get_itemtext_datasets() -> List[Any]:

@@ -11,6 +11,8 @@ from ..utils.redivis.tables import (
     _TERMINAL_ERROR_KINDS,
 )
 from ..operations.version import current_version
+from ..config import META_REF
+from ..utils.redivis.pins import _dataset_key, _pins, pinned_irw_version
 
 
 def _get_table_metadata(table_name: str) -> Dict[str, Any]:
@@ -130,6 +132,35 @@ def _get_table_itemtext(table_name: str) -> Union[pd.DataFrame, str]:
         raise
 
 
+def _version_line() -> Optional[str]:
+    """The line of info() output naming the IRW version its numbers describe.
+
+    Under `use_version()` that is the pinned version, not the newest one --
+    otherwise a pinned session would print v332's statistics under the newest
+    version's number. Pins set one dataset at a time do not add up to any IRW
+    version, so the line says that rather than inventing a number, and names
+    the metadata dataset's tag, which is what the statistics come from.
+    """
+    pins = _pins()
+    if not pins:
+        stamp = current_version()
+        if stamp is None:
+            return None
+        number, released = stamp
+        return f"IRW version: v{number} (released {released})"
+
+    pinned = pinned_irw_version()
+    if pinned is not None:
+        number, released = pinned
+        return f"IRW version: v{number} (released {released}), pinned for this session"
+
+    meta_tag = pins.get(_dataset_key(META_REF[1]), "current release")
+    return (
+        "IRW version: none -- datasets pinned individually "
+        f"(metadata from irw_meta {meta_tag}; see irw.get_version())"
+    )
+
+
 def _format_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
     """Format table info as a string."""
     lines = []
@@ -139,10 +170,9 @@ def _format_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
     # which meant summary statistics copied out of info() could not be tied to
     # a citable corpus version (issue #3). Quiet and non-raising: an
     # unreachable manifest drops the line rather than failing info().
-    stamp = current_version()
-    if stamp is not None:
-        number, released = stamp
-        lines.append(f"IRW version: v{number} (released {released})")
+    version_line = _version_line()
+    if version_line is not None:
+        lines.append(version_line)
     lines.append(f"{'='*60}")
     
     # Description section (if available)

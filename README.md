@@ -111,6 +111,14 @@ report.ok                              # False if anything blocks
 # Which version of IRW is this? (cite this number)
 irw.version()                         # newest IRW version and its dataset pins
 irw.version("2026-08-01")             # what was live on that date
+irw.version(version=332)              # exactly what v332 held
+
+# Read the corpus as one IRW version held it, for the rest of the session
+irw.use_version(332)                  # every dataset pinned to its v332 tag
+df = irw.fetch("gilbert_meta_12")     # v332's copy, today and next year
+irw.get_version()                     # the Redivis tag each dataset is read at
+irw.set_version("irw_meta", "v19.3")  # or pin a single dataset
+irw.reset_version()                   # back to the current release
 ```
 
 ## Caching and releases
@@ -133,6 +141,12 @@ metadata_cache.clear()
 ```
 
 Nothing is cached on disk, so a new process starts cold.
+
+A version pin (`use_version()`, `set_version()`, `reset_version()`) clears the
+whole in-process cache, and pinned dataset handles are cached under keys that
+name their pins, so a pinned session is never served data cached from the
+current release, or the reverse. Unpinning means the current release's
+metadata is downloaded again.
 ## Validating your own data
 
 `irw.validate()` checks a table against the IRW format standard — the rules in
