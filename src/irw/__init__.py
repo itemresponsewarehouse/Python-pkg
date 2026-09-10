@@ -57,6 +57,7 @@ from .api import (
     simdata,
     simdata_comp,
     validate,
+    imv,
 )
 from .operations.list_tables import IRWMetadataUnavailable
 
@@ -80,6 +81,7 @@ __all__ = [
     "simdata",
     "simdata_comp",
     "validate",
+    "imv",
 ]
 
 # Single source of truth is config.VERSION -- these two literals had drifted
