@@ -21,6 +21,8 @@ covered here.
 No network: every dataset, table and version here is synthetic.
 """
 
+import time
+
 import pandas as pd
 import pytest
 
@@ -120,10 +122,32 @@ def test_a_failed_refresh_keeps_the_last_known_tag():
     assert _dataset_version_tag(ds) == "v19.0"
 
 
-def test_an_unknown_tag_never_matches_a_cached_entry():
+def test_an_unknown_tag_never_matches_a_cached_entry(monkeypatch):
     """`get(key)` with no version means no check, so None must not pass through."""
+    monkeypatch.setenv("IRW_VERSION_TTL_SECONDS", "0")
     assert _cache_version(None) != _cache_version(None)
     assert _cache_version("v20.0") == "v20.0"
+
+
+def test_an_unknown_tag_is_bounded_by_the_ttl_not_repeated_per_call(monkeypatch):
+    """The refill this guards is a Redivis table download, charged against the
+    account-wide 30-day export cap. A version that cannot be resolved must not
+    turn into one re-download per lookup for the life of the process."""
+    monkeypatch.setenv("IRW_VERSION_TTL_SECONDS", "3600")
+    assert _cache_version(None) == _cache_version(None)
+    # ...and still cannot be mistaken for a real version tag.
+    assert _cache_version(None) != _cache_version("v20.0")
+
+
+def test_an_unknown_tag_stops_matching_in_the_next_window(monkeypatch):
+    monkeypatch.setenv("IRW_VERSION_TTL_SECONDS", "100")
+    clock = {"t": 0.0}
+    monkeypatch.setattr(ds_mod.time, "monotonic", lambda: clock["t"])
+    first = _cache_version(None)
+    clock["t"] = 99.0
+    assert _cache_version(None) == first
+    clock["t"] = 101.0
+    assert _cache_version(None) != first
 
 
 def test_a_group_version_is_unknown_if_any_member_is():
@@ -157,10 +181,21 @@ def test_a_release_invalidates_the_table_list():
     assert ds.list_calls == 2
 
 
-def test_an_unversioned_dataset_is_not_cached():
-    """No tag means no way to tell a stale list from a current one."""
+def test_an_unversioned_dataset_is_listed_once_per_window(monkeypatch):
+    """No tag means no way to tell a stale list from a current one, so the list
+    cannot be trusted across a release -- but it must still be bounded. Listing
+    the six warehouses is ~43 paginated requests; per call, that is sustained
+    load on a shared account for as long as the version stays unresolvable."""
+    monkeypatch.setenv("IRW_VERSION_TTL_SECONDS", "3600")
     ds = _FakeDataset("fresh_shard", None, ["a__items"])
-    _dataset_table_list(ds)
+    for _ in range(5):
+        _dataset_table_list(ds)
+    assert ds.list_calls == 1
+
+    # The next window re-lists, so an unversioned dataset is refreshed rather
+    # than pinned for the life of the process.
+    clock = {"t": time.monotonic() + 7200}
+    monkeypatch.setattr(ds_mod.time, "monotonic", lambda: clock["t"])
     _dataset_table_list(ds)
     assert ds.list_calls == 2
 
