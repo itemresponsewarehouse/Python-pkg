@@ -81,6 +81,11 @@ irw.info("agn_kay_2025")  # Table metadata
 df = irw.fetch("agn_kay_2025")
 # Convert to response matrix
 resp_matrix = irw.long2resp(df)
+# Person-level columns (e.g. cov_group), one row per id, in the matrix's row order
+covs = irw.covariates(df, align=resp_matrix)
+
+# Item and response sets without downloading (no export quota)
+sets = irw.table_sets("agn_kay_2025")  # dict: table, n_rows, items, resp, per_item
 
 # Explore available filters
 filters = irw.get_filters()  # Returns list of filter names
