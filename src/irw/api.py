@@ -16,17 +16,20 @@ Usage:
     irw.save_bibtex("agn_kay_2025")
     irw.download("agn_kay_2025")
     irw.long2resp(df)  # df is a DataFrame from fetch()
+    irw.resp2long(wide)  # and back again
 """
 
 from __future__ import annotations
 import warnings
 import datetime
-from typing import Optional, Union, Dict, List, Literal
+from typing import Optional, Union, Dict, List, Literal, Tuple
 import pandas as pd
 from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset
 from .utils.redivis.item_text import _list_itemtext_tables, _itemtext_disclaimer
 from .utils.long2resp import long2resp as _long2resp
+from .utils.long2resp import check_resp as check_resp, resp2long as resp2long
 from .operations.fetch import fetch as _fetch
+from .operations.table_sets import table_sets as _table_sets
 from .operations.list_tables import list_tables as _list_tables, list_tables_basic
 from .operations.info import info_for
 from .operations.filter import filter_tables
@@ -40,6 +43,9 @@ from .operations.version import (
 )
 from .operations.simulate import simdata as simdata, simdata_comp as simdata_comp
 from .operations.validate import validate as validate
+from .operations.recode import recode as recode, decode as decode
+from .operations.imv import imv as imv
+from .operations.covariates import covariates as covariates
 from .utils.redivis.table_metadata import (
     get_collections_table as _get_collections_table,
     get_collection_members_table as _get_collection_members_table,
@@ -245,6 +251,71 @@ def fetch(
     
     else:
         return result
+
+
+def table_sets(
+    table_name: str,
+    source: str = "main",
+    *,
+    per_item: bool = False,
+) -> Dict[str, object]:
+    """
+    Summarize the value sets of an IRW table without downloading it.
+
+    Answers set and summary questions about a table -- which item codes it
+    contains, which response values occur, how many rows each item has --
+    with server-side aggregate queries rather than exporting the table. On a
+    large table that is the difference between downloading every row and
+    reading a few result rows: computing the item set of a 68-million-row
+    table with fetch() exports all 68 million rows, while table_sets()
+    returns in seconds and does not draw down the Redivis export quota.
+
+    Parameters
+    ----------
+    table_name : str
+        Name of a single IRW table.
+    source : str, default "main"
+        Dataset source to use. Options: "main", "sim", "comp", "nom".
+    per_item : bool, default False
+        If True, also return a per-item summary. One extra query; the result
+        has one row per distinct item.
+
+    Returns
+    -------
+    dict
+        - ``table``: fully qualified Redivis reference the queries ran against.
+        - ``n_rows``: total number of rows, missing responses included.
+        - ``items``: sorted list of distinct ``item`` values, as strings, or
+          None if the table has no ``item`` column.
+        - ``resp``: sorted list of distinct ``resp`` values -- numbers when
+          every value is numeric, strings otherwise, and always strings for
+          ``source="nom"``. ``"NA"`` and empty strings are treated as missing
+          and excluded, matching what fetch() produces. None if the table has
+          no ``resp`` column.
+        - ``per_item``: DataFrame with columns ``item``, ``n``, ``resp_min``,
+          ``resp_max`` and ``n_resp_levels``, or None when
+          ``per_item=False``. ``n`` counts rows with a non-missing response,
+          so it can sum to less than ``n_rows``; ``resp_min``/``resp_max``
+          are missing for an item with no numeric responses.
+
+    Raises
+    ------
+    ValueError
+        If the table does not exist, or its lookup fails on export quota,
+        authentication, or an invalid table.
+    RuntimeError
+        If one of the aggregate queries fails.
+
+    Examples
+    --------
+    >>> import irw
+    >>> sets = irw.table_sets("rosenberg_selfesteem")
+    >>> sets["items"]
+    >>> sets["resp"]
+    >>> irw.table_sets("condon_2024_sapa_personality", per_item=True)["per_item"]
+    """
+    datasets = _get_datasets(source)
+    return _table_sets(datasets, table_name, source=source, per_item=per_item)
 
 
 def itemtext(table_name: str) -> Union[pd.DataFrame, str]:
@@ -494,27 +565,36 @@ def long2resp(
     df: pd.DataFrame,
     wave: Optional[int] = None,
     id_density_threshold: Optional[float] = 0.1,
-    agg_method: Literal["mean", "mode", "median", "first"] = "mean"
-) -> pd.DataFrame:
+    agg_method: Optional[Literal["mean", "mode", "median", "first"]] = None,
+    check_resp: bool = False,
+    resp_col: str = "resp",
+) -> Union[pd.DataFrame, Tuple[pd.DataFrame, Dict]]:
     """
     Convert IRW long-format data to wide-format response matrix.
     
     Parameters
     ----------
     df : pandas.DataFrame
-        Long-format DataFrame with columns: id, item, resp (and optionally wave).
-        Typically obtained from irw.fetch().
+        Long-format DataFrame with columns: id, item, the column named by
+        ``resp_col`` (and optionally wave). Typically obtained from irw.fetch().
     wave : int, optional
         Filter by wave. Defaults to most frequent wave if None.
     id_density_threshold : float, optional
         Minimum response density (0.0-1.0). None to disable. Default 0.1.
-    agg_method : str, default "mean"
+    agg_method : str, optional
         How to handle multiple id-item pairs: "mean", "mode", "median", "first".
+        Defaults to "mean", or to "first" when no response is a number.
+    check_resp : bool, default False
+        If True, also run ``irw.check_resp()`` with its default thresholds and
+        return ``(wide, checks)``.
+    resp_col : str, default "resp"
+        Column holding the response values, e.g. ``"text"`` for nominal data.
         
     Returns
     -------
-    pandas.DataFrame
+    pandas.DataFrame or tuple
         Wide-format response matrix where rows are ids and columns are items.
+        With ``check_resp=True``, a ``(wide, checks)`` tuple.
         
     Examples
     --------
@@ -525,8 +605,18 @@ def long2resp(
     >>> 
     >>> # Convert to wide format
     >>> resp_matrix = irw.long2resp(df)
+    >>> 
+    >>> # ...and get the response diagnostics while doing it
+    >>> resp_matrix, checks = irw.long2resp(df, check_resp=True)
     """
-    return _long2resp(df, wave=wave, id_density_threshold=id_density_threshold, agg_method=agg_method)
+    return _long2resp(
+        df,
+        wave=wave,
+        id_density_threshold=id_density_threshold,
+        agg_method=agg_method,
+        check_resp=check_resp,
+        resp_col=resp_col,
+    )
 
 
 def get_filters() -> List[str]:

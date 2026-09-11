@@ -81,6 +81,14 @@ irw.info("agn_kay_2025")  # Table metadata
 df = irw.fetch("agn_kay_2025")
 # Convert to response matrix
 resp_matrix = irw.long2resp(df)
+checks = irw.check_resp(df)            # single-category items, sparse categories
+df_again = irw.resp2long(resp_matrix)  # and back to long format
+
+# Person-level columns (e.g. cov_group), one row per id, in the matrix's row order
+covs = irw.covariates(df, align=resp_matrix)
+
+# Item and response sets without downloading (no export quota)
+sets = irw.table_sets("agn_kay_2025")  # dict: table, n_rows, items, resp, per_item
 
 # Explore available filters
 filters = irw.get_filters()  # Returns list of filter names
@@ -103,6 +111,13 @@ irw.collection_members(tables="frac20")  # which collections is this table in?
 # Simulate IRW-shaped data (no network, no Redivis quota)
 sim = irw.simdata(n_id=500, n_item=20, model="2PL", seed=1)   # id / item / resp
 pairs = irw.simdata_comp(n_agent=100, n_pairs=10000, nu=0.1)  # agent_a / agent_b / winner
+
+# Swap awkward identifiers for short codes (P0001, I0001), and back again
+recoded, key = irw.recode(df)         # keep `key`: it is the only record of the mapping
+original = irw.decode(recoded, key)   # also decodes long2resp() column names
+
+# Compare two models' predicted probabilities for the same 0/1 outcomes
+irw.imv(preds, "p1", "p2")  # preds has resp, p1, p2; the gain from p1 to p2 (not symmetric)
 
 # Check your own table against the IRW format before depositing it
 report = irw.validate("my_table.csv")  # needs `pip install irw-validate`
