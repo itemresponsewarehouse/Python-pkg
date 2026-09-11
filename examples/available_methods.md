@@ -42,6 +42,9 @@ See `## Collections` below for worked examples of the collection methods.
 - **`download(table_name, path=None, overwrite=False)`** - Download table using Redivis's native download
 - **`long2resp(df, wave=None, id_density_threshold=0.1, agg_method="mean")`** - Convert long-format DataFrame to response matrix
   - Takes a DataFrame (from `fetch()`) and converts to wide format
+- **`covariates(df, cols=None, align=None)`** - Person-level columns, one row per `id`
+  - `cols=None` detects columns that take one value within every id, and names the ones it rejects
+  - `align=long2resp(df)` puts the rows in the matrix's order; ids absent from `df` give NA rows
 
 ## Example Workflow
 See `examples/example.py` for a complete workflow example.
