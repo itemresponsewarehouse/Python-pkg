@@ -280,3 +280,173 @@ def test_existing_tables_notices_a_release(monkeypatch):
 
     warehouse.release("v21.0", ["Table_A"])
     assert table_metadata._get_existing_tables() == {"table_a"}
+
+
+# --- a handle's address is frozen at its first .get() (#75) ---------------
+#
+# The fakes above refresh to the current release on every `.get()`, which is
+# not what `redivis.Dataset` does. Its `.get()` replaces `uri` and
+# `qualified_reference` with the ones Redivis returns, and those name the
+# version current at the time, even for a handle opened with no version:
+# `/datasets/datapages.item_response_warehouse_3` becomes
+# `/datasets/datapages.item_response_warehouse_3:5xaj:v6_0`. Every later
+# `.get()` re-reads v6.0. The fakes below do the same, so a refresh that just
+# re-`get()`s the cached handle never sees a release -- which is what #53's
+# fix did, and why its tests above could not catch it.
+
+
+class _Server:
+    """What Redivis holds: each dataset's released versions and the current one."""
+
+    def __init__(self):
+        self.releases = {}  # ref -> {tag: [table names]}
+        self.current = {}   # ref -> tag
+        self.gets = 0
+
+    def release(self, ref, tag, table_names):
+        self.releases.setdefault(ref, {})[tag] = list(table_names)
+        self.current[ref] = tag
+
+
+class _FreezingDataset:
+    def __init__(self, server, ref, version=None):
+        self._server = server
+        self._ref = ref
+        self.name = ref
+        self.properties = None
+        self.qualified_reference = f"datapages.{ref}" + (f":{version}" if version else "")
+        self.scoped_reference = self.qualified_reference.split(".", 1)[1]
+        self.uri = f"/datasets/{self.qualified_reference}"
+
+    def _addressed_tag(self):
+        # The ref already holds a reference id (`irw_text:abcd`), so the
+        # version is whatever follows the ref, not whatever follows a colon.
+        suffix = self.qualified_reference[len(f"datapages.{self._ref}"):]
+        return suffix[1:] or None
+
+    def get(self):
+        self._server.gets += 1
+        tag = self._addressed_tag() or self._server.current[self._ref]
+        # The freeze: the response's address carries the version it resolved.
+        self.qualified_reference = f"datapages.{self._ref}:{tag}"
+        self.scoped_reference = f"{self._ref}:{tag}"
+        self.uri = f"/datasets/{self.qualified_reference}"
+        self.properties = {"version": {"tag": tag}}
+        return self
+
+    def list_tables(self):
+        tag = self._addressed_tag()
+        return [_FakeTable(n) for n in self._server.releases[self._ref][tag]]
+
+
+class _FreezingRedivis:
+    def __init__(self, server):
+        self.server = server
+
+    def user(self, _user):
+        server = self.server
+
+        class _U:
+            @staticmethod
+            def dataset(ref, version=None):
+                return _FreezingDataset(server, ref, version)
+
+        return _U()
+
+
+@pytest.fixture
+def server(monkeypatch):
+    from irw.utils.redivis import pins
+
+    srv = _Server()
+    monkeypatch.setattr(ds_mod, "redivis", _FreezingRedivis(srv))
+    monkeypatch.setattr(pins, "_PINS", {})
+    return srv
+
+
+def test_the_fake_reproduces_the_frozen_address(server):
+    """Guard on the fake itself: without the freeze, the tests below prove nothing."""
+    server.release("irw_text:abcd", "v19.0", [])
+    ds = ds_mod.redivis.user("datapages").dataset("irw_text:abcd").get()
+    server.release("irw_text:abcd", "v20.0", [])
+    assert ds.get().properties["version"]["tag"] == "v19.0"
+
+
+def test_a_cached_unpinned_handle_sees_a_release(server):
+    server.release("irw_text:abcd", "v19.0", ["a__items"])
+    ds = ds_mod._init_dataset("datapages", "irw_text:abcd")
+    assert _dataset_version_tag(ds) == "v19.0"
+
+    server.release("irw_text:abcd", "v20.0", ["a__items"])
+    assert _dataset_version_tag(ds) == "v20.0"
+
+
+def test_the_cached_handle_is_moved_to_the_release(server):
+    """A current tag is not enough: tables reached through the handle are
+    addressed at its `qualified_reference`, so that has to move too."""
+    server.release("irw_text:abcd", "v19.0", ["a__items"])
+    ds = ds_mod._init_dataset("datapages", "irw_text:abcd")
+    server.release("irw_text:abcd", "v20.0", ["a__items"])
+
+    _dataset_version_tag(ds)
+    assert ds.qualified_reference == "datapages.irw_text:abcd:v20.0"
+    assert ds.uri.endswith(":v20.0")
+    assert ds.properties["version"]["tag"] == "v20.0"
+
+
+def test_a_withdrawal_reaches_a_long_running_process_through_a_frozen_handle(server):
+    """The #51 symptom, with the handle behaving as redivis.Dataset really does."""
+    server.release("irw_text:abcd", "v19.0", ["withdrawn__items", "kept__items"])
+    ds = ds_mod._init_dataset("datapages", "irw_text:abcd")
+    assert [t.name for t in _dataset_table_list(ds)] == ["withdrawn__items", "kept__items"]
+
+    server.release("irw_text:abcd", "v20.0", ["kept__items"])
+    assert [t.name for t in _dataset_table_list(ds)] == ["kept__items"]
+
+
+def test_a_pinned_handle_stays_on_its_version(server):
+    """The frozen address is exactly what a pin wants; a release must not move it."""
+    from irw.utils.redivis import pins
+
+    server.release("irw_text:abcd", "v19.0", ["a__items"])
+    pins._PINS[pins._dataset_key("irw_text:abcd")] = "v19.0"
+    ds = ds_mod._init_dataset("datapages", "irw_text:abcd")
+
+    server.release("irw_text:abcd", "v20.0", [])
+    assert _dataset_version_tag(ds) == "v19.0"
+    assert ds.qualified_reference.endswith(":v19.0")
+    assert [t.name for t in _dataset_table_list(ds)] == ["a__items"]
+
+
+def test_an_unchanged_release_does_not_touch_the_handle(server, monkeypatch):
+    server.release("irw_text:abcd", "v19.0", [])
+    ds = ds_mod._init_dataset("datapages", "irw_text:abcd")
+    before = ds.qualified_reference
+    for _ in range(3):
+        assert _dataset_version_tag(ds) == "v19.0"
+    assert ds.qualified_reference == before
+
+
+def test_the_probe_is_still_bounded_by_the_ttl(server, monkeypatch):
+    monkeypatch.setenv("IRW_VERSION_TTL_SECONDS", "3600")
+    server.release("irw_text:abcd", "v19.0", [])
+    ds = ds_mod._init_dataset("datapages", "irw_text:abcd")
+    before = server.gets
+    for _ in range(5):
+        _dataset_version_tag(ds)
+    assert server.gets == before + 1
+
+
+def test_a_failed_probe_keeps_the_last_known_tag_and_address(server, monkeypatch):
+    server.release("irw_text:abcd", "v19.0", [])
+    ds = ds_mod._init_dataset("datapages", "irw_text:abcd")
+    assert _dataset_version_tag(ds) == "v19.0"
+
+    class _Down:
+        @staticmethod
+        def user(_user):
+            raise ConnectionError("redivis unreachable")
+
+    monkeypatch.setattr(ds_mod, "redivis", _Down())
+    assert _dataset_version_tag(ds) == "v19.0"
+    assert ds.qualified_reference.endswith(":v19.0")
