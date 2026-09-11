@@ -58,6 +58,8 @@ from .api import (
     simdata,
     simdata_comp,
     validate,
+    recode,
+    decode,
     imv,
     covariates,
 )
@@ -84,6 +86,8 @@ __all__ = [
     "simdata",
     "simdata_comp",
     "validate",
+    "recode",
+    "decode",
     "imv",
     "covariates",
 ]
