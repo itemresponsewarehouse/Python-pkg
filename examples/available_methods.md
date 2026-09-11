@@ -32,6 +32,11 @@ See `## Collections` below for worked examples of the collection methods.
   - Multiple tables → returns `dict[str, pandas.DataFrame]`
   - `wide=True`: Automatically convert to wide-format response matrix
 
+- **`table_sets(table_name, source="main", per_item=False)`** - Item set, response set and row count of a table, without downloading it
+  - Runs server-side aggregate queries, so it does not count against the Redivis export quota
+  - Returns `dict` with `table`, `n_rows`, `items`, `resp`, and `per_item` (a `pandas.DataFrame` when `per_item=True`)
+  - `"NA"` and empty responses are excluded from `resp`, matching `fetch()`
+
 - **`itemtext(table_name)`** - Get item-level text
 - **`save_bibtex(table_names, output_file=None)`** - Get/save BibTeX citations for one or more tables
   - Supports single table name or list of table names
@@ -40,8 +45,20 @@ See `## Collections` below for worked examples of the collection methods.
   - Updates BibTeX keys to match table names
   - Returns list of saved BibTeX entries
 - **`download(table_name, path=None, overwrite=False)`** - Download table using Redivis's native download
-- **`long2resp(df, wave=None, id_density_threshold=0.1, agg_method="mean")`** - Convert long-format DataFrame to response matrix
+- **`long2resp(df, wave=None, id_density_threshold=0.1, agg_method=None, check_resp=False, resp_col="resp")`** - Convert long-format DataFrame to response matrix
   - Takes a DataFrame (from `fetch()`) and converts to wide format
+  - `resp_col`: the response column, e.g. `"text"` for nominal labels
+  - `check_resp=True`: returns `(wide, checks)`, with `checks` as `check_resp()` returns it
+- **`resp2long(x, id=True)`** - Convert a wide response matrix (DataFrame or array) back to long format
+  - `id=False`: generate positional ids `1..n` for a matrix with no `id` column
+- **`check_resp(x, min_count=5, min_prop=0.01, resp_col="resp")`** - Flag single-category items and sparse categories in long data
+  - Returns: `dict` with `single_category_items` (list) and `sparse_category_items` (dict of DataFrames)
+- **`recode(df, cols=("id", "item"), prefix=None)`** - Replace identifiers with short codes (`P0001`, `I0001`)
+  - Returns: `(DataFrame, key)`; codes are only meaningful relative to their key
+- **`decode(df, key, cols=None)`** - Restore original identifiers, in long format or `long2resp()` output
+- **`covariates(df, cols=None, align=None)`** - Person-level columns, one row per `id`
+  - `cols=None` detects columns that take one value within every id, and names the ones it rejects
+  - `align=long2resp(df)` puts the rows in the matrix's order; ids absent from `df` give NA rows
 
 ## Example Workflow
 See `examples/example.py` for a complete workflow example.

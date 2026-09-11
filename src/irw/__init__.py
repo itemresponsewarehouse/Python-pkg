@@ -43,10 +43,13 @@ from .api import (
     filter,
     info,
     fetch,
+    table_sets,
     itemtext,
     save_bibtex,
     download,
     long2resp,
+    resp2long,
+    check_resp,
     get_filters,
     describe_filter,
     list_tables_with_itemtext,
@@ -57,6 +60,10 @@ from .api import (
     simdata,
     simdata_comp,
     validate,
+    recode,
+    decode,
+    imv,
+    covariates,
 )
 from .operations.list_tables import IRWMetadataUnavailable
 
@@ -66,10 +73,13 @@ __all__ = [
     "filter",
     "info",
     "fetch",
+    "table_sets",
     "itemtext",
     "save_bibtex",
     "download",
     "long2resp",
+    "resp2long",
+    "check_resp",
     "get_filters",
     "describe_filter",
     "list_tables_with_itemtext",
@@ -80,6 +90,10 @@ __all__ = [
     "simdata",
     "simdata_comp",
     "validate",
+    "recode",
+    "decode",
+    "imv",
+    "covariates",
 ]
 
 # Single source of truth is config.VERSION -- these two literals had drifted
