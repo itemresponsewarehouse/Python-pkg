@@ -96,24 +96,34 @@ def list_tables(source: str = "main", include_metadata: bool = False) -> pd.Data
         return list_tables_basic(datasets)
 
 
-def filter(**kwargs) -> pd.Series:
+def filter(*, source: str = "main", **kwargs) -> pd.Series:
     """
     Filter IRW tables based on metadata criteria.
     
-    Only works for main IRW datasets.
-    
     Parameters
     ----------
+    source : str, default "main"
+        Dataset source to filter. Options: "main", "nom", "sim", "comp".
+        Tag filters need "main" or "nom"; `collection` needs "main"; "comp"
+        takes only `n_responses`, `n_actors` and `license`. A filter the
+        source cannot answer raises ValueError rather than matching nothing.
     **kwargs
-        Filter parameters (n_responses, construct_type, etc.)
+        Filter parameters (n_responses, construct_type, etc.). See
+        get_filters(source) for the names a source accepts.
         
     Returns
     -------
     pandas.Series
         Sorted Series of table names that match filters.
+
+    Examples
+    --------
+    >>> import irw
+    >>> irw.filter(source="nom", construct_type="Cognitive/educational")
+    >>> irw.filter(source="comp", n_actors=[2, 10])
     """
-    datasets = _get_datasets("main")
-    return filter_tables(datasets, **kwargs)
+    datasets = _get_datasets(source)
+    return filter_tables(datasets, source=source, **kwargs)
 
 
 def info(table_name: Optional[str] = None, source: str = "main", return_dict: bool = False) -> Union[None, Dict]:
@@ -620,9 +630,15 @@ def long2resp(
     )
 
 
-def get_filters() -> List[str]:
+def get_filters(source: str = "main") -> List[str]:
     """
     Get list of available filter parameter names.
+
+    Parameters
+    ----------
+    source : str, default "main"
+        Dataset source. Options: "main", "nom", "sim", "comp". Filters the
+        source refuses outright are left out.
     
     Returns
     -------
@@ -635,10 +651,10 @@ def get_filters() -> List[str]:
     >>> filters = irw.get_filters()
     >>> print(filters)  # ['n_responses', 'n_participants', ...]
     """
-    return _get_filters_func()
+    return _get_filters_func(source)
 
 
-def describe_filter(filter_name: str) -> Optional[Dict]:
+def describe_filter(filter_name: str, source: str = "main") -> Optional[Dict]:
     """
     Describe a filter and show available values.
     
@@ -646,13 +662,17 @@ def describe_filter(filter_name: str) -> Optional[Dict]:
     ----------
     filter_name : str
         Name of the filter to describe.
+    source : str, default "main"
+        Dataset source whose values to report. Options: "main", "nom",
+        "sim", "comp". Raises ValueError for a filter the source refuses,
+        e.g. a tag filter for "sim" or "comp".
         
     Returns
     -------
     dict or None
         Dictionary with 'description' and 'values', or None if not found.
     """
-    return _describe_filter(_get_datasets("main"), filter_name)
+    return _describe_filter(_get_datasets(source), filter_name, source)
 
 
 def list_tables_with_itemtext() -> List[str]:

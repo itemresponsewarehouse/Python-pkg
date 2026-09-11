@@ -98,6 +98,11 @@ irw.describe_filter('construct_type')  # Get values for a specific filter
 filtered = irw.filter(n_responses=[1000, None], construct_type="Affective/mental health")
 dfs = irw.fetch(filtered)
 
+# The other sources: "nom" (nominal responses, tagged), "sim", "comp"
+irw.filter(source="nom", construct_type="Cognitive/educational")
+irw.describe_filter("license", source="comp")
+irw.filter(source="comp", n_actors=[2, 10])  # R's irw_filter_comp()
+
 # Get BibTeX citation
 irw.save_bibtex("agn_kay_2025")  # Returns BibTeX entry
 # Download table
