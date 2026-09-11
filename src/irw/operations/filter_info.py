@@ -12,7 +12,14 @@ from ..utils.redivis.table_metadata import (
 )
 from ..utils.redivis.item_text import _list_itemtext_tables
 from ..operations.list_tables import _build_base_table_list
-from ..operations.filter import _split_tags
+from ..operations.filter import (
+    COMP_FILTERS,
+    COMP_ONLY_FILTERS,
+    TAG_FILTERS,
+    _check_filters_for_source,
+    _split_tags,
+)
+from ..config import COLLECTION_SOURCES, SOURCES, TAG_SOURCES
 
 
 # Filter descriptions with usage instructions
@@ -36,18 +43,29 @@ FILTER_DESCRIPTIONS = {
     'longitudinal': 'Whether the dataset is longitudinal (i.e., has wave or date variables). Use True to include only longitudinal datasets, False to exclude longitudinal datasets, or None for no filter.',
     'has_item_text': 'Whether reconstructed item text is available for the dataset. Use True for tables with item text, False for those without, or None for no filter. Item text is available for a minority of tables and is reconstructed from source documents with partial review, so its absence is not a judgement about the response data.',
     'license': 'Dataset license type (e.g., "CC BY 4.0"). Use a single string or a list of strings for OR logic.',
-    'collection': 'Collection membership (e.g., "rct", "big_five", "depression"). Collections are labelled groupings of IRW tables -- study designs, instrument families and constructs. A table can be in several at once. Use a single string or a list of strings for OR logic (the union, not the intersection). See irw.collections() for what exists, and note the coverage column: collections derived from tags searched only ~62% of tables, so they are not exhaustive.'
+    'collection': 'Collection membership (e.g., "rct", "big_five", "depression"). Collections are labelled groupings of IRW tables -- study designs, instrument families and constructs. A table can be in several at once. Use a single string or a list of strings for OR logic (the union, not the intersection). See irw.collections() for what exists, and note the coverage column: collections derived from tags searched only ~62% of tables, so they are not exhaustive.',
+    'n_actors': 'Number of actors in a competition table. Competition source only (source="comp"). Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
 }
 
 
-def get_filters() -> List[str]:
+def get_filters(source: str = "main") -> List[str]:
     """
     Get list of available filter parameter names.
+
+    Parameters
+    ----------
+    source : str, default "main"
+        Table source: "main", "nom", "sim" or "comp". A filter that source
+        refuses outright is left out -- tag filters for sim and comp,
+        `collection` for everything but main, and all but n_responses,
+        n_actors and license for comp. A source whose metadata lacks a
+        column (nom has no `density`) still lists that filter; filter()
+        raises when it is used.
     
     Returns
     -------
     list of str
-        List of all available filter parameter names.
+        List of the filter parameter names the source accepts.
         
     Examples
     --------
@@ -57,10 +75,22 @@ def get_filters() -> List[str]:
     >>> filters = irw.get_filters()
     >>> print(filters)  # ['n_responses', 'n_participants', ...]
     """
-    return list(FILTER_DESCRIPTIONS.keys())
+    if source not in SOURCES:
+        raise ValueError(
+            f"Unknown source '{source}'. Must be one of: "
+            + ", ".join(f"'{s}'" for s in SOURCES)
+        )
+    if source == "comp":
+        return [name for name in FILTER_DESCRIPTIONS if name in COMP_FILTERS]
+    names = [name for name in FILTER_DESCRIPTIONS if name not in COMP_ONLY_FILTERS]
+    if source not in TAG_SOURCES:
+        names = [name for name in names if name not in TAG_FILTERS]
+    if source not in COLLECTION_SOURCES:
+        names = [name for name in names if name != "collection"]
+    return names
 
 
-def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]]:
+def describe_filter(datasets: List, filter_name: str, source: str = "main") -> Optional[Dict[str, Any]]:
     """
     Describe a specific filter and show its available values.
     
@@ -82,11 +112,23 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
         Redivis dataset objects (typically from IRW._datasets).
     filter_name : str
         Name of the filter to describe (e.g., 'n_responses', 'construct_type', 'var').
+    source : str, default "main"
+        Table source whose values to report: "main", "nom", "sim" or "comp".
+        `describe_filter('license', source=...)` is R's
+        `irw_license_options(source = ...)`, and a tag filter is
+        `irw_tag_options(column, source = ...)`.
         
     Returns
     -------
     dict or None
         Dictionary with keys 'description' and 'values', or None if filter not found.
+
+    Raises
+    ------
+    ValueError
+        If `source` is unknown, or refuses this filter (a tag filter for an
+        untagged source, `collection` outside main, n_actors outside comp) --
+        the same refusals filter() makes.
         
     Examples
     --------
@@ -110,6 +152,14 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
     # Check if filter name is valid
     if filter_name not in FILTER_DESCRIPTIONS:
         return None
+    if source not in SOURCES:
+        raise ValueError(
+            f"Unknown source '{source}'. Must be one of: "
+            + ", ".join(f"'{s}'" for s in SOURCES)
+        )
+    # The values of a filter the source refuses would describe a question
+    # filter() will not take, so refuse it the same way.
+    _check_filters_for_source(source, {filter_name: True})
     
     description = FILTER_DESCRIPTIONS[filter_name]
     result = {'description': description}
@@ -133,11 +183,12 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
         'n_items',
         'responses_per_participant',
         'responses_per_item',
-        'density'
+        'density',
+        'n_actors',
     ]
     
     if filter_name in numeric_filters:
-        metadata_df = get_metadata_table()
+        metadata_df = get_metadata_table(source)
         if metadata_df.empty:
             return None
         
@@ -176,7 +227,7 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
     ]
     
     if filter_name in categorical_filters:
-        tags_df = get_tags_table()
+        tags_df = get_tags_table(source)
         if tags_df.empty:
             return None
         
@@ -220,7 +271,7 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
     
     # License filter - only need bibliography table
     if filter_name == 'license':
-        biblio_df = get_biblio_table()
+        biblio_df = get_biblio_table(source)
         if biblio_df.empty:
             return None
         
@@ -244,7 +295,7 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
     # Special filters
     if filter_name == 'var':
         # Variables column is in metadata table, not tags table
-        metadata_df = get_metadata_table()
+        metadata_df = get_metadata_table(source)
         if metadata_df.empty:
             return None
         
@@ -281,7 +332,7 @@ def describe_filter(datasets: List, filter_name: str) -> Optional[Dict[str, Any]
     
     if filter_name == 'longitudinal':
         # Need metadata table for longitudinal flag
-        metadata_df = get_metadata_table()
+        metadata_df = get_metadata_table(source)
         if metadata_df.empty:
             return None
         

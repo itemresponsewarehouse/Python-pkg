@@ -104,14 +104,14 @@ def _build_base_table_list(datasets: List[Any]) -> pd.DataFrame:
     return out.sort_values("name", kind="stable").reset_index(drop=True)
 
 
-def _merge_metadata(base: pd.DataFrame, datasets: List[Any]) -> pd.DataFrame:
-    cache_key = f"list_tables:{_datasets_cache_key(datasets)}"
+def _merge_metadata(base: pd.DataFrame, datasets: List[Any], source: str = "main") -> pd.DataFrame:
+    cache_key = f"list_tables:{source}:{_datasets_cache_key(datasets)}"
     version = _cache_version(_datasets_version_tag(datasets))
     cached = metadata_cache.get(cache_key, version)
     if cached is not None:
         return cached.copy()
 
-    metadata = _table_info()
+    metadata = _table_info(source)
     if metadata.empty:
         raise IRWMetadataUnavailable(
             "IRW metadata is empty: the metadata tables resolved but returned no "
@@ -172,7 +172,7 @@ def _order_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df[ordered_cols]
 
 
-def list_tables(datasets: List[Any]) -> pd.DataFrame:
+def list_tables(datasets: List[Any], source: str = "main") -> pd.DataFrame:
     """
     List available tables with integrated IRW stats, tags, biblio, and item-text availability.
 
@@ -180,6 +180,10 @@ def list_tables(datasets: List[Any]) -> pd.DataFrame:
     ----------
     datasets : List[Any]
         Redivis dataset objects to enumerate tables from.
+    source : str, default "main"
+        The source `datasets` belong to, which picks its metadata tables:
+        "main", "nom", "sim" or "comp". Only main and nom carry tags, and only
+        main carries collections; the other sources' frames lack those columns.
 
     Returns
     -------
@@ -205,7 +209,7 @@ def list_tables(datasets: List[Any]) -> pd.DataFrame:
     >>> longitudinal_studies = tables[tables["longitudinal"] == True]
     """
     # Cache key based on dataset identifiers
-    cache_key = f"list_tables_final:{_datasets_cache_key(datasets)}"
+    cache_key = f"list_tables_final:{source}:{_datasets_cache_key(datasets)}"
     version = _cache_version(_datasets_version_tag(datasets))
 
     # Check if final result is cached
@@ -219,7 +223,7 @@ def list_tables(datasets: List[Any]) -> pd.DataFrame:
     # Get metadata and merge
     try:
         # Merge metadata and post-process (uses cached metadata)
-        result = _merge_metadata(out, datasets)
+        result = _merge_metadata(out, datasets, source)
         result = _compute_item_text_flag(result)  # Uses cached itemtext_tables
         result = _order_columns(result)
         

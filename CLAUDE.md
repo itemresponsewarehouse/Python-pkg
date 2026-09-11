@@ -48,6 +48,16 @@ both R configs. It is tagged like `main` but has no collections, so
 rule as `Rpkg/R/redivis-config.R`. Note the naming difference across the two
 clients: R calls the main source `"core"`, Python calls it `"main"`.
 
+`filter()`, `describe_filter()` and `get_filters()` take `source=` (#28), and
+the metadata lookups under them read that source's tables from
+`SOURCE_META_TABLES`. `TAG_SOURCES` and `COLLECTION_SOURCES` in `config.py` are
+R's `.irw_tag_sources` and `.irw_collection_sources`; test membership in them,
+never `source == "main"`. A filter a source cannot answer raises -- tag filters
+for sim/comp, `collection` outside main, anything but `n_responses`,
+`n_actors` and `license` for comp -- because an empty result reads as "no
+matches". Main's metadata cache keys stay bare (`"tags"`); other sources'
+carry the source (`"tags:nom"`).
+
 **Adding a main warehouse:** append a `(user, dataset_ref)` tuple to `MAIN_REFS` in `config.py` only. See `docs/DEVELOPERS.md` for details and test commands.
 
 ### Key design decisions

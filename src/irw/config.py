@@ -64,6 +64,30 @@ META_TABLES: ClassVar[dict[str, str]] = {
     "collection_members": "collection_members",
 }
 
+# The table sources, in Python's spelling (R calls "main" "core").
+SOURCES: Tuple[str, ...] = ("main", "nom", "sim", "comp")
+
+# Each source's metadata, tags and bibliography tables in irw_meta, by bare name
+# for the reason given above META_TABLES. A source with no "tags" entry has no
+# tags table, which mirrors Rpkg's .irw_tag_sources: sim and comp are untagged
+# by design (Rpkg/inst/developer/tags.md), so asking for their tags errors.
+SOURCE_META_TABLES: ClassVar[dict[str, dict[str, str]]] = {
+    "main": {"metadata": "metadata", "tags": "tags", "biblio": "biblio"},
+    "nom": {"metadata": "nominal_metadata", "tags": "nominal_tags", "biblio": "nominal_biblio"},
+    "sim": {"metadata": "simsyn_metadata", "biblio": "simsyn_biblio"},
+    "comp": {"metadata": "comps_metadata", "biblio": "comps_biblio"},
+}
+
+# Rpkg's .irw_tag_sources and .irw_collection_sources. Code tests membership
+# here rather than `source == "main"`, and a source outside either list must
+# ERROR when asked for tags or collections, not return an empty frame: an empty
+# frame filters every table away and reads as "no matches" instead of "wrong
+# question".
+TAG_SOURCES: Tuple[str, ...] = tuple(
+    source for source, tables in SOURCE_META_TABLES.items() if "tags" in tables
+)
+COLLECTION_SOURCES: Tuple[str, ...] = ("main",)
+
 # Package metadata
 PACKAGE_NAME: str = "irw"
 # The one place the package version is written in Python. `irw.__version__`
@@ -83,6 +107,10 @@ __all__ = [
     "META_REF",
     "ITEMTEXT_REFS",
     "META_TABLES",
+    "SOURCES",
+    "SOURCE_META_TABLES",
+    "TAG_SOURCES",
+    "COLLECTION_SOURCES",
     "PACKAGE_NAME",
     "VERSION",
     "DESCRIPTION",

@@ -6,14 +6,36 @@ import math
 from numbers import Real
 import pandas as pd
 import numpy as np
+from ..config import COLLECTION_SOURCES, SOURCES, TAG_SOURCES
 from ..operations.list_tables import list_tables, IRWMetadataUnavailable
 
 
 NUMERIC_FILTERS = frozenset({
     'n_responses', 'n_categories', 'n_participants', 'n_items',
-    'responses_per_participant', 'responses_per_item', 'density',
+    'responses_per_participant', 'responses_per_item', 'density', 'n_actors',
 })
 BOOLEAN_FILTERS = frozenset({'longitudinal', 'has_item_text'})
+
+# Filters that read a tags table, so exist only for a source in TAG_SOURCES.
+TAG_FILTERS = (
+    'age_range', 'child_age', 'construct_type', 'construct_name', 'sample',
+    'measurement_tool', 'item_format', 'language',
+)
+# The competition source is filtered on these and nothing else, exactly as
+# Rpkg's irw_filter(source = "comp") / irw_filter_comp(). n_actors exists only
+# there.
+COMP_FILTERS = ('n_responses', 'n_actors', 'license')
+COMP_ONLY_FILTERS = ('n_actors',)
+
+# The column each filter reads in list_tables(); a filter not named here reads
+# the column of its own name.
+FILTER_COLUMNS = {'var': 'variables', 'collection': 'collections'}
+
+# filter()'s density default, as an object rather than a literal so that
+# "the caller passed density" can be told apart from "the caller left the
+# default", which a value comparison cannot do. R makes the same distinction
+# with missing(density).
+_DEFAULT_DENSITY = [0.5, 1]
 
 
 class InvalidFilterValue(ValueError):
@@ -234,6 +256,41 @@ def _apply_longitudinal_filter(
     return df[mask].copy()
 
 
+def _check_filters_for_source(source: str, supplied: dict) -> None:
+    """Refuse a filter the source cannot answer, before any data is loaded.
+
+    Mirrors the checks at the top of Rpkg's irw_filter(), in the same order.
+    Each is an error rather than an empty result: an empty result is
+    indistinguishable from "nothing matched".
+    """
+    actors = [name for name in COMP_ONLY_FILTERS if name in supplied]
+    if actors and source != 'comp':
+        raise ValueError("`n_actors` is only available when source='comp'.")
+
+    if source == 'comp':
+        unsupported = [name for name in supplied if name not in COMP_FILTERS]
+        if unsupported:
+            raise ValueError(
+                "These filters are not available for source='comp': "
+                f"{', '.join(unsupported)}."
+            )
+        return
+
+    tags = [name for name in TAG_FILTERS if name in supplied]
+    if tags and source not in TAG_SOURCES:
+        raise ValueError(
+            "Tag filters are only available for source in "
+            + ", ".join(f"'{s}'" for s in TAG_SOURCES)
+            + f". Unsupported filter(s): {', '.join(tags)}."
+        )
+
+    if 'collection' in supplied and source not in COLLECTION_SOURCES:
+        raise ValueError(
+            "`collection` is only available for source in "
+            + ", ".join(f"'{s}'" for s in COLLECTION_SOURCES) + "."
+        )
+
+
 def filter_tables(
     datasets: List,
     n_responses: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
@@ -242,7 +299,7 @@ def filter_tables(
     n_items: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
     responses_per_participant: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
     responses_per_item: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
-    density: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = [0.5, 1],
+    density: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = _DEFAULT_DENSITY,
     var: Optional[Union[str, List[str]]] = None,
     age_range: Optional[Union[str, List[str]]] = None,
     child_age: Optional[Union[str, List[str]]] = None,
@@ -256,6 +313,8 @@ def filter_tables(
     has_item_text: Optional[bool] = None,
     license: Optional[Union[str, List[str]]] = None,
     collection: Optional[Union[str, List[str]]] = None,
+    n_actors: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
+    source: str = "main",
 ) -> pd.Series:
     """
     Filter IRW tables based on metadata criteria.
@@ -263,7 +322,19 @@ def filter_tables(
     Returns the names of datasets in the Item Response Warehouse (IRW) that match
     user-specified metadata, tag values, variable presence, and license criteria.
     
-    This function only works for the main IRW database (source="main").
+    Which filters exist depends on ``source``, following the R package's
+    ``irw_filter(source = ...)``:
+
+    - "main" and "nom" take every filter except ``n_actors``, but only "main"
+      has collections, so ``collection`` raises for "nom".
+    - "sim" has no tags, so every tag filter raises, as does ``collection``.
+    - "comp" takes only ``n_responses``, ``n_actors`` and ``license`` (this is
+      R's ``irw_filter_comp()``); anything else raises, and the density
+      default is not applied.
+
+    A source's metadata may still lack a column a filter needs (nom has no
+    ``density`` or ``variables``); passing that filter raises ValueError, and
+    the density default is skipped for it rather than failing every call.
     
     Parameters
     ----------
@@ -351,6 +422,13 @@ def filter_tables(
         the union, not the intersection -- for that, intersect two
         irw.collection() results. Raises ValueError on an unknown name.
         See irw.collections() for what exists and how complete each one is.
+        Main source only.
+
+    n_actors : float, int, or list of length 1 or 2, optional
+        Filter competition tables by number of actors. Only for source="comp".
+
+    source : str, default "main"
+        Table source: "main", "nom", "sim" or "comp".
 
     Returns
     -------
@@ -382,17 +460,53 @@ def filter_tables(
     >>> # Filter by response category complexity
     >>> filtered = irw.filter(n_categories=2)  # binary
     >>> filtered = irw.filter(n_categories=[3, 5])  # small multi-category
+    >>>
+    >>> # Other sources
+    >>> filtered = irw.filter(source="nom", construct_type="Cognitive/educational", density=None)
+    >>> filtered = irw.filter(source="comp", n_actors=[2, 10])
     """
+    params = dict(locals())
+    supplied = {
+        name: value for name, value in params.items()
+        if name not in ('datasets', 'source') and value is not None
+    }
+    if density is _DEFAULT_DENSITY:
+        supplied.pop('density')
+
     # Validate before loading data, including when the catalogue is empty.
-    for filter_name, filter_value in locals().copy().items():
-        if filter_name != 'datasets':
-            validate_filter_value(filter_name, filter_value)
+    if source not in SOURCES:
+        raise ValueError(
+            f"Unknown source '{source}'. Must be one of: "
+            + ", ".join(f"'{s}'" for s in SOURCES)
+        )
+    for filter_name, filter_value in supplied.items():
+        validate_filter_value(filter_name, filter_value)
+    _check_filters_for_source(source, supplied)
 
     # Get all tables with metadata
-    df = list_tables(datasets)
+    df = list_tables(datasets, source=source)
     
     if df.empty or 'name' not in df.columns:
         return pd.Series([], dtype=str, name='name')
+
+    if source != 'main':
+        # Main keeps _require_column's reading of a missing column -- an
+        # outage -- because main's metadata always carries every column. The
+        # other sources' tables legitimately lack some, and "could not be
+        # loaded" would be the wrong diagnosis.
+        missing = [
+            name for name in supplied
+            if FILTER_COLUMNS.get(name, name) not in df.columns
+        ]
+        if missing:
+            raise ValueError(
+                f"These filters are not available for source='{source}', whose "
+                f"metadata has no column for them: {', '.join(missing)}."
+            )
+        if density is _DEFAULT_DENSITY and 'density' not in df.columns:
+            density = None
+    if source == 'comp' and density is _DEFAULT_DENSITY:
+        density = None
     
     # Apply numeric filters
     df = _apply_numeric_filter(df, 'n_responses', n_responses)
@@ -472,6 +586,9 @@ def filter_tables(
     
     # Apply longitudinal filter
     df = _apply_longitudinal_filter(df, longitudinal)
+
+    # Competition only; _check_filters_for_source has refused it elsewhere.
+    df = _apply_numeric_filter(df, 'n_actors', n_actors)
     
     # Apply license filter
     df = _apply_tag_filter(df, 'license', license)
