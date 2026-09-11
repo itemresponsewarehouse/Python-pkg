@@ -81,6 +81,9 @@ irw.info("agn_kay_2025")  # Table metadata
 df = irw.fetch("agn_kay_2025")
 # Convert to response matrix
 resp_matrix = irw.long2resp(df)
+checks = irw.check_resp(df)            # single-category items, sparse categories
+df_again = irw.resp2long(resp_matrix)  # and back to long format
+
 # Person-level columns (e.g. cov_group), one row per id, in the matrix's row order
 covs = irw.covariates(df, align=resp_matrix)
 

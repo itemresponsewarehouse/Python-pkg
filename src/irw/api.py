@@ -16,16 +16,18 @@ Usage:
     irw.save_bibtex("agn_kay_2025")
     irw.download("agn_kay_2025")
     irw.long2resp(df)  # df is a DataFrame from fetch()
+    irw.resp2long(wide)  # and back again
 """
 
 from __future__ import annotations
 import warnings
 import datetime
-from typing import Optional, Union, Dict, List, Literal
+from typing import Optional, Union, Dict, List, Literal, Tuple
 import pandas as pd
 from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset
 from .utils.redivis.item_text import _list_itemtext_tables, _itemtext_disclaimer
 from .utils.long2resp import long2resp as _long2resp
+from .utils.long2resp import check_resp as check_resp, resp2long as resp2long
 from .operations.fetch import fetch as _fetch
 from .operations.table_sets import table_sets as _table_sets
 from .operations.list_tables import list_tables as _list_tables, list_tables_basic
@@ -550,27 +552,36 @@ def long2resp(
     df: pd.DataFrame,
     wave: Optional[int] = None,
     id_density_threshold: Optional[float] = 0.1,
-    agg_method: Literal["mean", "mode", "median", "first"] = "mean"
-) -> pd.DataFrame:
+    agg_method: Optional[Literal["mean", "mode", "median", "first"]] = None,
+    check_resp: bool = False,
+    resp_col: str = "resp",
+) -> Union[pd.DataFrame, Tuple[pd.DataFrame, Dict]]:
     """
     Convert IRW long-format data to wide-format response matrix.
     
     Parameters
     ----------
     df : pandas.DataFrame
-        Long-format DataFrame with columns: id, item, resp (and optionally wave).
-        Typically obtained from irw.fetch().
+        Long-format DataFrame with columns: id, item, the column named by
+        ``resp_col`` (and optionally wave). Typically obtained from irw.fetch().
     wave : int, optional
         Filter by wave. Defaults to most frequent wave if None.
     id_density_threshold : float, optional
         Minimum response density (0.0-1.0). None to disable. Default 0.1.
-    agg_method : str, default "mean"
+    agg_method : str, optional
         How to handle multiple id-item pairs: "mean", "mode", "median", "first".
+        Defaults to "mean", or to "first" when no response is a number.
+    check_resp : bool, default False
+        If True, also run ``irw.check_resp()`` with its default thresholds and
+        return ``(wide, checks)``.
+    resp_col : str, default "resp"
+        Column holding the response values, e.g. ``"text"`` for nominal data.
         
     Returns
     -------
-    pandas.DataFrame
+    pandas.DataFrame or tuple
         Wide-format response matrix where rows are ids and columns are items.
+        With ``check_resp=True``, a ``(wide, checks)`` tuple.
         
     Examples
     --------
@@ -581,8 +592,18 @@ def long2resp(
     >>> 
     >>> # Convert to wide format
     >>> resp_matrix = irw.long2resp(df)
+    >>> 
+    >>> # ...and get the response diagnostics while doing it
+    >>> resp_matrix, checks = irw.long2resp(df, check_resp=True)
     """
-    return _long2resp(df, wave=wave, id_density_threshold=id_density_threshold, agg_method=agg_method)
+    return _long2resp(
+        df,
+        wave=wave,
+        id_density_threshold=id_density_threshold,
+        agg_method=agg_method,
+        check_resp=check_resp,
+        resp_col=resp_col,
+    )
 
 
 def get_filters() -> List[str]:
