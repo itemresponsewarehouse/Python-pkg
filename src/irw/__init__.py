@@ -59,6 +59,7 @@ from .api import (
     simdata_comp,
     validate,
     merge,
+    imv,
     covariates,
 )
 from .operations.list_tables import IRWMetadataUnavailable
@@ -85,6 +86,7 @@ __all__ = [
     "simdata_comp",
     "validate",
     "merge",
+    "imv",
     "covariates",
 ]
 
