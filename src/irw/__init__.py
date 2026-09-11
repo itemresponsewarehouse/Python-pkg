@@ -43,6 +43,7 @@ from .api import (
     filter,
     info,
     fetch,
+    table_sets,
     itemtext,
     save_bibtex,
     download,
@@ -59,6 +60,7 @@ from .api import (
     simdata,
     simdata_comp,
     validate,
+    covariates,
 )
 from .operations.list_tables import IRWMetadataUnavailable
 
@@ -68,6 +70,7 @@ __all__ = [
     "filter",
     "info",
     "fetch",
+    "table_sets",
     "itemtext",
     "save_bibtex",
     "download",
@@ -84,6 +87,7 @@ __all__ = [
     "simdata",
     "simdata_comp",
     "validate",
+    "covariates",
 ]
 
 # Single source of truth is config.VERSION -- these two literals had drifted
