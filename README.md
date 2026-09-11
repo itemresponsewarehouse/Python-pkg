@@ -103,6 +103,9 @@ irw.save_bibtex("agn_kay_2025")  # Returns BibTeX entry
 # Download table
 irw.download("agn_kay_2025", path="data.csv")
 
+# Reassemble a study deposited as several tables (same DOI / BibTeX)
+merged = irw.merge("ajaykumar_2023_nasa_tlx")  # reports N before fetching; confirm=True to be asked
+
 # Browse collections: labelled groupings of tables
 irw.collections()                     # all collections, with coverage and table counts
 tabs = irw.collection("depression")   # the table names in one collection

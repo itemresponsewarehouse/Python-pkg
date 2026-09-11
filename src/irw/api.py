@@ -37,6 +37,7 @@ from .operations.filter_info import get_filters as _get_filters_func, describe_f
 from .operations.version import version as _version
 from .operations.simulate import simdata as simdata, simdata_comp as simdata_comp
 from .operations.validate import validate as validate
+from .operations.merge import merge as merge
 from .operations.recode import recode as recode, decode as decode
 from .operations.imv import imv as imv
 from .operations.covariates import covariates as covariates
