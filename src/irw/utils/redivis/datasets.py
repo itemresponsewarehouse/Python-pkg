@@ -6,14 +6,27 @@ import time
 from typing import Any, List, Optional, Tuple
 from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF
 from .cache import metadata_cache
+from .pins import (
+    ABSENT,
+    IRWVersionUnavailable,
+    _absent_message,
+    _dataset_key,
+    _pinned_version,
+    _pins_fingerprint,
+)
 import redivis
 
 logger = logging.getLogger(__name__)
 
 
 def _main_datasets_cache_key() -> str:
-    """Cache key that changes when MAIN_REFS is updated (e.g. new warehouse added)."""
-    return "main_datasets:" + "|".join(f"{user}/{ref}" for user, ref in MAIN_REFS)
+    """Cache key that changes when MAIN_REFS is updated (e.g. new warehouse added).
+
+    The session's version pins are part of the key, so a pinned session and an
+    unpinned one can never share warehouse handles.
+    """
+    return ("main_datasets:" + "|".join(f"{user}/{ref}" for user, ref in MAIN_REFS)
+            + _pins_fingerprint(MAIN_REFS))
 
 
 def _datasets_cache_key(datasets: List[Any]) -> str:
@@ -43,7 +56,15 @@ def _init_datasets_from_refs(
 
     datasets: List[Any] = []
     failures: List[str] = []
+    absent: List[str] = []
     for user, ref in refs:
+        # A shard younger than the pinned IRW version is not a failure: it did
+        # not exist then, so a reproduced session should not see it. Skipped
+        # quietly, unlike an unavailable shard, because absence is the right
+        # answer rather than a fault.
+        if _pinned_version(ref) == ABSENT:
+            absent.append(_dataset_key(ref))
+            continue
         try:
             datasets.append(_init_dataset(user, ref))
         except Exception as e:
@@ -55,7 +76,19 @@ def _init_datasets_from_refs(
                 e,
             )
 
+    if absent:
+        logger.info(
+            "Skipping %d dataset(s) with no release at the pinned IRW version: %s",
+            len(absent),
+            ", ".join(absent),
+        )
     if not datasets:
+        if not failures:
+            raise IRWVersionUnavailable(
+                "None of " + ", ".join(absent) + " had a released version at "
+                "the IRW version pinned by irw.use_version(). Use "
+                "irw.reset_version() to return to the current release."
+            )
         raise RuntimeError(
             "No IRW warehouse could be opened: " + "; ".join(failures)
         )
@@ -239,12 +272,72 @@ def _order_main_datasets(datasets: List[Any]) -> List[Any]:
 
 
 def _init_dataset(user: str, ds_ref: str) -> Any:
-    """Create a Redivis dataset handle and ensure metadata is loaded."""
-    ds = redivis.user(user).dataset(ds_ref)
+    """Create a Redivis dataset handle and ensure metadata is loaded.
+
+    Honours the session's version pin for the dataset (see `pins.py`). Every
+    IRW dataset is opened through here, so a pin reaches fetches, listings,
+    metadata and item text alike -- R's `.irw_open_dataset()` is the same
+    single point.
+
+    A pinned handle is labelled with its tag (``_id`` is
+    ``item_response_warehouse:as2e@v46.0``), and `_dataset_label` is what every
+    per-dataset cache below keys on -- the version tag, the table list. So a
+    pinned handle and a current one never share an entry, even within the
+    version-tag TTL.
+    """
+    version = _pinned_version(ds_ref)
+    if version == ABSENT:
+        raise IRWVersionUnavailable(_absent_message(ds_ref))
+
+    if version is None:
+        ds = redivis.user(user).dataset(ds_ref)
+    else:
+        ds = redivis.user(user).dataset(ds_ref, version=version)
     ds.get()
-    
+
     setattr(ds, "_user", user)
-    setattr(ds, "_id", ds_ref)
+    setattr(ds, "_id", ds_ref if version is None else f"{ds_ref}@{version}")
+    setattr(ds, "_irw_pin", version)
+    return ds
+
+
+def _verify_version(user: str, ds_ref: str, tag: str) -> Any:
+    """Open `ds_ref` at `tag` and confirm Redivis actually serves that version.
+
+    Redivis resolves a version it does not recognise to the current release
+    instead of failing, which would make a pin a silent no-op, so the tag it
+    resolves to is compared with the tag asked for. Ported from R's
+    `.irw_verify_version`, with one difference: R reports every failure as
+    "does not exist", and here only a not-found does. A timeout is not evidence
+    that a version was never released.
+    """
+    from .tables import _classify_error, _sanitize_error
+
+    key = _dataset_key(ds_ref)
+    try:
+        ds = redivis.user(user).dataset(ds_ref, version=tag)
+        ds.get()
+    except Exception as e:
+        kind = _classify_error(e)
+        if kind == "not_found":
+            raise ValueError(
+                f"Version {tag} of {key} does not exist on Redivis. "
+                "Use irw.version() to see the tags each IRW version held."
+            ) from e
+        if kind == "auth":
+            raise RuntimeError(
+                "Redivis authentication failed while checking a version pin. "
+                "Sign in via the browser when prompted, or see the README "
+                f"troubleshooting section. Underlying error: {_sanitize_error(str(e))}"
+            ) from e
+        raise
+
+    resolved = ((getattr(ds, "properties", None) or {}).get("version") or {}).get("tag")
+    if resolved != tag:
+        raise ValueError(
+            f"Version {tag} of {key} could not be resolved on Redivis "
+            f"(got {resolved!r} instead)."
+        )
     return ds
 
 
@@ -264,32 +357,35 @@ def _init_main_datasets() -> List[Any]:
 
 def _init_sim_dataset() -> Any:
     """Initialize simulation dataset (cached)."""
-    cached = metadata_cache.get("sim_dataset")
+    cache_key = "sim_dataset" + _pins_fingerprint([SIM_REF])
+    cached = metadata_cache.get(cache_key)
     if cached is not None:
         return cached
     
     dataset = _init_dataset(*SIM_REF)
-    metadata_cache.set("sim_dataset", dataset)
+    metadata_cache.set(cache_key, dataset)
     return dataset
 
 
 def _init_comp_dataset() -> Any:
     """Initialize competition dataset (cached)."""
-    cached = metadata_cache.get("comp_dataset")
+    cache_key = "comp_dataset" + _pins_fingerprint([COMP_REF])
+    cached = metadata_cache.get(cache_key)
     if cached is not None:
         return cached
     
     dataset = _init_dataset(*COMP_REF)
-    metadata_cache.set("comp_dataset", dataset)
+    metadata_cache.set(cache_key, dataset)
     return dataset
 
 
 def _init_nom_dataset() -> Any:
     """Initialize nominal-response dataset (cached)."""
-    cached = metadata_cache.get("nom_dataset")
+    cache_key = "nom_dataset" + _pins_fingerprint([NOM_REF])
+    cached = metadata_cache.get(cache_key)
     if cached is not None:
         return cached
     
     dataset = _init_dataset(*NOM_REF)
-    metadata_cache.set("nom_dataset", dataset)
+    metadata_cache.set(cache_key, dataset)
     return dataset

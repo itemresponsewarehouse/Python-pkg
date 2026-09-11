@@ -34,9 +34,16 @@ from .operations.list_tables import list_tables as _list_tables, list_tables_bas
 from .operations.info import info_for
 from .operations.filter import filter_tables
 from .operations.filter_info import get_filters as _get_filters_func, describe_filter as _describe_filter
-from .operations.version import version as _version
+from .operations.version import (
+    version as _version,
+    use_version as use_version,
+    set_version as set_version,
+    get_version as get_version,
+    reset_version as reset_version,
+)
 from .operations.simulate import simdata as simdata, simdata_comp as simdata_comp
 from .operations.validate import validate as validate
+from .operations.merge import merge as merge
 from .operations.recode import recode as recode, decode as decode
 from .operations.imv import imv as imv
 from .operations.covariates import covariates as covariates
@@ -531,9 +538,16 @@ def download(table_name: str, path: Optional[str] = None, overwrite: bool = Fals
     )
     import os
 
+    from .utils.redivis.pins import IRWVersionUnavailable
+
     all_datasets = []
     for source in ["main", "sim", "comp", "nom"]:
-        datasets = _get_datasets(source)
+        try:
+            datasets = _get_datasets(source)
+        except IRWVersionUnavailable:
+            # A source with no release at the pinned IRW version holds none of
+            # that version's tables; searching the others is the right answer.
+            continue
         all_datasets.extend(datasets if isinstance(datasets, list) else [datasets])
 
     def _download_from(ds):
@@ -853,7 +867,10 @@ def collection_members(
     return df.sort_values(["table", "collection"]).reset_index(drop=True)
 
 
-def version(date: Optional[Union[str, datetime.date, datetime.datetime]] = None) -> pd.DataFrame:
+def version(
+    date: Optional[Union[str, datetime.date, datetime.datetime]] = None,
+    version: Optional[Union[int, str]] = None,
+) -> pd.DataFrame:
     """
     Which IRW version was live, and the Redivis version of every dataset in it.
 
@@ -867,6 +884,9 @@ def version(date: Optional[Union[str, datetime.date, datetime.datetime]] = None)
     date : str, date, or datetime, optional
         Report the version that was live then, e.g. ``"2026-08-01"``. Defaults
         to the newest version.
+    version : int, optional
+        Report exactly what this IRW version held, e.g. ``332``. Mutually
+        exclusive with ``date``.
 
     Returns
     -------
@@ -882,9 +902,13 @@ def version(date: Optional[Union[str, datetime.date, datetime.datetime]] = None)
     migration, so 142 of the corpus\' 332 released versions cannot be dated
     exactly; the manifest brackets those rather than asserting them.
 
+    To make the session *read* a version rather than report it, use
+    :func:`use_version`.
+
     Examples
     --------
     >>> irw.version()                     # doctest: +SKIP
+    >>> irw.version(version=332)          # doctest: +SKIP
     >>> irw.version("2026-08-01")         # doctest: +SKIP
     """
-    return _version(date)
+    return _version(date, version=version)
