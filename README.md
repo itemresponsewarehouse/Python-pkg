@@ -112,6 +112,13 @@ irw.collection_members(tables="frac20")  # which collections is this table in?
 sim = irw.simdata(n_id=500, n_item=20, model="2PL", seed=1)   # id / item / resp
 pairs = irw.simdata_comp(n_agent=100, n_pairs=10000, nu=0.1)  # agent_a / agent_b / winner
 
+# Swap awkward identifiers for short codes (P0001, I0001), and back again
+recoded, key = irw.recode(df)         # keep `key`: it is the only record of the mapping
+original = irw.decode(recoded, key)   # also decodes long2resp() column names
+
+# Compare two models' predicted probabilities for the same 0/1 outcomes
+irw.imv(preds, "p1", "p2")  # preds has resp, p1, p2; the gain from p1 to p2 (not symmetric)
+
 # Check your own table against the IRW format before depositing it
 report = irw.validate("my_table.csv")  # needs `pip install irw-validate`
 report.ok                              # False if anything blocks

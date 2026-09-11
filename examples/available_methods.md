@@ -53,6 +53,9 @@ See `## Collections` below for worked examples of the collection methods.
   - `id=False`: generate positional ids `1..n` for a matrix with no `id` column
 - **`check_resp(x, min_count=5, min_prop=0.01, resp_col="resp")`** - Flag single-category items and sparse categories in long data
   - Returns: `dict` with `single_category_items` (list) and `sparse_category_items` (dict of DataFrames)
+- **`recode(df, cols=("id", "item"), prefix=None)`** - Replace identifiers with short codes (`P0001`, `I0001`)
+  - Returns: `(DataFrame, key)`; codes are only meaningful relative to their key
+- **`decode(df, key, cols=None)`** - Restore original identifiers, in long format or `long2resp()` output
 - **`covariates(df, cols=None, align=None)`** - Person-level columns, one row per `id`
   - `cols=None` detects columns that take one value within every id, and names the ones it rejects
   - `align=long2resp(df)` puts the rows in the matrix's order; ids absent from `df` give NA rows
