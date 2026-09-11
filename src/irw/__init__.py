@@ -60,6 +60,7 @@ from .api import (
     validate,
     recode,
     decode,
+    imv,
     covariates,
 )
 from .operations.list_tables import IRWMetadataUnavailable
@@ -87,6 +88,7 @@ __all__ = [
     "validate",
     "recode",
     "decode",
+    "imv",
     "covariates",
 ]
 
