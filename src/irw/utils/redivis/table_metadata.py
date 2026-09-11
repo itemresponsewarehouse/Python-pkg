@@ -1,7 +1,6 @@
 """Table-level metadata utilities for main IRW dataset."""
 
 import pandas as pd
-import redivis
 from typing import Any
 from ...config import META_REF, META_TABLES
 from .cache import metadata_cache
@@ -10,9 +9,11 @@ from .datasets import (
     _dataset_table_list,
     _dataset_version_tag,
     _datasets_version_tag,
+    _init_dataset,
     _init_main_datasets,
     _main_datasets_cache_key,
 )
+from .pins import _pins_fingerprint
 
 
 def _get_meta_dataset() -> Any:
@@ -23,14 +24,17 @@ def _get_meta_dataset() -> Any:
     it at `.get()` time -- see `_dataset_version_tag`, which is how every
     caller below resolves the current version.
     """
-    cached_dataset = metadata_cache.get("meta_dataset")
+    # Opened through `_init_dataset` so a session version pin applies, and
+    # keyed on the pin so a pinned handle is a different object from the
+    # current one (`properties` never refetches, so sharing would be wrong).
+    cache_key = "meta_dataset" + _pins_fingerprint([META_REF])
+    cached_dataset = metadata_cache.get(cache_key)
     if cached_dataset is not None:
         return cached_dataset
-    
-    dataset = redivis.user(META_REF[0]).dataset(META_REF[1])
-    dataset.get()
-    
-    metadata_cache.set("meta_dataset", dataset)
+
+    dataset = _init_dataset(*META_REF)
+
+    metadata_cache.set(cache_key, dataset)
     return dataset
 
 

@@ -17,6 +17,7 @@ from ..utils.redivis.tables import (
     _retry_transient,
     _terminal_error_message,
 )
+from ..utils.redivis.pins import _pinned_not_found_hint
 
 logger = logging.getLogger(__name__)
 
@@ -284,7 +285,10 @@ def _fetch_one_table(
                 stacklevel=2,
             )
     else:
-        msg = f"Table '{name}' does not exist in the IRW database."
+        # Under a version pin, "not in IRW" and "not in the release you pinned"
+        # are the same not-found; say which releases were searched.
+        msg = (f"Table '{name}' does not exist in the IRW database."
+               + _pinned_not_found_hint(datasets))
         warnings.warn(msg, UserWarning, stacklevel=2)
         logger.warning(msg)
     return None

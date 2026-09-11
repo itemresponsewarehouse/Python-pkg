@@ -57,6 +57,10 @@ from .api import (
     collection,
     collection_members,
     version,
+    use_version,
+    set_version,
+    get_version,
+    reset_version,
     simdata,
     simdata_comp,
     validate,
@@ -67,9 +71,11 @@ from .api import (
     covariates,
 )
 from .operations.list_tables import IRWMetadataUnavailable
+from .utils.redivis.pins import IRWVersionUnavailable
 
 __all__ = [
     "IRWMetadataUnavailable",
+    "IRWVersionUnavailable",
     "list_tables",
     "filter",
     "info",
@@ -88,6 +94,10 @@ __all__ = [
     "collection",
     "collection_members",
     "version",
+    "use_version",
+    "set_version",
+    "get_version",
+    "reset_version",
     "simdata",
     "simdata_comp",
     "validate",
