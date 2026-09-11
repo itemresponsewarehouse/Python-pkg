@@ -15,6 +15,7 @@ from .filter_info import get_filters as get_filters, describe_filter as describe
 from .simulate import simdata as simdata, simdata_comp as simdata_comp
 from .validate import validate as validate
 from .merge import merge as merge
+from .recode import recode as recode, decode as decode
 from .covariates import covariates as covariates
 
 # No public exports - all functions are internal
