@@ -116,6 +116,21 @@ def _init_datasets_from_refs(
 # So the tag has to come from a handle that is actually re-`get()`. That is one
 # small metadata request, and doing it per lookup would be wasteful, so it is
 # bounded by a TTL: worst-case staleness is the TTL, not the process lifetime.
+#
+# Re-`get()`-ing the *same* handle is not enough either (issue #75). `.get()`
+# replaces the handle's `uri` and `qualified_reference` with the ones Redivis
+# returns, and those name the version that was current at the time
+# (`item_response_warehouse_3:5xaj:v6_0`) even when no version was asked for.
+# Every later `.get()` then re-reads that version, and every table reached
+# through the handle is addressed at it. So the refresh asks an unversioned
+# reference for the current release, and when that has moved, points the
+# cached handle at it in place -- the handle lists and caches holding the
+# object then follow without being rebuilt.
+
+# The attributes `redivis.Dataset.get()` rewrites from the response
+# (`update_properties` in redivis 0.20.x). Moving a handle to another release
+# means moving all of them, or tables would be addressed at the old one.
+_HANDLE_ADDRESS_ATTRS = ("properties", "qualified_reference", "scoped_reference", "uri", "name")
 
 _DEFAULT_VERSION_TTL_SECONDS = 300.0
 
@@ -150,6 +165,36 @@ def _dataset_label(ds: Any) -> str:
     return (getattr(ds, "_id", None) or getattr(ds, "name", None) or "").lower()
 
 
+def _properties_tag(properties: Any) -> Optional[str]:
+    return ((properties or {}).get("version") or {}).get("tag")
+
+
+def _refresh_handle(ds: Any) -> Any:
+    """Re-read `ds` from Redivis and return the properties of its current release.
+
+    A pinned handle is re-read as it is: its frozen address is the point. So is
+    a handle that did not come through `_init_dataset`, which has no unversioned
+    reference to ask. Otherwise the current release is read from a fresh,
+    unversioned handle, and `ds` is moved onto it if it has changed.
+    """
+    user = getattr(ds, "_user", None)
+    ref = getattr(ds, "_id", None)
+    if getattr(ds, "_irw_pin", None) is not None or not user or not ref:
+        ds.get()
+        return getattr(ds, "properties", None)
+
+    current = redivis.user(user).dataset(ref)
+    current.get()
+    old_tag = _properties_tag(getattr(ds, "properties", None))
+    new_tag = _properties_tag(current.properties)
+    if new_tag != old_tag:
+        for attr in _HANDLE_ADDRESS_ATTRS:
+            if hasattr(current, attr):
+                setattr(ds, attr, getattr(current, attr))
+        logger.info("IRW dataset %s moved from %s to %s.", ref, old_tag, new_tag)
+    return current.properties
+
+
 def _dataset_version_tag(ds: Any) -> Optional[str]:
     """Current released version tag for `ds`, refreshed at most once per TTL.
 
@@ -169,7 +214,7 @@ def _dataset_version_tag(ds: Any) -> Optional[str]:
         return stamped[1]
 
     try:
-        ds.get()
+        properties = _refresh_handle(ds)
     except Exception as e:
         logger.debug("Could not refresh version for %s: %s", _dataset_label(ds), e)
         if stamped is not None:
@@ -178,8 +223,7 @@ def _dataset_version_tag(ds: Any) -> Optional[str]:
             return stamped[1]
         return None
 
-    properties = getattr(ds, "properties", None) or {}
-    tag = (properties.get("version") or {}).get("tag")
+    tag = _properties_tag(properties)
     metadata_cache.set(key, (now, tag))
     return tag
 
