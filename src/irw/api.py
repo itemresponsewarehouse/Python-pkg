@@ -27,6 +27,7 @@ from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_da
 from .utils.redivis.item_text import _list_itemtext_tables, _itemtext_disclaimer
 from .utils.long2resp import long2resp as _long2resp
 from .operations.fetch import fetch as _fetch
+from .operations.table_sets import table_sets as _table_sets
 from .operations.list_tables import list_tables as _list_tables, list_tables_basic
 from .operations.info import info_for
 from .operations.filter import filter_tables
@@ -240,6 +241,71 @@ def fetch(
     
     else:
         return result
+
+
+def table_sets(
+    table_name: str,
+    source: str = "main",
+    *,
+    per_item: bool = False,
+) -> Dict[str, object]:
+    """
+    Summarize the value sets of an IRW table without downloading it.
+
+    Answers set and summary questions about a table -- which item codes it
+    contains, which response values occur, how many rows each item has --
+    with server-side aggregate queries rather than exporting the table. On a
+    large table that is the difference between downloading every row and
+    reading a few result rows: computing the item set of a 68-million-row
+    table with fetch() exports all 68 million rows, while table_sets()
+    returns in seconds and does not draw down the Redivis export quota.
+
+    Parameters
+    ----------
+    table_name : str
+        Name of a single IRW table.
+    source : str, default "main"
+        Dataset source to use. Options: "main", "sim", "comp", "nom".
+    per_item : bool, default False
+        If True, also return a per-item summary. One extra query; the result
+        has one row per distinct item.
+
+    Returns
+    -------
+    dict
+        - ``table``: fully qualified Redivis reference the queries ran against.
+        - ``n_rows``: total number of rows, missing responses included.
+        - ``items``: sorted list of distinct ``item`` values, as strings, or
+          None if the table has no ``item`` column.
+        - ``resp``: sorted list of distinct ``resp`` values -- numbers when
+          every value is numeric, strings otherwise, and always strings for
+          ``source="nom"``. ``"NA"`` and empty strings are treated as missing
+          and excluded, matching what fetch() produces. None if the table has
+          no ``resp`` column.
+        - ``per_item``: DataFrame with columns ``item``, ``n``, ``resp_min``,
+          ``resp_max`` and ``n_resp_levels``, or None when
+          ``per_item=False``. ``n`` counts rows with a non-missing response,
+          so it can sum to less than ``n_rows``; ``resp_min``/``resp_max``
+          are missing for an item with no numeric responses.
+
+    Raises
+    ------
+    ValueError
+        If the table does not exist, or its lookup fails on export quota,
+        authentication, or an invalid table.
+    RuntimeError
+        If one of the aggregate queries fails.
+
+    Examples
+    --------
+    >>> import irw
+    >>> sets = irw.table_sets("rosenberg_selfesteem")
+    >>> sets["items"]
+    >>> sets["resp"]
+    >>> irw.table_sets("condon_2024_sapa_personality", per_item=True)["per_item"]
+    """
+    datasets = _get_datasets(source)
+    return _table_sets(datasets, table_name, source=source, per_item=per_item)
 
 
 def itemtext(table_name: str) -> Union[pd.DataFrame, str]:

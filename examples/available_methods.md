@@ -32,6 +32,11 @@ See `## Collections` below for worked examples of the collection methods.
   - Multiple tables → returns `dict[str, pandas.DataFrame]`
   - `wide=True`: Automatically convert to wide-format response matrix
 
+- **`table_sets(table_name, source="main", per_item=False)`** - Item set, response set and row count of a table, without downloading it
+  - Runs server-side aggregate queries, so it does not count against the Redivis export quota
+  - Returns `dict` with `table`, `n_rows`, `items`, `resp`, and `per_item` (a `pandas.DataFrame` when `per_item=True`)
+  - `"NA"` and empty responses are excluded from `resp`, matching `fetch()`
+
 - **`itemtext(table_name)`** - Get item-level text
 - **`save_bibtex(table_names, output_file=None)`** - Get/save BibTeX citations for one or more tables
   - Supports single table name or list of table names
