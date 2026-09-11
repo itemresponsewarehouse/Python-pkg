@@ -35,6 +35,7 @@ from .operations.filter_info import get_filters as _get_filters_func, describe_f
 from .operations.version import version as _version
 from .operations.simulate import simdata as simdata, simdata_comp as simdata_comp
 from .operations.validate import validate as validate
+from .operations.imv import imv as imv
 from .operations.covariates import covariates as covariates
 from .utils.redivis.table_metadata import (
     get_collections_table as _get_collections_table,
