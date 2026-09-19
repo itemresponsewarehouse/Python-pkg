@@ -85,11 +85,11 @@ PUBLIC_SOURCE_MAX_BYTES = 8 * 1024 * 1024
 
 # IRW records two licences per table: the Original License of the source
 # deposit and the Derived License IRW redistributes its own extract under.
-# Only the derived one reaches this server -- the biblio table the package
-# reads carries `Derived_License` and nothing else, while `Original License`
-# lives in the data dictionary and is not exported. So the field is reported
-# as null with its provenance stated, rather than the derived licence being
-# quietly passed off as the answer to a question about the source.
+# biblio gains `Original_License` with ben-domingue/irw#2032; until that export
+# is live the column is absent, and the field is reported as null with its
+# provenance stated, rather than the derived licence being quietly passed off
+# as the answer to a question about the source. Once the column exists it is
+# sparse, and a blank means "not recorded" -- never "unlicensed".
 ORIGINAL_LICENSE_NOTE = (
     "IRW records an Original License for the source deposit separately from "
     "the Derived License above, but it is not carried in the metadata this "
@@ -97,6 +97,19 @@ ORIGINAL_LICENSE_NOTE = (
     "restrictive derived licence does not imply a restrictive original one, "
     "or the reverse. Check the table's entry in the IRW data dictionary "
     "before relying on either."
+)
+
+ORIGINAL_LICENSE_RECORDED_NOTE = (
+    "This is the licence of the source deposit as recorded in the IRW data "
+    "dictionary. It is distinct from the Derived License above, and neither "
+    "one is a licence to the instrument."
+)
+
+ORIGINAL_LICENSE_BLANK_NOTE = (
+    "No Original License is recorded for this table's source deposit, so it "
+    "is reported as null. Null means not recorded, not unlicensed: check the "
+    "source deposit before relying on the Derived License above for a "
+    "question about the source."
 )
 
 INSTRUMENT_RIGHTS_NOTE = (
@@ -1026,6 +1039,7 @@ class IRWTools:
                 except (TypeError, ValueError, OverflowError):
                     n_responses = None
                 licence = raw.get("Derived_License", raw.get("license"))
+                original = raw.get("Original_License")
                 variables = raw.get("variables")
                 catalogue[key] = {
                     "name": str(name),
@@ -1040,6 +1054,17 @@ class IRWTools:
                         ]
                     ),
                     "license": None if _is_missing(licence) else str(licence),
+                    # Absent (pre-#2032 metadata) and blank are different
+                    # answers, so both are kept.
+                    "original_license_exported": "Original_License" in raw,
+                    # Blank cells arrive as "" or the literal "NA" as well
+                    # as null; all three mean "not recorded".
+                    "original_license": (
+                        None
+                        if _is_missing(original)
+                        or str(original).strip() in ("", "NA")
+                        else str(original).strip()
+                    ),
                     "has_item_text": _as_bool(raw.get("has_item_text")),
                     "tagged": _is_tagged(raw),
                 }
@@ -1065,11 +1090,18 @@ class IRWTools:
                 f"This table has {len(notes)} public item-text note(s); read "
                 "rights.public_notes before using the text."
             )
+        original = facts.get("original_license")
+        if not facts.get("original_license_exported"):
+            original, original_note = None, ORIGINAL_LICENSE_NOTE
+        elif original is None:
+            original_note = ORIGINAL_LICENSE_BLANK_NOTE
+        else:
+            original_note = ORIGINAL_LICENSE_RECORDED_NOTE
         rights = {
             "response_data_license": facts.get("license"),
             "response_data_license_field": "Derived License",
-            "original_license": None,
-            "original_license_note": ORIGINAL_LICENSE_NOTE,
+            "original_license": original,
+            "original_license_note": original_note,
             "instrument_rights": INSTRUMENT_RIGHTS_NOTE,
             "public_notes": notes,
             "public_notes_url": ITEMTEXT_ISSUES_PAGE,
@@ -2007,9 +2039,9 @@ def create_server(
     ) -> Dict[str, Any]:
         """Return a bounded page of item-level text with its rights information.
 
-        `rights` carries the response-data licence (IRW's Derived License,
-        not the source deposit's Original License, which is not in the
-        metadata this server reads and is reported as null), the
+        `rights` carries the response-data licence (IRW's Derived License),
+        the source deposit's Original License where one is recorded (null
+        means not recorded, not unlicensed), the
         instrument-rights rule, and the table's public notes from the
         item-text issues page (withdrawn wording, machine translations, known
         mismatches). The deposit licence is not an instrument licence: never
