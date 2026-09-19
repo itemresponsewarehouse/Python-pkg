@@ -41,6 +41,12 @@ from .operations.version import (
     get_version as get_version,
     reset_version as reset_version,
 )
+from .operations.cache import (
+    cache_dir as cache_dir,
+    cache_info as cache_info,
+    clear_cache as clear_cache,
+    set_cache as set_cache,
+)
 from .operations.simulate import simdata as simdata, simdata_comp as simdata_comp
 from .operations.validate import validate as validate
 from .operations.merge import merge as merge
@@ -215,6 +221,14 @@ def fetch(
     pandas.DataFrame or dict[str, pandas.DataFrame]
         Single table returns DataFrame, multiple return dict.
         If wide=True, returns wide-format response matrix instead of long format.
+
+    Notes
+    -----
+    A whole-table download is kept on disk (see `cache_dir()`) and reused by
+    later fetches, in this session or another, for as long as the table is
+    unchanged on Redivis; the R package shares the same copies. A table that
+    is already cached also serves ``max_rows`` and ``columns`` without an
+    export. Switch this off with `set_cache(False)` or ``IRW_CACHE=0``.
     """
     from .operations.fetch import _validate_pushdown
 

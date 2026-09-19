@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, Union
 import pandas as pd
 from ..utils.redivis.table_metadata import _table_info
 from ..utils.redivis.item_text import _get_itemtext_table, _list_itemtext_tables
+from ..utils.redivis import disk_cache
 from ..utils.redivis.tables import (
     _classify_error,
     _retry_transient,
@@ -120,6 +121,16 @@ def _get_table_itemtext(table_name: str) -> Union[pd.DataFrame, str]:
         return f"Item-level text is not available for table '{table_name}'."
 
     try:
+        # Same on-disk cache as fetch(), under its own kind so a table and its
+        # item text never collide.
+        entry = disk_cache.lookup(itemtext_table, "itemtext")
+        if entry is not None:
+            cached = entry.read()
+            if cached is not None:
+                return cached
+            arrow_table = _retry_transient(itemtext_table.to_arrow_table)
+            entry.write(arrow_table)
+            return disk_cache.to_frame(arrow_table)
         return _retry_transient(itemtext_table.to_pandas_dataframe)
     except Exception as e:
         # Name the condition rather than letting a raw Redivis payload out.
