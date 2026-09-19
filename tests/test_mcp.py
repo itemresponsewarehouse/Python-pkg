@@ -620,6 +620,26 @@ def test_itemtext_carries_rights_licence_and_public_notes(tools):
     assert any("public item-text note" in w for w in result["warnings"])
 
 
+def test_original_license_is_read_once_biblio_exports_it():
+    # ben-domingue/irw#2032: biblio gains Original_License, sparse. A recorded
+    # value is reported; a blank is null with a note that it means "not
+    # recorded", which is a different answer from the column being absent.
+    backend = FakeBackend()
+    backend.tables["Original_License"] = ["CC BY-NC 4.0", None, "", "NA"]
+    tools = IRWTools(backend, FakeSource())
+
+    result = tools.get_itemtext("alpha_depression", limit=1)
+    rights = result["rights"]
+    assert rights["original_license"] == "CC BY-NC 4.0"
+    assert rights["response_data_license"] == "CC BY"
+    assert "distinct from the Derived License" in rights["original_license_note"]
+
+    for blank in ("beta_math", "gamma_depression", "huge_assessment"):
+        rights, _ = tools._rights(blank)
+        assert rights["original_license"] is None
+        assert "not recorded, not unlicensed" in rights["original_license_note"]
+
+
 def test_itemtext_unavailable_but_catalogued_is_flagged_as_a_fault(tools):
     # gamma_depression is flagged has_item_text=True but the fake has no text.
     result = tools.get_itemtext("gamma_depression")

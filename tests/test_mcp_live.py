@@ -166,7 +166,10 @@ def test_itemtext_from_the_older_shard_is_reachable(tools):
     rights = result["rights"]
     assert rights["response_data_license"]
     assert rights["response_data_license_field"] == "Derived License"
-    assert rights["original_license"] is None
+    # Null until ben-domingue/irw#2032's export is live, and sparse after it;
+    # either way the note must say which of the two it is.
+    assert rights["original_license"] is None or isinstance(rights["original_license"], str)
+    assert rights["original_license_note"]
     assert "does not extend to the instrument" in rights["instrument_rights"]
 
 
