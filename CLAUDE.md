@@ -62,7 +62,7 @@ carry the source (`"tags:nom"`).
 
 ### Key design decisions
 
-- **Caching** (`utils/redivis/cache.py`): Redivis metadata tables are cached in-process to avoid redundant network calls. Cache is per-session only.
+- **Caching**: Redivis metadata tables are cached in-process (`utils/redivis/cache.py`), per session. Downloaded tables and item text are also cached on disk (`utils/redivis/disk_cache.py`), keyed on each table's Redivis content hash, in a Parquet layout shared with the R package -- the format is a contract with `Rpkg/R/disk-cache.R` (ben-domingue/irw#2253).
 - **`fetch()` return type varies**: returns a single DataFrame for a single table name, or a `dict[name → DataFrame]` for a list or a filtered Series.
 - **Warning suppression** in `__init__.py`: silences a known noisy Redivis warning about missing reference IDs.
 - **Internal naming**: functions in `operations/` use a leading underscore convention — they are not part of the public API.

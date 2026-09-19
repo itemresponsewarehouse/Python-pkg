@@ -18,6 +18,7 @@ from ..utils.redivis.tables import (
     _terminal_error_message,
 )
 from ..utils.redivis.pins import _pinned_not_found_hint
+from ..utils.redivis import disk_cache
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,46 @@ def _validate_pushdown(
     return max_rows, column_list
 
 
+def _download(
+    tbl: Any,
+    name: str,
+    *,
+    dedup: bool,
+    max_rows: Optional[int],
+    column_list: Optional[List[str]],
+) -> pd.DataFrame:
+    """The table's rows as Redivis would send them, from the disk cache if it can.
+
+    Only a whole-table download is cached, because a slice cannot stand in for
+    the table. A cached whole table can serve a slice, though, so the pushdown
+    is then applied here rather than by Redivis -- nothing is exported either
+    way. Dedup needs every column (fetch() drops the extra ones after), which
+    is why `columns` is not pushed down when it is set.
+    """
+    variables = None if dedup else column_list
+    entry = disk_cache.lookup(tbl, "tables")
+    if entry is not None:
+        df = entry.read()
+        if df is not None:
+            logger.info("Read '%s' from the IRW cache: %s", name, entry.path)
+            if variables is not None:
+                missing = [c for c in variables if c not in df.columns]
+                if missing:
+                    raise KeyError(f"Table '{name}' has no column(s) {missing}.")
+                df = df.loc[:, variables]
+            if max_rows is not None:
+                df = df.iloc[:max_rows]
+            return df
+        if max_rows is None and variables is None:
+            arrow_table = _retry_transient(tbl.to_arrow_table)
+            entry.write(arrow_table)
+            return disk_cache.to_frame(arrow_table)
+
+    return _retry_transient(
+        lambda: tbl.to_pandas_dataframe(max_rows, variables=variables)
+    )
+
+
 def _fetch_one_table(
     datasets: List[Any],
     name: str,
@@ -193,11 +234,7 @@ def _fetch_one_table(
 
     def _load_table(ds: Any) -> pd.DataFrame:
         tbl = _get_table(ds, name)
-        df = _retry_transient(
-            lambda: tbl.to_pandas_dataframe(
-                max_rows, variables=None if dedup else column_list
-            )
-        )
+        df = _download(tbl, name, dedup=dedup, max_rows=max_rows, column_list=column_list)
 
         # --- inline transforms needed only for fetch() ---
 

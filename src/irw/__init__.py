@@ -69,6 +69,10 @@ from .api import (
     decode,
     imv,
     covariates,
+    cache_dir,
+    cache_info,
+    clear_cache,
+    set_cache,
 )
 from .operations.list_tables import IRWMetadataUnavailable
 from .utils.redivis.pins import IRWVersionUnavailable
@@ -106,6 +110,10 @@ __all__ = [
     "decode",
     "imv",
     "covariates",
+    "cache_dir",
+    "cache_info",
+    "clear_cache",
+    "set_cache",
 ]
 
 # Single source of truth is config.VERSION -- these two literals had drifted

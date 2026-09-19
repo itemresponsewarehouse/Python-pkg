@@ -163,13 +163,34 @@ from irw.utils.redivis.cache import metadata_cache
 metadata_cache.clear()
 ```
 
-Nothing is cached on disk, so a new process starts cold.
+### Tables on disk
+
+`fetch()` and `itemtext()` also keep every table they download on disk, so a
+new process does not export it again. Every export counts against Redivis'
+30-day export cap. A copy is used for as long as the table is unchanged:
+it is filed under the table's Redivis content hash, and a fetch still asks
+Redivis for the table first, so a rebuilt table is downloaded again and a
+withdrawn one is never served from disk. The R package reads and writes the
+same files.
+
+```python
+irw.cache_dir()             # ~/.cache/irw, ~/Library/Caches/irw, or %LOCALAPPDATA%\irw\Cache
+irw.cache_info()            # one row per cached table, with its size
+irw.clear_cache("lessR_Mach4")  # or clear_cache() for everything
+irw.set_cache(False)        # this session; IRW_CACHE=0 for all of them
+```
+
+Set `IRW_CACHE_DIR` to put the cache somewhere else. Only whole tables are
+saved: a `max_rows` or `columns` fetch of a table that is not cached yet goes
+to Redivis and saves nothing, but a table already cached serves both
+locally.
 
 A version pin (`use_version()`, `set_version()`, `reset_version()`) clears the
 whole in-process cache, and pinned dataset handles are cached under keys that
 name their pins, so a pinned session is never served data cached from the
 current release, or the reverse. Unpinning means the current release's
 metadata is downloaded again.
+
 ## Validating your own data
 
 `irw.validate()` checks a table against the IRW format standard — the rules in
