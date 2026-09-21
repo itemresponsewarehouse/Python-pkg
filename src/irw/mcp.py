@@ -18,6 +18,7 @@ import os
 import re
 import sys
 import threading
+import time
 import warnings
 from collections.abc import Mapping
 from contextlib import contextmanager, nullcontext, redirect_stdout
@@ -132,13 +133,32 @@ _TAG_COLUMNS = (
     "age_range",
 )
 
+#: How to get credentials. Shared by every branch of ``ensure_ready`` so the
+#: remedy is worded once; each branch says what is wrong before this.
+AUTH_SETUP_HOWTO = (
+    "The Redivis SDK would open an interactive browser login, which cannot "
+    "complete inside an MCP server. Authenticate once in a regular terminal "
+    "with `python -c \"import irw; irw.list_tables()\"` (credentials are cached "
+    "in ~/.redivis), then retry. REDIVIS_API_TOKEN is also read if you cannot "
+    "use a browser, though the SDK itself deprecates it for interactive use."
+)
+
 AUTH_SETUP_MESSAGE = (
-    "Usable Redivis credentials are unavailable or require renewed authorization. The Redivis SDK would open an "
-    "interactive browser login, which cannot complete inside an MCP server. "
-    "Authenticate once in a regular terminal with "
-    "`python -c \"import irw; irw.list_tables()\"` (credentials are cached in "
-    "~/.redivis), or set the REDIVIS_API_TOKEN environment variable for the "
-    "MCP host, then retry."
+    "No Redivis credentials found: neither REDIVIS_API_TOKEN nor a cached "
+    "~/.redivis/python_credentials. " + AUTH_SETUP_HOWTO
+)
+
+AUTH_EXPIRED_MESSAGE = (
+    "Cached Redivis credentials at ~/.redivis/python_credentials have expired "
+    "and this server cannot renew them: refreshing may need a browser, and the "
+    "SDK's fallback is the interactive login. " + AUTH_SETUP_HOWTO
+)
+
+AUTH_UNREADABLE_MESSAGE = (
+    "Cached Redivis credentials at ~/.redivis/python_credentials could not be "
+    "read as JSON. The SDK treats an unreadable file as absent and falls back "
+    "to the interactive login, so it is reported here instead. Delete the file "
+    "and re-authenticate. " + AUTH_SETUP_HOWTO
 )
 
 ITEMTEXT_DISCLAIMER = (
@@ -237,12 +257,49 @@ class PackageBackend:
         minutes. Inside a stdio MCP server that print is captured and the
         tool call simply hangs, so the absence of credentials has to be an
         error the client can read, not a wait.
+
+        This used to check only that the file EXISTED, which is why the message
+        had to hedge with "or require renewed authorization": a stale or
+        unreadable credential passed the gate and the failure surfaced later as
+        an opaque 401 from inside the SDK. Read the state and name it (#2157).
+
+        The file is deliberately only inspected, never repaired: expiry is the
+        SDK's business, and this is a read-only server.
         """
         if os.getenv("REDIVIS_API_TOKEN"):
             return
-        if (Path.home() / ".redivis" / "python_credentials").is_file():
+        path = Path.home() / ".redivis" / "python_credentials"
+        if not path.is_file():
+            raise IRWMCPError("authentication_required", AUTH_SETUP_MESSAGE)
+        try:
+            credentials = json.loads(path.read_text())
+        except (OSError, ValueError):
+            # The SDK swallows this and falls through to the browser login,
+            # which noninteractive() then turns into a bare refusal. Say what
+            # actually happened.
+            raise IRWMCPError("authentication_required", AUTH_UNREADABLE_MESSAGE)
+        if not isinstance(credentials, dict) or "access_token" not in credentials:
+            raise IRWMCPError("authentication_required", AUTH_UNREADABLE_MESSAGE)
+
+        expires_at = credentials.get("expires_at")
+        if not isinstance(expires_at, (int, float)):
+            # No expiry recorded: the SDK's own guard requires `expires_at`
+            # before it will trust the cache, so treat it the same way rather
+            # than guessing the token is good.
             return
-        raise IRWMCPError("authentication_required", AUTH_SETUP_MESSAGE)
+        if expires_at >= time.time():
+            return
+        # Expired. A refresh may still succeed and the SDK will try it on the
+        # next call, but only where a refresh token is present, and it clears
+        # the file and reverts to a browser login when the exchange fails --
+        # which noninteractive() turns into this same error anyway. So report
+        # the stale credential rather than starting a call that cannot recover.
+        #
+        # Worth knowing that the window is real rather than theoretical: the SDK
+        # will not even attempt the refresh until five minutes AFTER expiry
+        # (redivis `common/auth.py`: `expires_at < time.time() - 5 * 60`, where
+        # refreshing five minutes early would need `+`). See irw#2157.
+        raise IRWMCPError("authentication_required", AUTH_EXPIRED_MESSAGE)
 
     def list_tables(self) -> pd.DataFrame:
         return irw.list_tables(source=SOURCE, include_metadata=True)

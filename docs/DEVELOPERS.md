@@ -109,6 +109,15 @@ SDK's fallback is an interactive browser login that can never complete inside
 a stdio server, so `PackageBackend.ensure_ready` checks for `REDIVIS_API_TOKEN`
 or `~/.redivis/python_credentials` first.
 
+It reads that file rather than only checking that it exists (irw#2157). A
+credential can be present and unusable, and the three cases need different
+answers: absent, expired, or unparseable. The SDK treats an unreadable
+credential file as absent and an expired one as refreshable -- but its refresh
+can need a browser, and `noninteractive()` has already replaced the login
+function by then, so both used to surface as one opaque failure. The gate names
+which it is. It only inspects: expiry is the SDK's business, and this server is
+read-only.
+
 `fetch_table` bounds its window on the wire: it passes `max_rows` and
 `columns` to `irw.fetch()`, which forwards both to Redivis's read session, so
 the rows outside the page are never sent. The `FETCH_MAX_RESPONSES` guard

@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -456,6 +457,78 @@ def test_missing_credentials_are_an_error_not_a_hang(monkeypatch, tmp_path):
         PackageBackend().ensure_ready()
     assert error.value.code == "authentication_required"
     assert "REDIVIS_API_TOKEN" in error.value.message
+
+
+def _write_credentials(tmp_path, **fields):
+    """A cached credential file at the path ensure_ready reads."""
+    import json as _json
+
+    directory = tmp_path / ".redivis"
+    directory.mkdir(exist_ok=True)
+    (directory / "python_credentials").write_text(_json.dumps(fields))
+
+
+def test_a_valid_cached_credential_passes(monkeypatch, tmp_path):
+    from irw.mcp import PackageBackend
+
+    monkeypatch.delenv("REDIVIS_API_TOKEN", raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    _write_credentials(tmp_path, access_token="t", refresh_token="r",
+                       expires_at=time.time() + 3600)
+    PackageBackend().ensure_ready()
+
+
+def test_an_expired_credential_says_so_instead_of_a_later_401(monkeypatch, tmp_path):
+    """#2157: the old check only asked whether the file EXISTED, so a stale
+    credential passed the gate and failed opaquely from inside the SDK."""
+    from irw.mcp import PackageBackend
+
+    monkeypatch.delenv("REDIVIS_API_TOKEN", raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    _write_credentials(tmp_path, access_token="t", refresh_token="r",
+                       expires_at=time.time() - 3600)
+    with pytest.raises(IRWMCPError) as error:
+        PackageBackend().ensure_ready()
+    assert error.value.code == "authentication_required"
+    assert "expired" in error.value.message
+    # and it must not be confused with the no-credentials case
+    assert "No Redivis credentials found" not in error.value.message
+
+
+def test_an_unreadable_credential_is_named_not_treated_as_absent(monkeypatch, tmp_path):
+    """The SDK swallows a parse failure and falls through to a browser login,
+    which noninteractive() turns into a bare refusal."""
+    from irw.mcp import PackageBackend
+
+    monkeypatch.delenv("REDIVIS_API_TOKEN", raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    directory = tmp_path / ".redivis"
+    directory.mkdir(exist_ok=True)
+    (directory / "python_credentials").write_text("not json at all")
+    with pytest.raises(IRWMCPError) as error:
+        PackageBackend().ensure_ready()
+    assert error.value.code == "authentication_required"
+    assert "could not be read as JSON" in error.value.message
+
+
+def test_a_credential_with_no_expiry_is_not_second_guessed(monkeypatch, tmp_path):
+    """The SDK requires `expires_at` before it trusts the cache, so an absent
+    one is its problem to handle, not ours to guess about."""
+    from irw.mcp import PackageBackend
+
+    monkeypatch.delenv("REDIVIS_API_TOKEN", raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    _write_credentials(tmp_path, access_token="t")
+    PackageBackend().ensure_ready()
+
+
+def test_an_api_token_still_short_circuits_the_file_check(monkeypatch, tmp_path):
+    """CI has no cached credential and must not be made to need one."""
+    from irw.mcp import PackageBackend
+
+    monkeypatch.setenv("REDIVIS_API_TOKEN", "x")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    PackageBackend().ensure_ready()
 
 
 def test_backend_ensure_ready_gates_every_call():

@@ -271,9 +271,24 @@ server. On Windows, use `.venv\Scripts\python.exe` instead.
 Authenticate with Redivis **before** first use. The Redivis SDK's interactive
 browser login cannot complete inside an MCP server, so the server refuses to
 start a call without credentials (error code `authentication_required`) rather
-than hanging. Either run one call in a regular terminal --
-`python -c "import irw; irw.list_tables()"` -- which caches credentials in
-`~/.redivis`, or set `REDIVIS_API_TOKEN` in the MCP host's environment.
+than hanging.
+
+Run one call in a regular terminal:
+
+```bash
+python -c "import irw; irw.list_tables()"
+```
+
+That signs you in through Redivis's OAuth device flow and caches the result in
+`~/.redivis`. **This is the way to do it.** The access token it stores is
+short-lived and rotates, the credential is yours rather than shared, and Redivis
+can revoke it.
+
+If you genuinely cannot use a browser -- a headless server, or CI --
+`REDIVIS_API_TOKEN` in the MCP host's environment is read instead. Prefer the
+browser flow where you have one: an API token is a long-lived
+password-equivalent with no expiry, and the Redivis SDK itself emits a
+deprecation warning when one is used from an interactive session.
 
 Configure an MCP host to start the installed launcher by its absolute path.
 Add the `irw` entry to any existing `mcpServers` object; do not replace other
