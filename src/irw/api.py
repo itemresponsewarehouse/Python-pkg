@@ -735,8 +735,9 @@ def collections(kind: Optional[Union[str, List[str]]] = None) -> pd.DataFrame:
     something:
 
     - ``metadata-complete``  — searched every documented table.
-    - ``tagged-subset-only`` — searched only the ~62% of tables that carry tag
-      annotations, and coverage is far lower in the newer warehouses. Not
+    - ``tagged-subset-only`` — searched only the tables whose tags include a
+      construct name (about half; the definition states the exact count), and
+      far fewer in the newer warehouses. Not
       exhaustive; do not describe these as "all".
     - ``curated-only``       — every member chosen by hand.
 
