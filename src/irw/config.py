@@ -41,6 +41,7 @@ META_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_meta:bdxt")
 ITEMTEXT_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "irw_text:07b6"),
     ("datapages", "irw_text_2:ae47"),
+    ("datapages", "irw_text_3:9g4m"),
 )
 
 # Main IRW metadata table references.
