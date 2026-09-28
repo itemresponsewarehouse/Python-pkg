@@ -18,3 +18,12 @@ def _isolated_disk_cache(tmp_path_factory, monkeypatch):
     disk_cache._state["announced"] = True
     yield
     disk_cache.set_enabled(None)
+
+
+@pytest.fixture(autouse=True)
+def _no_source_note(monkeypatch):
+    """Keep fetch()'s credit note from querying the live biblio in unit tests.
+
+    tests/test_source_note.py clears this and replaces the lookup itself.
+    """
+    monkeypatch.setenv("IRW_SOURCE_NOTE", "0")
