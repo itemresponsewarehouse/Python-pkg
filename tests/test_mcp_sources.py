@@ -100,6 +100,22 @@ def test_family_matching_requires_separator():
     assert _match_scripts("study_2026_phq", ["data/study_2026.py"]) == (["data/study_2026.py"], "prefix")
 
 
+def test_index_outranks_prefix_but_not_exact():
+    paths = ["data/weida_2020.py", "data/weida_2020_financial_security.py", "data/weida_2020_cesd10.R"]
+    index = {"weida_2020_cesd10": ["data/weida_2020_financial_security.py"]}
+    assert _match_scripts("weida_2020_cesd10", paths, index) == (["data/weida_2020_cesd10.R"], "exact")
+    paths = paths[:2]
+    assert _match_scripts("weida_2020_cesd10", paths, index) == (
+        ["data/weida_2020_financial_security.py"], "index")
+    assert _match_scripts("weida_2020_cesd10", paths) == (["data/weida_2020.py"], "prefix")
+
+
+def test_several_indexed_scripts_are_ambiguous():
+    paths = ["data/a_battery.py", "data/b_battery.py"]
+    index = {"shared_table": paths}
+    assert _match_scripts("shared_table", paths, index) == (paths, "ambiguous")
+
+
 def test_multiple_family_matches_are_not_arbitrarily_selected():
     paths = ["data/study_2026_a.py", "data/study_2026_b.py"]
     assert _match_scripts("study_2026", paths) == (paths, "ambiguous")

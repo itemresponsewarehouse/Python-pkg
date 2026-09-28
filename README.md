@@ -232,7 +232,7 @@ MCP-capable research assistant (issue ben-domingue/irw#1713). Eight tools:
 | `search_tables` | free-text search plus `irw.filter()`'s own filters, passed straight through; a summary card per hit, each saying whether it is `tagged` | no |
 | `describe_filter` | what one filter means and which values it takes | no |
 | `describe_table` | statistics, tags, bibliography for one table | no |
-| `get_processing_notes` | the header of the script that built the table, from the IRW GitHub repository: whether `id` links across waves, what a `cov_*` means, what was excluded | no (no login either) |
+| `get_processing_notes` | the header of the script that built the table, from the IRW GitHub repository (found by name, or through the repository's table-to-script index when the script is named for something else): whether `id` links across waves, what a `cov_*` means, what was excluded | no (no login either) |
 | `fetch_table` | a bounded page of rows, bounded on the wire | a page |
 | `get_itemtext` | a bounded page of item text with a `rights` object: response-data licence, the instrument-rights rule, and the table's public notes | small |
 | `list_collections` | the labelled collections | no |

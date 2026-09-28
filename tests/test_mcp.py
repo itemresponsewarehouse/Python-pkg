@@ -187,6 +187,9 @@ TREE_JSON = json.dumps(
         "tree": [
             {"path": "data/alpha_depression.py", "type": "blob"},
             {"path": "data/DART_Brysbaert_2020.R", "type": "blob"},
+            {"path": "data/liem_2024_env_stewardship.py", "type": "blob"},
+            {"path": "data/dopmeijer_2022_burnout_battery.py", "type": "blob"},
+            {"path": "data/weida_2020_financial_security.py", "type": "blob"},
             {"path": "data/README.md", "type": "blob"},
             {"path": "metadata/01_metadata.R", "type": "blob"},
         ]
@@ -203,7 +206,21 @@ SCRIPTS = {
         "df = pd.read_csv('x.csv')\n"
     ),
     "data/DART_Brysbaert_2020.R": "# Five sub-datasets from one paper.\nlibrary(dplyr)\n",
+    "data/liem_2024_env_stewardship.py": "# Four tables from one battery.\nimport pandas\n",
+    "data/dopmeijer_2022_burnout_battery.py": "# Loneliness resp runs reversed.\nimport pandas\n",
+    "data/weida_2020_financial_security.py": "# The ten items are the CES-D-10.\nimport pandas\n",
 }
+
+# metadata/table_scripts.csv, as 13_script_index.py writes it (#2494). The
+# three rows are the three tables the name match missed: two battery scripts
+# named for something else, and a table renamed after its script was written.
+TABLE_SCRIPTS_CSV = (
+    "table,scripts\n"
+    "dopmeijer_2022_loneliness,data/dopmeijer_2022_burnout_battery.py\n"
+    "liem_2024_attitude_env,data/liem_2024_env_stewardship.py\n"
+    "weida_2020_cesd10,data/weida_2020_financial_security.py\n"
+    "gone_2020_table,data/gone_2020_script.py\n"
+)
 
 OVERRIDES_CSV = "date,tool,table,checks,reason,user\n2026-09-01,validate_irw,alpha_depression,rt_units,rt is already in seconds,bd\n"
 
@@ -226,6 +243,8 @@ class FakeSource(GitHubSource):
             return ISSUES_QMD
         if url.endswith("validator_overrides.csv"):
             return OVERRIDES_CSV
+        if url.endswith("metadata/table_scripts.csv"):
+            return TABLE_SCRIPTS_CSV
         for path, text in SCRIPTS.items():
             if url.endswith(path):
                 return text
@@ -745,6 +764,50 @@ def test_processing_notes_prefix_match_names_a_multi_table_script(tools):
     assert result["match"] == "prefix"
     assert result["scripts"][0]["path"] == "data/DART_Brysbaert_2020.R"
     assert any("prefix" in w for w in result["warnings"])
+
+
+@pytest.mark.parametrize(
+    "table, script",
+    [
+        ("liem_2024_attitude_env", "data/liem_2024_env_stewardship.py"),
+        ("dopmeijer_2022_loneliness", "data/dopmeijer_2022_burnout_battery.py"),
+        ("weida_2020_cesd10", "data/weida_2020_financial_security.py"),
+    ],
+)
+def test_processing_notes_finds_scripts_named_for_something_else(tools, table, script):
+    """#2494: a battery script, and a table renamed after its script was
+    written, share no name prefix with the table. The index finds them."""
+    result = tools.get_processing_notes(table)
+    assert result["match"] == "index"
+    assert result["candidate_paths"] == [script]
+    assert result["scripts"][0]["path"] == script
+    assert result["scripts"][0]["header"]
+    assert any("table-to-script index" in w for w in result["warnings"])
+
+
+def test_processing_notes_index_row_for_a_deleted_script_is_not_served(tools):
+    result = tools.get_processing_notes("gone_2020_table")
+    assert result["match"] == "none"
+    assert result["scripts"] == []
+
+
+def test_processing_notes_exact_match_does_not_fetch_the_index(tools):
+    tools.get_processing_notes("alpha_depression")
+    assert not any(u.endswith("table_scripts.csv") for u in tools.source.calls)
+
+
+def test_processing_notes_survive_an_unreadable_index():
+    class _NoIndex(FakeSource):
+        def _fetch_text(self, url):
+            if url.endswith("metadata/table_scripts.csv"):
+                raise FileNotFoundError(url)
+            return super()._fetch_text(url)
+
+    tools = IRWTools(FakeBackend(), _NoIndex())
+    result = tools.get_processing_notes("DART_Brysbaert_2020_1")
+    assert result["match"] == "prefix"
+    assert any("index could not be loaded" in w for w in result["warnings"])
+    assert tools.get_processing_notes("weida_2020_cesd10")["match"] == "none"
 
 
 def test_processing_notes_missing_script_is_a_warning_not_an_error(tools):
