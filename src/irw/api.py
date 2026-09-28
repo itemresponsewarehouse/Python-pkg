@@ -26,6 +26,7 @@ from typing import Optional, Union, Dict, List, Literal, Tuple
 import pandas as pd
 from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset
 from .utils.redivis.item_text import _list_itemtext_tables, _itemtext_disclaimer
+from .utils.redivis.source_note import _source_note, disable_source_note as disable_source_note
 from .utils.long2resp import long2resp as _long2resp
 from .utils.long2resp import check_resp as check_resp, resp2long as resp2long
 from .operations.fetch import fetch as _fetch
@@ -229,6 +230,10 @@ def fetch(
     unchanged on Redivis; the R package shares the same copies. A table that
     is already cached also serves ``max_rows`` and ``columns`` without an
     export. Switch this off with `set_cache(False)` or ``IRW_CACHE=0``.
+
+    A table the IRW found through another collection, such as openESM, prints
+    that collection's note and citation once per session per collection.
+    Silence it with `disable_source_note()` or ``IRW_SOURCE_NOTE=0``.
     """
     from .operations.fetch import _validate_pushdown
 
@@ -250,6 +255,12 @@ def fetch(
         datasets, table_name, dedup=dedup, max_rows=max_rows,
         columns=None if wide else columns
     )
+    # Credit a table found through an intermediary such as openESM (#2421).
+    # Never raises and is silent on any failure.
+    if isinstance(result, pd.DataFrame):
+        _source_note([table_name], source)
+    elif isinstance(result, dict):
+        _source_note([k for k, v in result.items() if v is not None], source)
     
     # Handle single DataFrame result
     if isinstance(result, pd.DataFrame):
