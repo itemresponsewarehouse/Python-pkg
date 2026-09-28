@@ -26,7 +26,7 @@ from typing import Optional, Union, Dict, List, Literal, Tuple
 import pandas as pd
 from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset
 from .utils.redivis.item_text import _list_itemtext_tables, _itemtext_disclaimer
-from .utils.redivis.source_note import _source_note, disable_source_note as disable_source_note
+from .utils.redivis.source_note import _source_note, disable_source_note as disable_source_note, aggregator_bibtex
 from .utils.long2resp import long2resp as _long2resp
 from .utils.long2resp import check_resp as check_resp, resp2long as resp2long
 from .operations.fetch import fetch as _fetch
@@ -409,6 +409,10 @@ def save_bibtex(
     
     Updates the BibTeX key to match the table name. Attempts to fetch BibTeX
     from the bibliography table first, then falls back to DOI-based lookup if needed.
+
+    A table the IRW found through another collection, such as openESM, also
+    gets that collection's own entry (e.g. ``siepe2026openesm``), added once
+    however many of its tables are requested.
     
     If output_file is provided, saves entries to file. Otherwise, returns entries.
     
@@ -446,6 +450,7 @@ def save_bibtex(
     valid_entries = []
     missing_tables = []
     missing_doi_tables = []
+    sources_via = []
     
     # Fetch the full biblio table once (uses cache)
     from .utils.redivis.table_metadata import get_biblio_table
@@ -467,6 +472,14 @@ def save_bibtex(
             missing_doi_tables.append(table_name)
             continue
         
+        # A table found through an intermediary such as openESM also cites
+        # that intermediary (ben-domingue/irw#2421); collected here, appended
+        # once per source after the tables' own entries.
+        if 'Source_via' in biblio_entry.columns:
+            via = biblio_entry.iloc[0].get('Source_via')
+            if via is not None and pd.notna(via) and str(via).strip():
+                sources_via.append(str(via).strip())
+
         # Get BibTeX and DOI from the row
         bibtex = biblio_entry.iloc[0].get('BibTex') if 'BibTex' in biblio_entry.columns else None
         doi = biblio_entry.iloc[0].get('DOI__for_paper_') if 'DOI__for_paper_' in biblio_entry.columns else None
@@ -516,6 +529,8 @@ def save_bibtex(
         )
         
         valid_entries.append(bibtex)
+
+    valid_entries.extend(aggregator_bibtex(sources_via))
     
     # Remove duplicates while preserving order
     if valid_entries:

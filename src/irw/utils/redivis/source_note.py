@@ -39,8 +39,32 @@ AGGREGATORS: Dict[str, Dict[str, str]] = {
             "datasets. Behavior Research Methods, 58(8), 240. "
             "https://doi.org/10.3758/s13428-026-03112-y"
         ),
+        # save_bibtex() appends this once for any requested table found via
+        # openESM. Names per Crossref (ben-domingue/irw#2503).
+        "bibtex": (
+            "@article{siepe2026openesm, title={Introducing openESM: A database "
+            "of openly available experience sampling datasets}, "
+            "author={Siepe, Bj{\\\"o}rn S. and Haslbeck, Jonas M. B. and "
+            "Kloft, Matthias and B{\\\"u}chner, Anabel and Zhang, Yong and "
+            "Fried, Eiko I. and Heck, Daniel W.}, journal={Behavior Research "
+            "Methods}, volume={58}, number={8}, pages={240}, year={2026}, "
+            "doi={10.3758/s13428-026-03112-y}}"
+        ),
     },
 }
+
+
+def aggregator_bibtex(sources) -> list:
+    """BibTeX entries for the distinct known sources in `sources`, in order."""
+    out, seen = [], set()
+    for via in sources:
+        if via is None or via in seen:
+            continue
+        seen.add(via)
+        entry = AGGREGATORS.get(via, {}).get("bibtex")
+        if entry:
+            out.append(entry)
+    return out
 
 _state = {"enabled": True, "shown": set(), "lookup": None}
 
