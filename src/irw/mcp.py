@@ -911,6 +911,8 @@ def _script_header(text: str) -> Tuple[str, bool]:
 
 
 _SCRIPT_SUFFIX = re.compile(r"\.(py|r|do|ipynb|txt)$", re.IGNORECASE)
+# Built weekly by metadata/13_script_index.py in the IRW repository (#2494).
+TABLE_SCRIPTS_PATH = "metadata/table_scripts.csv"
 
 
 def _processing_header(path: str, text: str) -> Tuple[str, bool]:
@@ -938,10 +940,18 @@ def _processing_header(path: str, text: str) -> Tuple[str, bool]:
     return text[:PROCESSING_NOTES_MAX_CHARS], truncated
 
 
-def _match_scripts(table_name: str, paths: List[str]) -> Tuple[List[str], str]:
+def _match_scripts(
+    table_name: str,
+    paths: List[str],
+    index: Optional[Dict[str, List[str]]] = None,
+) -> Tuple[List[str], str]:
     """Find the processing script(s) for a table among ``data/`` paths.
 
-    Exact stem match first. Failing that, a prefix match in either direction
+    Exact stem match first. Then the IRW repository's table-to-script index
+    (``metadata/table_scripts.csv``), which lists the scripts whose code names
+    the table: that is how a battery script (``liem_2024_env_stewardship.py``
+    writes ``liem_2024_attitude_env``) or a table renamed after its script was
+    written is found. Failing both, a prefix match in either direction
     catches multi-table scripts (``DART_Brysbaert_2020.R`` produces
     ``DART_Brysbaert_2020_1`` and friends) and tables named more fully than
     their script. Returns the paths and how they were matched.
@@ -956,6 +966,15 @@ def _match_scripts(table_name: str, paths: List[str]) -> Tuple[List[str], str]:
     if wanted in stems:
         paths = sorted(stems[wanted])
         return paths, "exact" if len(paths) == 1 else "ambiguous"
+    if index:
+        # Only scripts that are in this commit's listing: an index row naming
+        # a script that has since been deleted or renamed must not be served.
+        listed = set(paths)
+        indexed = sorted(
+            p for p in index.get(wanted, []) if p in listed and _SCRIPT_SUFFIX.search(p)
+        )
+        if indexed:
+            return indexed, "index" if len(indexed) == 1 else "ambiguous"
     candidates = [
         stem
         for stem in stems
@@ -981,6 +1000,7 @@ class GitHubSource:
         self._fetch = fetch_text or _http_get_text
         self._scripts: Optional[List[str]] = None
         self._scripts_truncated = False
+        self._table_scripts: Optional[Dict[str, List[str]]] = None
         self._issues: Optional[Dict[str, List[str]]] = None
         self._overrides: Optional[Dict[str, List[Dict[str, str]]]] = None
         self._files: Dict[str, str] = {}
@@ -1022,6 +1042,21 @@ class GitHubSource:
     @property
     def scripts_truncated(self) -> bool:
         return self._scripts_truncated
+
+    def table_scripts(self) -> Dict[str, List[str]]:
+        """The repository's table -> scripts index, keyed on casefolded table."""
+        if self._table_scripts is None:
+            import csv
+
+            text = self._fetch(self._raw_url(TABLE_SCRIPTS_PATH))
+            index: Dict[str, List[str]] = {}
+            for row in csv.DictReader(io.StringIO(text)):
+                table = (row.get("table") or "").strip()
+                scripts = [p.strip() for p in (row.get("scripts") or "").split("|") if p.strip()]
+                if table and scripts:
+                    index.setdefault(table.casefold(), []).extend(scripts)
+            self._table_scripts = index
+        return self._table_scripts
 
     def read_script(self, path: str) -> str:
         if path not in self._files:
@@ -1811,7 +1846,21 @@ class IRWTools:
                 f"({type(error).__name__}). Retry later.",
                 retryable=True,
             ) from None
-        paths, match = _match_scripts(table_name, scripts)
+        index: Optional[Dict[str, List[str]]] = None
+        if table_name.casefold() not in {
+            _SCRIPT_SUFFIX.sub("", p.rsplit("/", 1)[-1]).casefold()
+            for p in scripts if _SCRIPT_SUFFIX.search(p)
+        }:
+            try:
+                index = self.source.table_scripts()
+            except Exception as error:
+                state.add(
+                    "The table-to-script index could not be loaded "
+                    f"({type(error).__name__}), so only the script's name was "
+                    "matched. A script named for another table may still "
+                    "have built this one."
+                )
+        paths, match = _match_scripts(table_name, scripts, index)
         notes: List[Dict[str, Any]] = []
         if match == "ambiguous":
             state.add("Several processing scripts match this table family; no script was selected. Inspect candidate_paths.")
@@ -1844,6 +1893,13 @@ class IRWTools:
                     "returned. Treat this as 'not looked up', not as 'not "
                     f"there': check {IRW_REPO_BLOB_URL}data/ directly."
                 )
+        elif match == "index":
+            state.add(
+                "Matched through the repository's table-to-script index: this "
+                "script names the table in its code but is named for something "
+                "else (a multi-table script, or a table renamed after the "
+                "script was written)."
+            )
         elif match == "prefix":
             state.add(
                 "Matched by name prefix, not exactly: the script may produce "
@@ -2133,8 +2189,9 @@ def create_server(
         table: facts metadata cannot express live only here, such as whether
         `id` links people across waves or fell back to the row index, what a
         `cov_*` column really means, and which source columns were excluded.
-        `match` says how the script was found: exact, prefix (a multi-table
-        script), or none.
+        `match` says how the script was found: exact, index (a script named
+        for something else that names this table in its code), prefix (a
+        multi-table script), ambiguous, or none.
         """
         return deliver(lambda: tools.get_processing_notes(table_name))
 

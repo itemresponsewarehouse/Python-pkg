@@ -99,7 +99,7 @@ class Script(BaseModel):
 
 class Notes(Result):
     table: str
-    match: Literal["exact", "prefix", "ambiguous", "none"]
+    match: Literal["exact", "index", "prefix", "ambiguous", "none"]
     candidate_paths: List[str]
     scripts: List[Script]
     validator_overrides: List[Dict[str, str]]

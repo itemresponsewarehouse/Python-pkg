@@ -98,7 +98,9 @@ manifest failure degrades to an unpinned result with a warning, never an error.
 
 Two sources feed the tools. `PackageBackend` wraps the public `irw` API for
 everything on Redivis. `GitHubSource` reads public files with no login and no
-quota: the `data/` script listing and headers (`get_processing_notes`), the
+quota: the `data/` script listing and headers (`get_processing_notes`, which
+also reads `metadata/table_scripts.csv`, the IRW repository's weekly
+table-to-script index, for scripts not named after their table), the
 per-table notes embedded in the site's `itemtext_issues.qmd` (the `rights`
 object on `get_itemtext`), and `processing_notes/validator_overrides.csv`.
 Both are injectable, which is how the offline tests run without a network.
