@@ -168,3 +168,54 @@ def test_a_week_old_cache_is_refreshed(monkeypatch):
     monkeypatch.setitem(sn._state, "lookup", None)
     _notes(lambda: sn._source_note(["bailon_2020_covidaffect"]))
     assert len(calls) == 2
+
+
+# --- save_bibtex(): the intermediary's own entry (ben-domingue/irw#2421) ----
+
+
+def _fake_biblio(monkeypatch, with_column=True):
+    rows = {
+        "table": ["bailon_2020_covidaffect", "other_esm", "environment_ltm"],
+        "BibTex": ["@article{Bailon2020, title={CoVidAffect}}",
+                   "@article{Other2021, title={Other}}",
+                   "@article{Env2019, title={Env}}"],
+        "DOI__for_paper_": [None, None, None],
+    }
+    if with_column:
+        rows["Source_via"] = ["openESM", "openESM", None]
+    import irw.utils.redivis.table_metadata as tm
+    monkeypatch.setattr(tm, "get_biblio_table", lambda *a, **k: pd.DataFrame(rows))
+    monkeypatch.setattr(tm, "_get_existing_tables", lambda *a, **k: set(rows["table"]))
+
+
+def test_save_bibtex_adds_the_openesm_entry_once_after_the_tables(monkeypatch):
+    _fake_biblio(monkeypatch)
+    out = irw.save_bibtex(["bailon_2020_covidaffect", "other_esm", "environment_ltm"])
+    assert [e.split(",")[0] for e in out] == [
+        "@article{bailon_2020_covidaffect", "@article{other_esm",
+        "@article{environment_ltm", "@article{siepe2026openesm"]
+    assert "B{\\\"u}chner, Anabel" in out[-1]
+
+
+def test_save_bibtex_without_an_openesm_table_is_unchanged(monkeypatch):
+    _fake_biblio(monkeypatch)
+    assert len(irw.save_bibtex("environment_ltm")) == 1
+
+
+def test_save_bibtex_on_a_biblio_without_the_column(monkeypatch):
+    # Every biblio released before the column lands.
+    _fake_biblio(monkeypatch, with_column=False)
+    assert len(irw.save_bibtex(["bailon_2020_covidaffect", "environment_ltm"])) == 2
+
+
+def test_the_openesm_entry_is_written_to_the_file(monkeypatch, tmp_path):
+    _fake_biblio(monkeypatch)
+    f = tmp_path / "refs.bib"
+    irw.save_bibtex("bailon_2020_covidaffect", str(f))
+    assert "@article{siepe2026openesm" in f.read_text(encoding="utf-8")
+
+
+def test_the_openesm_bibtex_parses_as_bibtex():
+    entry = sn.AGGREGATORS["openESM"]["bibtex"]
+    assert entry.count("{") == entry.count("}")
+    assert entry.startswith("@article{siepe2026openesm,")

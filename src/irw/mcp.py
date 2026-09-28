@@ -2175,7 +2175,9 @@ def create_server(
     def get_citation(table_name: str) -> Dict[str, Any]:
         """Return BibTeX for the original data producers of one IRW table.
 
-        Cite the original producers, not only the IRW, when using a table.
+        Cite the original producers, not only the IRW, when using a table. A
+        table the IRW found through another collection, such as openESM, also
+        returns that collection's entry; cite both.
         """
         return deliver(lambda: tools.get_citation(table_name))
 
