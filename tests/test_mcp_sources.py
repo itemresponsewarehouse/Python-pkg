@@ -137,3 +137,15 @@ def test_notebook_notes_exclude_code_and_outputs():
     assert "Retain missing values" in header
     assert "not documentation" not in header
     assert not truncated
+
+
+def test_nominal_script_never_prefix_matches_a_core_table():
+    # irw#2529: nominal/himmelstein.R builds only the _nom table, but its stem
+    # prefixed every himmelstein-<task>-2025 table.
+    paths = ["data/nominal/himmelstein.R", "data/data_number_series.py"]
+    assert _match_scripts("himmelstein-number_series-2025", paths) == ([], "none")
+    assert _match_scripts("himmelstein-berlin_numeracy-2025_nom", paths) == (
+        ["data/nominal/himmelstein.R"], "prefix")
+    index = {"himmelstein-number_series-2025": ["data/data_number_series.py"]}
+    assert _match_scripts("himmelstein-number_series-2025", paths, index) == (
+        ["data/data_number_series.py"], "index")

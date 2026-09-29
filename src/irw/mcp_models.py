@@ -103,6 +103,7 @@ class Notes(Result):
     candidate_paths: List[str]
     scripts: List[Script]
     validator_overrides: List[Dict[str, str]]
+    data_notes: List[Dict[str, str]]
     guides: Dict[str, str]
 
 
