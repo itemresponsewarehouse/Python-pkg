@@ -913,6 +913,9 @@ def _script_header(text: str) -> Tuple[str, bool]:
 _SCRIPT_SUFFIX = re.compile(r"\.(py|r|do|ipynb|txt)$", re.IGNORECASE)
 # Built weekly by metadata/13_script_index.py in the IRW repository (#2494).
 TABLE_SCRIPTS_PATH = "metadata/table_scripts.csv"
+# Caveats true of a table's source, not IRW defects; hand-appended in the IRW
+# repository and shown on the table's landing page too (#2529).
+DATA_NOTES_PATH = "metadata/data_notes.csv"
 
 
 def _processing_header(path: str, text: str) -> Tuple[str, bool]:
@@ -954,7 +957,11 @@ def _match_scripts(
     written is found. Failing both, a prefix match in either direction
     catches multi-table scripts (``DART_Brysbaert_2020.R`` produces
     ``DART_Brysbaert_2020_1`` and friends) and tables named more fully than
-    their script. Returns the paths and how they were matched.
+    their script. A script under ``data/nominal/`` builds only ``_nom``
+    tables, so it never prefix-matches any other table
+    (``nominal/himmelstein.R`` is not the script for
+    ``himmelstein-number_series-2025``). Returns the paths and how they were
+    matched.
     """
     wanted = table_name.casefold()
     stems: Dict[str, List[str]] = {}
@@ -975,6 +982,12 @@ def _match_scripts(
         )
         if indexed:
             return indexed, "index" if len(indexed) == 1 else "ambiguous"
+    if not wanted.endswith("_nom"):
+        stems = {
+            stem: kept
+            for stem, found in stems.items()
+            if (kept := [p for p in found if not p.startswith("data/nominal/")])
+        }
     candidates = [
         stem
         for stem in stems
@@ -1003,6 +1016,7 @@ class GitHubSource:
         self._table_scripts: Optional[Dict[str, List[str]]] = None
         self._issues: Optional[Dict[str, List[str]]] = None
         self._overrides: Optional[Dict[str, List[Dict[str, str]]]] = None
+        self._data_notes: Optional[Dict[str, List[Dict[str, str]]]] = None
         self._files: Dict[str, str] = {}
         self._commit: Optional[str] = None
 
@@ -1080,6 +1094,27 @@ class GitHubSource:
                     overrides.setdefault(table.casefold(), []).append(dict(row))
             self._overrides = overrides
         return self._overrides
+
+    def data_notes(self) -> Dict[str, List[Dict[str, str]]]:
+        """Source caveats per table, keyed on casefolded table, oldest first."""
+        if self._data_notes is None:
+            import csv
+
+            text = self._fetch(self._raw_url(DATA_NOTES_PATH))
+            notes: Dict[str, List[Dict[str, str]]] = {}
+            for row in csv.DictReader(io.StringIO(text)):
+                table = (row.get("table") or "").strip()
+                note = (row.get("note") or "").strip()
+                if table and note:
+                    notes.setdefault(table.casefold(), []).append({
+                        "note": note,
+                        "issue": (row.get("issue") or "").strip(),
+                        "date": (row.get("date") or "").strip(),
+                    })
+            for rows in notes.values():
+                rows.sort(key=lambda r: (r["date"], r["note"]))
+            self._data_notes = notes
+        return self._data_notes
 
 
 class IRWTools:
@@ -1912,6 +1947,14 @@ class IRWTools:
             state.add(
                 f"Validator overrides could not be loaded ({type(error).__name__})."
             )
+        data_notes: List[Dict[str, str]] = []
+        try:
+            data_notes = self.source.data_notes().get(table_name.casefold(), [])
+        except Exception as error:
+            state.add(
+                f"The IRW's data notes could not be loaded ({type(error).__name__}); "
+                "an empty data_notes list here does not mean the table has none."
+            )
         return self._stamp(
             {
                 "source": SOURCE,
@@ -1920,6 +1963,7 @@ class IRWTools:
                 "candidate_paths": paths,
                 "scripts": notes,
                 "validator_overrides": overrides,
+                "data_notes": data_notes,
                 "guides": {
                     "data_standard": IRW_REPO_BLOB_URL + "datastandard.md",
                     "processing_instructions": IRW_REPO_BLOB_URL
@@ -2193,7 +2237,10 @@ def create_server(
         `cov_*` column really means, and which source columns were excluded.
         `match` says how the script was found: exact, index (a script named
         for something else that names this table in its code), prefix (a
-        multi-table script), ambiguous, or none.
+        multi-table script), ambiguous, or none. `data_notes` are the IRW's
+        caveats about the table's source (a doubtful answer key, what a
+        `wave` column counts, pooled forms): the table reproduces its source
+        faithfully, so these are things to know, not defects to be fixed.
         """
         return deliver(lambda: tools.get_processing_notes(table_name))
 

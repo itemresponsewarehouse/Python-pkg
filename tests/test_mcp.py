@@ -222,6 +222,12 @@ TABLE_SCRIPTS_CSV = (
     "gone_2020_table,data/gone_2020_script.py\n"
 )
 
+DATA_NOTES_CSV = (
+    "table,note,issue,date\n"
+    "alpha_depression,Item 3's source key looks wrong; source scoring kept.,#2529,2026-09-28\n"
+    "ALPHA_DEPRESSION,`wave` is the instruction block.,,2026-09-01\n"
+)
+
 OVERRIDES_CSV = "date,tool,table,checks,reason,user\n2026-09-01,validate_irw,alpha_depression,rt_units,rt is already in seconds,bd\n"
 
 
@@ -243,6 +249,8 @@ class FakeSource(GitHubSource):
             return ISSUES_QMD
         if url.endswith("validator_overrides.csv"):
             return OVERRIDES_CSV
+        if url.endswith("metadata/data_notes.csv"):
+            return DATA_NOTES_CSV
         if url.endswith("metadata/table_scripts.csv"):
             return TABLE_SCRIPTS_CSV
         for path, text in SCRIPTS.items():
@@ -757,6 +765,31 @@ def test_processing_notes_exact_match_returns_the_header(tools):
     assert "import pandas" not in result["scripts"][0]["header"]
     assert result["scripts"][0]["url"] == "https://github.com/ben-domingue/irw/blob/" + "a" * 40 + "/data/alpha_depression.py"
     assert result["validator_overrides"][0]["checks"] == "rt_units"
+
+
+def test_processing_notes_return_the_tables_data_notes(tools):
+    notes = tools.get_processing_notes("alpha_depression")["data_notes"]
+    # Case-insensitive on the table name, oldest first.
+    assert [n["date"] for n in notes] == ["2026-09-01", "2026-09-28"]
+    assert notes[1] == {
+        "note": "Item 3's source key looks wrong; source scoring kept.",
+        "issue": "#2529",
+        "date": "2026-09-28",
+    }
+    assert tools.get_processing_notes("DART_Brysbaert_2020_1")["data_notes"] == []
+
+
+def test_unreadable_data_notes_warn_rather_than_read_as_none():
+    class NoNotes(FakeSource):
+        def _fetch_text(self, url):
+            if url.endswith("metadata/data_notes.csv"):
+                raise ConnectionError("offline")
+            return super()._fetch_text(url)
+
+    result = IRWTools(FakeBackend(), NoNotes()).get_processing_notes("alpha_depression")
+    assert result["match"] == "exact"
+    assert result["data_notes"] == []
+    assert any("data notes could not be loaded" in w for w in result["warnings"])
 
 
 def test_processing_notes_prefix_match_names_a_multi_table_script(tools):
