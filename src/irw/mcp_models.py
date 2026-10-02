@@ -126,12 +126,23 @@ class ColumnInfo(BaseModel):
     documented: bool
 
 
+class SourceCodebook(BaseModel):
+    file_name: str
+    url: str
+    how_found: Literal["name_codebook", "readme_names_columns", "name_readme", "dataverse_ddi"]
+    host: Optional[str] = None
+    n_same_kind_in_deposit: Optional[int] = None
+    deposit_url: Optional[str] = None
+    evidence: Optional[str] = None
+
+
 class Columns(Result):
     table: str
     match: Literal["exact", "index", "prefix", "ambiguous", "none"]
     columns_source: Literal["column_docs", "live_scan"]
     columns: List[ColumnInfo]
     codebook_url: Optional[str]
+    source_codebooks: Optional[List[SourceCodebook]] = None
     guides: Dict[str, str]
 
 
