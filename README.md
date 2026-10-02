@@ -225,7 +225,7 @@ standalone R script implements, for agreement between the two.
 ## MCP server
 
 IRW can run as a local, read-only Model Context Protocol server for an
-MCP-capable research assistant (issue ben-domingue/irw#1713). Eight tools:
+MCP-capable research assistant (issue ben-domingue/irw#1713). Nine tools:
 
 | Tool | What it does | Costs Redivis quota? |
 |---|---|---|
@@ -233,6 +233,7 @@ MCP-capable research assistant (issue ben-domingue/irw#1713). Eight tools:
 | `describe_filter` | what one filter means and which values it takes | no |
 | `describe_table` | statistics, tags, bibliography for one table | no |
 | `get_processing_notes` | the header of the script that built the table, from the IRW GitHub repository (found by name, or through the repository's table-to-script index when the script is named for something else): whether `id` links across waves, what a `cov_*` means, what was excluded | no (no login either) |
+| `describe_columns` | what each column means and where that is written: the IRW data standard's definition (`cluster_id`, `treat`, ...), the build-script lines that name the column (usually the rename from the source column), or `documented: false` with the source link as the codebook (ben-domingue/irw#2755) | no |
 | `fetch_table` | a bounded page of rows, bounded on the wire | a page |
 | `get_itemtext` | a bounded page of item text with a `rights` object: response-data licence, the instrument-rights rule, and the table's public notes | small |
 | `list_collections` | the labelled collections | no |

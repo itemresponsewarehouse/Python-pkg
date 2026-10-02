@@ -916,6 +916,54 @@ TABLE_SCRIPTS_PATH = "metadata/table_scripts.csv"
 # Caveats true of a table's source, not IRW defects; hand-appended in the IRW
 # repository and shown on the table's landing page too (#2529).
 DATA_NOTES_PATH = "metadata/data_notes.csv"
+# The data standard's schema table is the one place IRW column names are
+# defined (#2755); describe_columns reads it rather than restating it here.
+DATA_STANDARD_PATH = "datastandard.md"
+# Lines of a build script shown per column: enough to show the rename that
+# produced it (`cluster_id = teacher_name`), not a reading of the script.
+COLUMN_MENTIONS_MAX = 3
+COLUMN_MENTION_MAX_CHARS = 200
+
+
+def _parse_data_standard(text: str) -> Tuple[Dict[str, str], Dict[str, str]]:
+    """Exact and prefix column definitions from datastandard.md's schema table.
+
+    A row's first cell names one or more columns in backticks. A name ending in
+    `*` (`cov_*`) or written as a numbered run (`qmatrix1`...`qmatrixN`) is a
+    family, matched by prefix; anything else is an exact name.
+    """
+    exact: Dict[str, str] = {}
+    prefix: Dict[str, str] = {}
+    for line in text.splitlines():
+        if not line.startswith("| `"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 3:
+            continue
+        rule = " | ".join(cells[2:]).strip()
+        for name in re.findall(r"`([^`]+)`", cells[0]):
+            if name.endswith("*"):
+                prefix.setdefault(name[:-1], rule)
+            elif re.fullmatch(r"[A-Za-z_]+N", name):
+                prefix.setdefault(name[:-1], rule)
+            elif re.fullmatch(r"[A-Za-z_]+1", name):
+                continue
+            else:
+                exact.setdefault(name, rule)
+    return exact, prefix
+
+
+def _column_mentions(column: str, path: str, text: str) -> List[Dict[str, Any]]:
+    """Lines of one script that name a column, as written."""
+    pattern = re.compile(r"(?<![\w.$])" + re.escape(column) + r"(?![\w])")
+    found: List[Dict[str, Any]] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if pattern.search(line):
+            found.append({"path": path, "line": number,
+                          "text": line.strip()[:COLUMN_MENTION_MAX_CHARS]})
+            if len(found) >= COLUMN_MENTIONS_MAX:
+                break
+    return found
 
 
 def _processing_header(path: str, text: str) -> Tuple[str, bool]:
@@ -1115,6 +1163,11 @@ class GitHubSource:
                 rows.sort(key=lambda r: (r["date"], r["note"]))
             self._data_notes = notes
         return self._data_notes
+
+
+    def data_standard(self) -> Tuple[Dict[str, str], Dict[str, str]]:
+        """(exact, prefix) column definitions from the IRW data standard."""
+        return _parse_data_standard(self.read_script(DATA_STANDARD_PATH))
 
 
 class IRWTools:
@@ -1973,6 +2026,94 @@ class IRWTools:
             }
         )
 
+    def describe_columns(self, table_name: str) -> Dict[str, Any]:
+        table_name = _validate_table_name(table_name)
+        details, package_warnings = self._call(self.backend.describe_table, table_name)
+        if details is None or details == {}:
+            raise IRWMCPError(
+                "not_found", f"No metadata was found for table '{table_name}'."
+            )
+        state = _ConversionState()
+        for message in package_warnings:
+            state.add(message)
+        stats = details.get("stats") if isinstance(details, Mapping) else None
+        raw = stats.get("variables") if isinstance(stats, Mapping) else None
+        names = [v.strip() for v in str(raw).split("|") if v.strip()] if raw else []
+        if not names:
+            state.add(
+                "The catalogue lists no columns for this table, so none could be "
+                "described. fetch_table with limit=1 shows the columns."
+            )
+        biblio = details.get("biblio") if isinstance(details, Mapping) else None
+        source_url = None
+        if isinstance(biblio, Mapping):
+            url = str(biblio.get("url") or "").strip()
+            if re.match(r"https?://", url):
+                source_url = url
+
+        exact: Dict[str, str] = {}
+        prefix: Dict[str, str] = {}
+        try:
+            exact, prefix = self.source.data_standard()
+        except Exception as error:
+            state.add(
+                f"The IRW data standard could not be loaded ({type(error).__name__}), "
+                "so no column is marked as defined by it here."
+            )
+
+        try:
+            notes = self.get_processing_notes(table_name)
+        except IRWMCPError as error:
+            # No script listing still leaves the standard's definitions.
+            state.add(f"Build scripts could not be searched: {error.message}")
+            notes = {"match": "none", "candidate_paths": [], "warnings": []}
+        match = notes["match"]
+        for message in notes["warnings"]:
+            state.add(message)
+        scripts: List[Tuple[str, str]] = []
+        if match in ("exact", "index", "prefix"):
+            for path in notes["candidate_paths"][:5]:
+                try:
+                    scripts.append((path, self.source.read_script(path)))
+                except Exception as error:
+                    state.add(f"Could not read {path} ({type(error).__name__}).")
+
+        columns: List[Dict[str, Any]] = []
+        for name in names:
+            definition, defined_by = None, None
+            if name in exact:
+                definition, defined_by = exact[name], "standard"
+            else:
+                family = max((p for p in prefix if name.startswith(p)), key=len, default=None)
+                if family is not None:
+                    definition, defined_by = prefix[family], "standard_family"
+            mentions = [m for path, text in scripts for m in _column_mentions(name, path, text)]
+            columns.append({
+                "name": name,
+                "defined_by": defined_by,
+                "definition": definition,
+                "script_mentions": mentions[:COLUMN_MENTIONS_MAX],
+                "documented": defined_by == "standard" or bool(mentions),
+            })
+        if any(not c["documented"] for c in columns):
+            state.add(
+                "Columns with documented=false are defined neither by the data "
+                "standard nor in a build script the IRW holds. Do not infer "
+                "their meaning from the name: the source's codebook is the "
+                "authority" + (f" ({source_url})." if source_url else ".")
+            )
+        return self._stamp(
+            {
+                "source": SOURCE,
+                "table": table_name,
+                "match": match,
+                "columns": columns,
+                "codebook_url": source_url,
+                "guides": {"data_standard": IRW_REPO_BLOB_URL + DATA_STANDARD_PATH},
+                "warnings": state.warnings,
+            }
+        )
+
 
 SERVER_INSTRUCTIONS = (
     "Read-only access to the Item Response Warehouse (IRW), a corpus of item "
@@ -2243,6 +2384,22 @@ def create_server(
         faithfully, so these are things to know, not defects to be fixed.
         """
         return deliver(lambda: tools.get_processing_notes(table_name))
+
+    @typed_tool(name="describe_columns", annotations=read_only, structured_output=True)
+    def describe_columns(table_name: str) -> Dict[str, Any]:
+        """Say what each column of one IRW table means, and where that is written.
+
+        No Redivis export quota. `defined_by` is "standard" when the IRW
+        data standard defines the column (id, item, resp, treat, cluster_id,
+        ...), "standard_family" when it defines only the family (`cov_*`:
+        a person-level covariate, not what this one measures). The
+        `script_mentions` are the lines of the table's build script that name
+        the column, which usually show the source column it came from.
+        `documented` is false when neither applies: do not guess a meaning
+        from the name. What item codes and covariate values stand for is in
+        the source's own codebook, at `codebook_url`.
+        """
+        return deliver(lambda: tools.describe_columns(table_name))
 
     return server
 

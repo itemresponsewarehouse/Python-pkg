@@ -92,7 +92,7 @@ After releasing or sharing the update, ask users to **restart their Python sessi
 The optional MCP server lives in `src/irw/mcp.py` and is deliberately separate
 from the core API. Install it with `pip install "irw[mcp]"` on Python 3.10 or
 newer. The server uses the official MCP Python SDK over stdio and registers the
-eight read-only tools documented in the package README. Every response is
+nine read-only tools documented in the package README. Every response is
 stamped with `irw_version` / `irw_released_at` from `current_version()`; a
 manifest failure degrades to an unpinned result with a warning, never an error.
 
