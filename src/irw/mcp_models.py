@@ -129,10 +129,11 @@ class ColumnInfo(BaseModel):
 class SourceCodebook(BaseModel):
     file_name: str
     url: str
-    how_found: Literal["name_codebook", "name_readme", "dataverse_ddi"]
+    how_found: Literal["name_codebook", "readme_names_columns", "name_readme", "dataverse_ddi"]
     host: Optional[str] = None
     n_same_kind_in_deposit: Optional[int] = None
     deposit_url: Optional[str] = None
+    evidence: Optional[str] = None
 
 
 class Columns(Result):

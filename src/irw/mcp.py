@@ -2280,7 +2280,8 @@ class IRWTools:
         shown: Dict[str, int] = {}
         for row in rows:
             kind = (row.get("how_found") or "").strip()
-            if kind not in ("name_codebook", "name_readme", "dataverse_ddi"):
+            if kind not in ("name_codebook", "readme_names_columns", "name_readme",
+                            "dataverse_ddi"):
                 continue
             shown[kind] = shown.get(kind, 0) + 1
             if shown[kind] > SOURCE_CODEBOOKS_MAX_PER_KIND:
@@ -2293,6 +2294,7 @@ class IRWTools:
                 "host": (row.get("host") or "").strip() or None,
                 "n_same_kind_in_deposit": int(n) if n.isdigit() else None,
                 "deposit_url": (row.get("deposit_url") or "").strip() or None,
+                "evidence": (row.get("evidence") or "").strip() or None,
             })
         for kind, n in shown.items():
             if n > SOURCE_CODEBOOKS_MAX_PER_KIND:
@@ -2304,9 +2306,12 @@ class IRWTools:
                 )
         if out:
             state.add(
-                "source_codebooks are files in the source deposit whose NAME says "
-                "codebook or README, or Dataverse's DDI variable export. Nothing "
-                "here was read: open the file before relying on it."
+                "source_codebooks are files in the source deposit: a codebook-named "
+                "file (name_codebook), a README whose text names this table's "
+                "columns (readme_names_columns; evidence lists them), a README that "
+                "does not (name_readme), or Dataverse's DDI variable export. Only "
+                "the READMEs were read, and only to match names: open a file before "
+                "relying on it."
             )
         return out
 
