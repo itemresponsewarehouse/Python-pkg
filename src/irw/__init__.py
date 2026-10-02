@@ -70,6 +70,7 @@ from .api import (
     decode,
     imv,
     covariates,
+    covariate_labels,
     cache_dir,
     cache_info,
     clear_cache,
@@ -77,10 +78,12 @@ from .api import (
 )
 from .operations.list_tables import IRWMetadataUnavailable
 from .utils.redivis.pins import IRWVersionUnavailable
+from .utils.redivis.table_metadata import CovariateLabelsUnavailable
 
 __all__ = [
     "IRWMetadataUnavailable",
     "IRWVersionUnavailable",
+    "CovariateLabelsUnavailable",
     "list_tables",
     "filter",
     "info",
@@ -112,6 +115,7 @@ __all__ = [
     "decode",
     "imv",
     "covariates",
+    "covariate_labels",
     "cache_dir",
     "cache_info",
     "clear_cache",

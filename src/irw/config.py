@@ -63,6 +63,10 @@ META_TABLES: ClassVar[dict[str, str]] = {
     # collection; `collection_members` is long, one row per (table, collection).
     "collections": "collections",
     "collection_members": "collection_members",
+    # Value labels for coded covariates (ben-domingue/irw#1775): long, one row
+    # per (table, covariate, code), all text. Opt-in only -- read by
+    # irw.covariate_labels() and covariates(labels=True), never by fetch().
+    "covariate_labels": "covariate_labels",
 }
 
 # The table sources, in Python's spelling (R calls "main" "core").
