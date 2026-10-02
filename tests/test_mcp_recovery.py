@@ -83,7 +83,7 @@ def test_spawned_stdio_all_tools_errors_concurrency_and_shutdown():
     async def check():
         async with Client(params) as client:
             listing = await client.list_tools()
-            assert len(listing.tools) == 8
+            assert len(listing.tools) == 9
             calls = [
                 ("search_tables", {"query": "math"}),
                 ("describe_filter", {"filter_name": "n_items"}),
@@ -93,6 +93,7 @@ def test_spawned_stdio_all_tools_errors_concurrency_and_shutdown():
                 ("list_collections", {}),
                 ("get_citation", {"table_name": "alpha_depression"}),
                 ("get_processing_notes", {"table_name": "alpha_depression"}),
+                ("describe_columns", {"table_name": "alpha_depression"}),
             ]
             for name, arguments in calls:
                 result = await client.call_tool(name, arguments)

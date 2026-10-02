@@ -107,6 +107,28 @@ class Notes(Result):
     guides: Dict[str, str]
 
 
+class ColumnMention(BaseModel):
+    path: str
+    line: int
+    text: str
+
+
+class ColumnInfo(BaseModel):
+    name: str
+    defined_by: Optional[Literal["standard", "standard_family"]]
+    definition: Optional[str]
+    script_mentions: List[ColumnMention]
+    documented: bool
+
+
+class Columns(Result):
+    table: str
+    match: Literal["exact", "index", "prefix", "ambiguous", "none"]
+    columns: List[ColumnInfo]
+    codebook_url: Optional[str]
+    guides: Dict[str, str]
+
+
 OUTPUT_MODELS = {
     name: create_model(name + "Output", result=(model, ...))
     for name, model in {
@@ -114,5 +136,6 @@ OUTPUT_MODELS = {
         "describe_table": Description, "fetch_table": Fetch,
         "get_itemtext": Itemtext, "list_collections": Collections,
         "get_citation": Citation, "get_processing_notes": Notes,
+        "describe_columns": Columns,
     }.items()
 }

@@ -585,6 +585,7 @@ def test_server_exposes_exactly_the_eight_public_tools():
                 "list_collections",
                 "get_citation",
                 "get_processing_notes",
+                "describe_columns",
             }
             # The filter list in the description has to be the package's, and
             # this is the only test that sees the description the host reads.
@@ -605,6 +606,7 @@ def test_server_exposes_exactly_the_eight_public_tools():
                 ("list_collections", {"limit": 1}),
                 ("get_citation", {"table_name": "alpha_depression"}),
                 ("get_processing_notes", {"table_name": "alpha_depression"}),
+                ("describe_columns", {"table_name": "alpha_depression"}),
             ]
             for name, arguments in calls:
                 result = await client.call_tool(name, arguments)
