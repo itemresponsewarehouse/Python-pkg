@@ -945,6 +945,13 @@ DATA_STANDARD_PATH = "datastandard.md"
 # and the site give one answer. A table newer than the last run is not in it;
 # describe_columns then falls back to scanning the script itself.
 COLUMN_DOCS_PATH = "metadata/column_docs.csv"
+# The source's own codebook files, found by NAME in each deposit's file list
+# (ben-domingue/irw#2766, metadata/find_codebook_links.py). how_found says how:
+# a codebook-named file, a README, or a Dataverse DDI variable export.
+CODEBOOK_LINKS_PATH = "metadata/codebook_links.csv"
+# Per kind, per table: a Dataverse deposit can carry one DDI export per data
+# file, and one deposit held 19 per-scale codebooks.
+SOURCE_CODEBOOKS_MAX_PER_KIND = 5
 # Lines of a build script shown per column: enough to show the rename that
 # produced it (`cluster_id = teacher_name`), not a reading of the script.
 COLUMN_MENTIONS_MAX = 3
@@ -1092,6 +1099,7 @@ class GitHubSource:
         self._overrides: Optional[Dict[str, List[Dict[str, str]]]] = None
         self._data_notes: Optional[Dict[str, List[Dict[str, str]]]] = None
         self._column_docs: Optional[Dict[str, Dict[str, Dict[str, str]]]] = None
+        self._codebook_links: Optional[Dict[str, List[Dict[str, str]]]] = None
         self._files: Dict[str, str] = {}
         self._commit: Optional[str] = None
 
@@ -1206,6 +1214,20 @@ class GitHubSource:
                     docs.setdefault(table.casefold(), {})[column] = row
             self._column_docs = docs
         return self._column_docs
+
+    def codebook_links(self) -> Dict[str, List[Dict[str, str]]]:
+        """``{casefolded table: [row, ...]}`` from codebook_links.csv."""
+        if self._codebook_links is None:
+            import csv
+
+            text = self._fetch(self._raw_url(CODEBOOK_LINKS_PATH))
+            links: Dict[str, List[Dict[str, str]]] = {}
+            for row in csv.DictReader(io.StringIO(text)):
+                table = (row.get("table") or "").strip()
+                if table and (row.get("url") or "").strip():
+                    links.setdefault(table.casefold(), []).append(row)
+            self._codebook_links = links
+        return self._codebook_links
 
     def data_standard(self) -> Tuple[Dict[str, str], Dict[str, str]]:
         """(exact, prefix) column definitions from the IRW data standard."""
@@ -2153,6 +2175,7 @@ class IRWTools:
             )
 
         labels = self._covariate_labels(table_name, state) if names else None
+        source_codebooks = self._source_codebooks(table_name, state)
 
         def standard_entry(name: str) -> Tuple[Optional[str], Optional[str]]:
             if name in exact:
@@ -2174,7 +2197,8 @@ class IRWTools:
             )
         if docs and names:
             return self._columns_from_docs(
-                table_name, names, docs, standard_entry, labels, source_url, state)
+                table_name, names, docs, standard_entry, labels, source_url,
+                source_codebooks, state)
         if docs_loaded and docs is None and names:
             state.add(
                 "This table is not in the IRW's column_docs.csv yet (it is rebuilt "
@@ -2228,10 +2252,63 @@ class IRWTools:
                 "columns_source": "live_scan",
                 "columns": columns,
                 "codebook_url": source_url,
+                "source_codebooks": source_codebooks,
                 "guides": {"data_standard": IRW_REPO_BLOB_URL + DATA_STANDARD_PATH},
                 "warnings": state.warnings,
             }
         )
+
+    def _source_codebooks(
+        self, table_name: str, state: _ConversionState
+    ) -> Optional[List[Dict[str, Any]]]:
+        """The source deposit's own codebook files, or None if unknown.
+
+        Best effort, like the covariate labels: None means the list could not
+        be read; ``[]`` means none was found by name, which is NOT a statement
+        that the source has no codebook (irw#2766 only matches file names, on
+        hosts whose file lists an API returns).
+        """
+        try:
+            rows = self.source.codebook_links().get(table_name.casefold(), [])
+        except Exception as error:
+            state.add(
+                f"The IRW's codebook_links.csv could not be loaded ({type(error).__name__}); "
+                "source_codebooks is unknown in this response."
+            )
+            return None
+        out: List[Dict[str, Any]] = []
+        shown: Dict[str, int] = {}
+        for row in rows:
+            kind = (row.get("how_found") or "").strip()
+            if kind not in ("name_codebook", "name_readme", "dataverse_ddi"):
+                continue
+            shown[kind] = shown.get(kind, 0) + 1
+            if shown[kind] > SOURCE_CODEBOOKS_MAX_PER_KIND:
+                continue
+            n = (row.get("n_same_kind_in_deposit") or "").strip()
+            out.append({
+                "file_name": (row.get("file_name") or "").strip(),
+                "url": row["url"].strip(),
+                "how_found": kind,
+                "host": (row.get("host") or "").strip() or None,
+                "n_same_kind_in_deposit": int(n) if n.isdigit() else None,
+                "deposit_url": (row.get("deposit_url") or "").strip() or None,
+            })
+        for kind, n in shown.items():
+            if n > SOURCE_CODEBOOKS_MAX_PER_KIND:
+                state.add(
+                    f"The source deposit has {n} {kind} files; the first "
+                    f"{SOURCE_CODEBOOKS_MAX_PER_KIND} are listed. When a deposit "
+                    "holds one per scale, match by the table's own scale, and say "
+                    "so; the IRW does not pick one for you."
+                )
+        if out:
+            state.add(
+                "source_codebooks are files in the source deposit whose NAME says "
+                "codebook or README, or Dataverse's DDI variable export. Nothing "
+                "here was read: open the file before relying on it."
+            )
+        return out
 
     def _columns_from_docs(
         self,
@@ -2241,6 +2318,7 @@ class IRWTools:
         standard_entry: Callable[[str], Tuple[Optional[str], Optional[str]]],
         labels: Optional[Dict[str, Dict[str, str]]],
         source_url: Optional[str],
+        source_codebooks: Optional[List[Dict[str, Any]]],
         state: _ConversionState,
     ) -> Dict[str, Any]:
         """describe_columns from column_docs.csv: the table pages' own rows."""
@@ -2309,6 +2387,7 @@ class IRWTools:
                 "columns_source": "column_docs",
                 "columns": columns,
                 "codebook_url": source_url,
+                "source_codebooks": source_codebooks,
                 "guides": {"data_standard": IRW_REPO_BLOB_URL + DATA_STANDARD_PATH,
                            "column_docs": IRW_REPO_BLOB_URL + COLUMN_DOCS_PATH},
                 "warnings": state.warnings,

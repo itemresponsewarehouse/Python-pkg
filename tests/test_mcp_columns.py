@@ -186,3 +186,50 @@ def test_unreadable_column_docs_falls_back_without_claiming_the_table_is_new():
     assert result["columns_source"] == "live_scan"
     assert any("column_docs.csv could not be loaded" in w for w in result["warnings"])
     assert not any("not in the IRW's column_docs.csv yet" in w for w in result["warnings"])
+
+
+# --- codebook_links.csv (irw#2766): the source's own codebook files ----------
+
+CODEBOOK_LINKS_CSV = (
+    "table,url,file_name,host,how_found,n_same_kind_in_deposit,deposit_url,checked_at\n"
+    "alpha_depression,https://example.org/f/1,Codebook.pdf,zenodo,name_codebook,1,https://example.org/d,2026-10-02\n"
+    "alpha_depression,https://example.org/f/2,README.md,zenodo,name_readme,1,https://example.org/d,2026-10-02\n"
+    + "".join(f"alpha_depression,https://example.org/ddi/{i},d{i}.tab,dataverse,dataverse_ddi,,https://example.org/d,2026-10-02\n"
+              for i in range(7))
+)
+
+
+class _LinksSource(_DocsSource):
+    def __init__(self, links=CODEBOOK_LINKS_CSV, **kw):
+        self.links = links
+        super().__init__(**kw)
+
+    def _fetch_text(self, url):
+        if url.endswith("/metadata/codebook_links.csv"):
+            self.calls.append(url)
+            if isinstance(self.links, Exception):
+                raise self.links
+            return self.links
+        return super()._fetch_text(url)
+
+
+def test_source_codebooks_are_listed_with_how_each_was_found():
+    result = IRWTools(_Backend(), _LinksSource()).describe_columns("alpha_depression")
+    books = result["source_codebooks"]
+    assert books[0] == {"file_name": "Codebook.pdf", "url": "https://example.org/f/1",
+                        "how_found": "name_codebook", "host": "zenodo",
+                        "n_same_kind_in_deposit": 1, "deposit_url": "https://example.org/d"}
+    assert [b["how_found"] for b in books].count("dataverse_ddi") == 5   # capped per kind
+    assert any("dataverse_ddi files; the first 5" in w for w in result["warnings"])
+    assert any("Nothing here was read" in w for w in result["warnings"])
+
+
+def test_no_codebook_found_is_an_empty_list_and_unreadable_is_none():
+    other = CODEBOOK_LINKS_CSV.replace("alpha_depression", "someone_else")
+    assert IRWTools(_Backend(), _LinksSource(links=other)).describe_columns(
+        "alpha_depression")["source_codebooks"] == []
+    result = IRWTools(_Backend(), _LinksSource(links=ConnectionError("down"))).describe_columns(
+        "alpha_depression")
+    assert result["source_codebooks"] is None
+    assert any("codebook_links.csv could not be loaded" in w for w in result["warnings"])
+    assert result["columns_source"] == "column_docs"   # the rest of the answer stands
