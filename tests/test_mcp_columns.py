@@ -193,6 +193,7 @@ def test_unreadable_column_docs_falls_back_without_claiming_the_table_is_new():
 CODEBOOK_LINKS_CSV = (
     "table,url,file_name,host,how_found,n_same_kind_in_deposit,deposit_url,evidence,checked_at\n"
     "alpha_depression,https://example.org/f/1,Codebook.pdf,zenodo,name_codebook,1,https://example.org/d,,2026-10-02\n"
+    "alpha_depression,https://example.org/f/9,Codebook_v2.pdf,example.org,recorded_at_ingest,1,,,2026-10-02\n"
     "alpha_depression,https://example.org/f/2,README.md,zenodo,readme_names_columns,1,https://example.org/d,"
     "\"names 4/9: treat, male, mystery, math\",2026-10-02\n"
     + "".join(f"alpha_depression,https://example.org/ddi/{i},d{i}.tab,dataverse,dataverse_ddi,,https://example.org/d,,2026-10-02\n"
@@ -221,8 +222,9 @@ def test_source_codebooks_are_listed_with_how_each_was_found():
                         "how_found": "name_codebook", "host": "zenodo",
                         "n_same_kind_in_deposit": 1, "deposit_url": "https://example.org/d",
                         "evidence": None}
-    assert books[1]["how_found"] == "readme_names_columns"
-    assert books[1]["evidence"].startswith("names 4/9")
+    assert books[1]["how_found"] == "recorded_at_ingest"
+    assert books[2]["how_found"] == "readme_names_columns"
+    assert books[2]["evidence"].startswith("names 4/9")
     assert [b["how_found"] for b in books].count("dataverse_ddi") == 5   # capped per kind
     assert any("dataverse_ddi files; the first 5" in w for w in result["warnings"])
     assert any("open a file before relying on it" in w for w in result["warnings"])

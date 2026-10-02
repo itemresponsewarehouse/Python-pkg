@@ -2280,8 +2280,8 @@ class IRWTools:
         shown: Dict[str, int] = {}
         for row in rows:
             kind = (row.get("how_found") or "").strip()
-            if kind not in ("name_codebook", "readme_names_columns", "name_readme",
-                            "dataverse_ddi"):
+            if kind not in ("recorded_at_ingest", "name_codebook", "readme_names_columns",
+                            "name_readme", "dataverse_ddi"):
                 continue
             shown[kind] = shown.get(kind, 0) + 1
             if shown[kind] > SOURCE_CODEBOOKS_MAX_PER_KIND:
@@ -2306,7 +2306,8 @@ class IRWTools:
                 )
         if out:
             state.add(
-                "source_codebooks are files in the source deposit: a codebook-named "
+                "source_codebooks are the source's own files: the codebook named by "
+                "whoever built the table (recorded_at_ingest), a codebook-named "
                 "file (name_codebook), a README whose text names this table's "
                 "columns (readme_names_columns; evidence lists them), a README that "
                 "does not (name_readme), or Dataverse's DDI variable export. Only "
