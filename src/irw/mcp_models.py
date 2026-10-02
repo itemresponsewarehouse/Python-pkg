@@ -119,13 +119,17 @@ class ColumnInfo(BaseModel):
     name: str
     defined_by: Optional[Literal["standard", "standard_family"]]
     definition: Optional[str]
+    basis: Optional[Literal["renamed", "built"]] = None
+    source_column: Optional[str] = None
     script_mentions: List[ColumnMention]
+    value_labels: Optional[Dict[str, str]] = None
     documented: bool
 
 
 class Columns(Result):
     table: str
     match: Literal["exact", "index", "prefix", "ambiguous", "none"]
+    columns_source: Literal["column_docs", "live_scan"]
     columns: List[ColumnInfo]
     codebook_url: Optional[str]
     guides: Dict[str, str]

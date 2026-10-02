@@ -1,5 +1,7 @@
 """describe_columns: what each column means, and where that is written (irw#2755)."""
 
+import pandas as pd
+
 from irw.mcp import IRWTools, _parse_data_standard
 from test_mcp import FakeBackend, FakeSource
 
@@ -77,7 +79,8 @@ def test_an_undocumented_column_is_said_to_be_so_not_guessed():
     result = IRWTools(_Backend(), _Source()).describe_columns("alpha_depression")
     mystery = _columns(result)["mystery"]
     assert mystery == {"name": "mystery", "defined_by": None, "definition": None,
-                       "script_mentions": [], "documented": False}
+                       "basis": None, "source_column": None, "script_mentions": [],
+                       "value_labels": None, "documented": False}
     assert any("documented=false" in w and "https://doi.org/10.1/example" in w
                for w in result["warnings"])
 
@@ -102,3 +105,84 @@ def test_a_table_without_a_column_list_says_so():
     result = IRWTools(FakeBackend(), _Source()).describe_columns("alpha_depression")
     assert result["columns"] == []
     assert any("lists no columns" in w for w in result["warnings"])
+
+
+# --- column_docs.csv (irw#2763 step 4): the table pages' own rows ------------
+
+# What stage 14 writes for the fixture table. `cov_male` is renamed, `treat`
+# built, `mystery` untraced; `match` is the script's for the whole table.
+COLUMN_DOCS_CSV = (
+    "table,column,defined_by,basis,source_column,script,script_line,match,documented\n"
+    "alpha_depression,id,standard,renamed,s_id,data/alpha_depression.py,4,exact,true\n"
+    "alpha_depression,item,standard,,,,,exact,true\n"
+    "alpha_depression,resp,standard,,,,,exact,true\n"
+    "alpha_depression,treat,standard,built,,data/alpha_depression.py,2,exact,true\n"
+    "alpha_depression,cluster_id,standard,renamed,teacher_name,data/alpha_depression.py,4,exact,true\n"
+    "alpha_depression,cov_male,standard_family,renamed,s_male_num,data/alpha_depression.py,4,exact,true\n"
+    "alpha_depression,std_baseline_math,standard_family,,,,,exact,false\n"
+    "alpha_depression,qmatrix3,standard_family,,,,,exact,false\n"
+    "alpha_depression,mystery,,,,,,exact,false\n"
+)
+
+
+class _DocsSource(_Source):
+    def __init__(self, docs=COLUMN_DOCS_CSV, **kw):
+        self.docs = docs
+        super().__init__(**kw)
+
+    def _fetch_text(self, url):
+        if url.endswith("/metadata/column_docs.csv"):
+            self.calls.append(url)
+            if isinstance(self.docs, Exception):
+                raise self.docs
+            return self.docs
+        return super()._fetch_text(url)
+
+
+class _LabelBackend(_Backend):
+    def covariate_labels(self, table_name):
+        return pd.DataFrame({"table": [table_name] * 2, "covariate": ["cov_male", "cov_male"],
+                             "code": ["0", "1"], "label": ["female", "male"]})
+
+
+def test_column_docs_rows_are_what_the_page_shows():
+    result = IRWTools(_LabelBackend(), _DocsSource()).describe_columns("alpha_depression")
+    assert result["columns_source"] == "column_docs"
+    assert result["match"] == "exact"
+    cols = _columns(result)
+    assert (cols["cluster_id"]["basis"], cols["cluster_id"]["source_column"]) == ("renamed", "teacher_name")
+    # The line behind the rename, with its text, for a link and a quote.
+    assert cols["cluster_id"]["script_mentions"] == [{
+        "path": "data/alpha_depression.py", "line": 4,
+        "text": "select(id = s_id, cluster_id = teacher_name, cov_male = s_male_num, item, resp)"}]
+    assert (cols["treat"]["basis"], cols["treat"]["source_column"]) == ("built", None)
+    assert cols["cov_male"]["value_labels"] == {"0": "female", "1": "male"}
+    assert cols["cov_male"]["documented"] is True
+    assert any("same rows the table's web page shows" in w for w in result["warnings"])
+
+
+def test_untraced_columns_stay_undocumented_and_carry_no_mentions():
+    cols = _columns(IRWTools(_Backend(), _DocsSource()).describe_columns("alpha_depression"))
+    assert cols["mystery"]["documented"] is False
+    assert cols["mystery"]["script_mentions"] == []
+    # A family definition is not a documented column (the CSV agrees).
+    assert cols["qmatrix3"]["defined_by"] == "standard_family"
+    assert cols["qmatrix3"]["documented"] is False
+
+
+def test_table_not_yet_in_column_docs_falls_back_to_a_live_scan():
+    other = COLUMN_DOCS_CSV.replace("alpha_depression", "someone_else")
+    result = IRWTools(_Backend(), _DocsSource(docs=other)).describe_columns("alpha_depression")
+    assert result["columns_source"] == "live_scan"
+    assert any("not in the IRW's column_docs.csv yet" in w for w in result["warnings"])
+    # The live scan still finds the rename line, but traces no source column.
+    cluster = _columns(result)["cluster_id"]
+    assert cluster["basis"] is None and cluster["script_mentions"]
+
+
+def test_unreadable_column_docs_falls_back_without_claiming_the_table_is_new():
+    result = IRWTools(_Backend(), _DocsSource(docs=ConnectionError("down"))).describe_columns(
+        "alpha_depression")
+    assert result["columns_source"] == "live_scan"
+    assert any("column_docs.csv could not be loaded" in w for w in result["warnings"])
+    assert not any("not in the IRW's column_docs.csv yet" in w for w in result["warnings"])

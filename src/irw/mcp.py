@@ -940,6 +940,11 @@ DATA_NOTES_PATH = "metadata/data_notes.csv"
 # The data standard's schema table is the one place IRW column names are
 # defined (#2755); describe_columns reads it rather than restating it here.
 DATA_STANDARD_PATH = "datastandard.md"
+# Per-column codebook rows built weekly by the IRW repository's stage 14
+# (ben-domingue/irw#2763): the same rows the table pages render, so the MCP
+# and the site give one answer. A table newer than the last run is not in it;
+# describe_columns then falls back to scanning the script itself.
+COLUMN_DOCS_PATH = "metadata/column_docs.csv"
 # Lines of a build script shown per column: enough to show the rename that
 # produced it (`cluster_id = teacher_name`), not a reading of the script.
 COLUMN_MENTIONS_MAX = 3
@@ -1086,6 +1091,7 @@ class GitHubSource:
         self._issues: Optional[Dict[str, List[str]]] = None
         self._overrides: Optional[Dict[str, List[Dict[str, str]]]] = None
         self._data_notes: Optional[Dict[str, List[Dict[str, str]]]] = None
+        self._column_docs: Optional[Dict[str, Dict[str, Dict[str, str]]]] = None
         self._files: Dict[str, str] = {}
         self._commit: Optional[str] = None
 
@@ -1185,6 +1191,21 @@ class GitHubSource:
             self._data_notes = notes
         return self._data_notes
 
+
+    def column_docs(self) -> Dict[str, Dict[str, Dict[str, str]]]:
+        """``{casefolded table: {column: row}}`` from column_docs.csv."""
+        if self._column_docs is None:
+            import csv
+
+            text = self._fetch(self._raw_url(COLUMN_DOCS_PATH))
+            docs: Dict[str, Dict[str, Dict[str, str]]] = {}
+            for row in csv.DictReader(io.StringIO(text)):
+                table = (row.get("table") or "").strip()
+                column = (row.get("column") or "").strip()
+                if table and column:
+                    docs.setdefault(table.casefold(), {})[column] = row
+            self._column_docs = docs
+        return self._column_docs
 
     def data_standard(self) -> Tuple[Dict[str, str], Dict[str, str]]:
         """(exact, prefix) column definitions from the IRW data standard."""
@@ -2131,6 +2152,36 @@ class IRWTools:
                 "so no column is marked as defined by it here."
             )
 
+        labels = self._covariate_labels(table_name, state) if names else None
+
+        def standard_entry(name: str) -> Tuple[Optional[str], Optional[str]]:
+            if name in exact:
+                return exact[name], "standard"
+            family = max((p for p in prefix if name.startswith(p)), key=len, default=None)
+            if family is not None:
+                return prefix[family], "standard_family"
+            return None, None
+
+        docs: Optional[Dict[str, Dict[str, str]]] = None
+        docs_loaded = False
+        try:
+            docs = self.source.column_docs().get(table_name.casefold())
+            docs_loaded = True
+        except Exception as error:
+            state.add(
+                f"The IRW's column_docs.csv could not be loaded ({type(error).__name__}); "
+                "the build script was scanned directly instead."
+            )
+        if docs and names:
+            return self._columns_from_docs(
+                table_name, names, docs, standard_entry, labels, source_url, state)
+        if docs_loaded and docs is None and names:
+            state.add(
+                "This table is not in the IRW's column_docs.csv yet (it is rebuilt "
+                "weekly), so the build script was scanned directly: script_mentions "
+                "are lines that name the column, and no source column is traced."
+            )
+
         try:
             notes = self.get_processing_notes(table_name)
         except IRWMCPError as error:
@@ -2150,19 +2201,16 @@ class IRWTools:
 
         columns: List[Dict[str, Any]] = []
         for name in names:
-            definition, defined_by = None, None
-            if name in exact:
-                definition, defined_by = exact[name], "standard"
-            else:
-                family = max((p for p in prefix if name.startswith(p)), key=len, default=None)
-                if family is not None:
-                    definition, defined_by = prefix[family], "standard_family"
+            definition, defined_by = standard_entry(name)
             mentions = [m for path, text in scripts for m in _column_mentions(name, path, text)]
             columns.append({
                 "name": name,
                 "defined_by": defined_by,
                 "definition": definition,
+                "basis": None,
+                "source_column": None,
                 "script_mentions": mentions[:COLUMN_MENTIONS_MAX],
+                "value_labels": (labels or {}).get(name),
                 "documented": defined_by == "standard" or bool(mentions),
             })
         if any(not c["documented"] for c in columns):
@@ -2177,9 +2225,92 @@ class IRWTools:
                 "source": SOURCE,
                 "table": table_name,
                 "match": match,
+                "columns_source": "live_scan",
                 "columns": columns,
                 "codebook_url": source_url,
                 "guides": {"data_standard": IRW_REPO_BLOB_URL + DATA_STANDARD_PATH},
+                "warnings": state.warnings,
+            }
+        )
+
+    def _columns_from_docs(
+        self,
+        table_name: str,
+        names: List[str],
+        docs: Dict[str, Dict[str, str]],
+        standard_entry: Callable[[str], Tuple[Optional[str], Optional[str]]],
+        labels: Optional[Dict[str, Dict[str, str]]],
+        source_url: Optional[str],
+        state: _ConversionState,
+    ) -> Dict[str, Any]:
+        """describe_columns from column_docs.csv: the table pages' own rows."""
+        match = next(iter(docs.values())).get("match") or "none"
+        if match not in ("exact", "index", "prefix", "ambiguous", "none"):
+            match = "none"
+        if match == "prefix":
+            state.add(
+                "The build script was matched by name prefix, not exactly: it may "
+                "produce several tables. Confirm it mentions this one before "
+                "relying on its source columns."
+            )
+        texts: Dict[str, Optional[List[str]]] = {}
+
+        def line_text(path: str, line: int) -> str:
+            if path not in texts:
+                try:
+                    texts[path] = self.source.read_script(path).splitlines()
+                except Exception as error:
+                    state.add(f"Could not read {path} ({type(error).__name__}).")
+                    texts[path] = None
+            lines = texts[path]
+            if not lines or not 0 < line <= len(lines):
+                return ""
+            return lines[line - 1].strip()[:COLUMN_MENTION_MAX_CHARS]
+
+        columns: List[Dict[str, Any]] = []
+        for name in names:
+            row = docs.get(name, {})
+            definition, defined_by = standard_entry(name)
+            basis = row.get("basis") or None
+            if basis not in ("renamed", "built"):
+                basis = None
+            mentions: List[Dict[str, Any]] = []
+            path, line = row.get("script") or "", row.get("script_line") or ""
+            if basis and path and line.isdigit():
+                mentions.append({"path": path, "line": int(line),
+                                 "text": line_text(path, int(line))})
+            columns.append({
+                "name": name,
+                "defined_by": defined_by,
+                "definition": definition,
+                "basis": basis,
+                "source_column": (row.get("source_column") or None) if basis == "renamed" else None,
+                "script_mentions": mentions,
+                "value_labels": (labels or {}).get(name),
+                "documented": defined_by == "standard" or basis == "renamed",
+            })
+        state.add(
+            "These rows are the IRW's reconstruction from the data standard and "
+            "the build script, the same rows the table's web page shows. They "
+            "may contain mistakes; the source's own codebook is the authority"
+            + (f" ({source_url})." if source_url else ".")
+        )
+        if any(not c["documented"] for c in columns):
+            state.add(
+                "Columns with documented=false are neither defined by the data "
+                "standard nor traced to a named source column. Do not infer their "
+                "meaning from the name."
+            )
+        return self._stamp(
+            {
+                "source": SOURCE,
+                "table": table_name,
+                "match": match,
+                "columns_source": "column_docs",
+                "columns": columns,
+                "codebook_url": source_url,
+                "guides": {"data_standard": IRW_REPO_BLOB_URL + DATA_STANDARD_PATH,
+                           "column_docs": IRW_REPO_BLOB_URL + COLUMN_DOCS_PATH},
                 "warnings": state.warnings,
             }
         )
@@ -2466,15 +2597,22 @@ def create_server(
     def describe_columns(table_name: str) -> Dict[str, Any]:
         """Say what each column of one IRW table means, and where that is written.
 
-        No Redivis export quota. `defined_by` is "standard" when the IRW
+        No Redivis export quota. The rows are the IRW's reconstruction, the
+        same ones the table's web page shows (`columns_source:
+        "column_docs"`); a table newer than the weekly rebuild is scanned
+        live instead (`"live_scan"`), with no source columns traced.
+        `source_column` is the source's own name for the column, when the
+        build script renamed it (`basis: "renamed"`); `basis: "built"` means
+        the script made it (a pivot, a recode). `value_labels` maps a
+        covariate's codes to the source's own labels. `defined_by` is "standard" when the IRW
         data standard defines the column (id, item, resp, treat, cluster_id,
         ...), "standard_family" when it defines only the family (`cov_*`:
-        a person-level covariate, not what this one measures). The
-        `script_mentions` are the lines of the table's build script that name
-        the column, which usually show the source column it came from.
-        `documented` is false when neither applies: do not guess a meaning
-        from the name. What item codes and covariate values stand for is in
-        the source's own codebook, at `codebook_url`.
+        a person-level covariate, not what this one measures).
+        `script_mentions` holds the build-script line behind `basis` (or, on
+        a live scan, lines that name the column). `documented` is false when
+        the standard does not define the column and no source column is
+        traced: do not guess a meaning from the name. The source's own
+        codebook, at `codebook_url`, is the authority.
         """
         return deliver(lambda: tools.describe_columns(table_name))
 
