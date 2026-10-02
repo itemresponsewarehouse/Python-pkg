@@ -290,6 +290,69 @@ def get_collection_members_table() -> pd.DataFrame:
     return filtered
 
 
+COVARIATE_LABEL_COLUMNS = ("table", "covariate", "code", "label")
+
+
+class CovariateLabelsUnavailable(LookupError):
+    """The irw_meta version in use has no ``covariate_labels`` table.
+
+    Raised rather than returning an empty frame: "this irw_meta has no label
+    table" and "this IRW table has no labelled covariates" are different
+    answers, and an empty frame would give the first as the second.
+    """
+
+
+def get_covariate_labels_table() -> pd.DataFrame:
+    """
+    Get the IRW covariate value labels: one row per (table, covariate, code).
+
+    Every column is text. ``code`` is the shipped value written as text (a
+    shipped 1.0 is ``"1"``); ``label`` is the source's own wording, or the
+    literal ``[institution name withheld]``. Not filtered to live tables: the
+    rows describe columns of tables, and a caller always asks about one table.
+
+    Raises
+    ------
+    CovariateLabelsUnavailable
+        If the irw_meta version in use (the latest, or a pinned one) has no
+        ``covariate_labels`` table -- it first shipped with ben-domingue/irw#1775.
+    """
+    dataset = _get_meta_dataset()
+    latest_version_tag = _cache_version(_dataset_version_tag(dataset))
+
+    cached_data = metadata_cache.get("covariate_labels", latest_version_tag)
+    if cached_data is not None:
+        return cached_data
+
+    name = META_TABLES["covariate_labels"]
+    # Ask the listing rather than catching a failed read: absence is an
+    # expected state (any irw_meta before #1775), and a read error must keep
+    # meaning "the read failed", not "there are no labels".
+    present = {
+        (getattr(t, "name", "") or "").lower() for t in _dataset_table_list(dataset)
+    }
+    if name.lower() not in present:
+        raise CovariateLabelsUnavailable(
+            f"This version of irw_meta ({_dataset_version_tag(dataset) or 'unknown version'}) "
+            f"has no `{name}` table, so covariate value labels are not "
+            "available. The table is new (ben-domingue/irw#1775): older irw_meta "
+            "versions do not carry it, so a session pinned to one with "
+            "irw.use_version() cannot decode covariates."
+        )
+
+    df = dataset.table(name).to_pandas_dataframe()
+    for col in COVARIATE_LABEL_COLUMNS:
+        if col not in df.columns:
+            raise CovariateLabelsUnavailable(
+                f"irw_meta's `{name}` table has no `{col}` column; expected "
+                f"{', '.join(COVARIATE_LABEL_COLUMNS)}."
+            )
+    df = df.loc[:, list(COVARIATE_LABEL_COLUMNS)].astype("string")
+
+    metadata_cache.set("covariate_labels", df, latest_version_tag)
+    return df
+
+
 def get_biblio_table(source: str = "main") -> pd.DataFrame:
     """
     Get the IRW bibliography table (bibliography info for each table).

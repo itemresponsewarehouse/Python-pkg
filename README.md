@@ -86,6 +86,10 @@ df_again = irw.resp2long(resp_matrix)  # and back to long format
 
 # Person-level columns (e.g. cov_group), one row per id, in the matrix's row order
 covs = irw.covariates(df, align=resp_matrix)
+# Coded covariates (cov_gender in {1, 2}): the source's own value labels.
+# Opt-in; fetch() output never changes. 1 can mean female in one table, male in another.
+irw.covariate_labels("cucchi_2018_rfq")   # table, covariate, code, label
+covs = irw.covariates(df, labels=True, table="agn_kay_2025")  # labelled cov_* -> Categorical
 
 # Item and response sets without downloading (no export quota)
 sets = irw.table_sets("agn_kay_2025")  # dict: table, n_rows, items, resp, per_item
@@ -231,7 +235,7 @@ MCP-capable research assistant (issue ben-domingue/irw#1713). Eight tools:
 |---|---|---|
 | `search_tables` | free-text search plus `irw.filter()`'s own filters, passed straight through; a summary card per hit, each saying whether it is `tagged` | no |
 | `describe_filter` | what one filter means and which values it takes | no |
-| `describe_table` | statistics, tags, bibliography for one table | no |
+| `describe_table` | statistics, tags, bibliography, and the source value labels of coded `cov_*` columns for one table | no |
 | `get_processing_notes` | the header of the script that built the table, from the IRW GitHub repository (found by name, or through the repository's table-to-script index when the script is named for something else): whether `id` links across waves, what a `cov_*` means, what was excluded | no (no login either) |
 | `fetch_table` | a bounded page of rows, bounded on the wire | a page |
 | `get_itemtext` | a bounded page of item text with a `rights` object: response-data licence, the instrument-rights rule, and the table's public notes | small |

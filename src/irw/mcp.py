@@ -57,6 +57,10 @@ SEARCH_CARD_FIELDS = (
     "collections",
 )
 
+# describe_table's covariate value labels (ben-domingue/irw#1775). The largest
+# table today carries 65 label rows, so this is a ceiling, not a page size.
+COVARIATE_LABELS_MAX_CODES = 200
+
 SEARCH_DEFAULT_LIMIT = 20
 SEARCH_MAX_LIMIT = 100
 ROW_DEFAULT_LIMIT = 100
@@ -219,6 +223,9 @@ class IRWBackend(Protocol):
 
     def itemtext(self, table_name: str) -> Any: ...
 
+    # Optional: a backend without it gives describe_table no labels.
+    # def covariate_labels(self, table_name: str) -> Optional[pd.DataFrame]: ...
+
     def collections(self) -> pd.DataFrame: ...
 
     def citation(self, table_name: str) -> List[str]: ...
@@ -345,6 +352,20 @@ class PackageBackend:
 
     def itemtext(self, table_name: str) -> Any:
         return irw.itemtext(table_name)
+
+    def covariate_labels(self, table_name: str) -> Optional[pd.DataFrame]:
+        """The table's covariate value labels, or None if irw_meta has none.
+
+        None means the irw_meta version in use has no ``covariate_labels``
+        table at all; an empty frame means it has the table and no rows for
+        this IRW table.
+        """
+        from .utils.redivis.table_metadata import CovariateLabelsUnavailable
+
+        try:
+            return irw.covariate_labels(table_name)
+        except CovariateLabelsUnavailable:
+            return None
 
     def collections(self) -> pd.DataFrame:
         return irw.collections()
@@ -1604,9 +1625,58 @@ class IRWTools:
                 "table": table_name,
                 "metadata": dict(metadata),
                 "schema": schema,
+                "covariate_labels": self._covariate_labels(table_name, state),
                 "warnings": state.warnings,
             }
         )
+
+    def _covariate_labels(
+        self, table_name: str, state: _ConversionState
+    ) -> Optional[Dict[str, Dict[str, str]]]:
+        """``{covariate: {code: label}}`` for describe_table, or None.
+
+        Best effort: the labels are a supplement to the metadata, so a failure
+        to load them becomes a warning, never a failed describe_table. None
+        means "unknown" (no labels table, or it could not be read); ``{}``
+        means the table has no labelled covariates.
+        """
+        fetch = getattr(self.backend, "covariate_labels", None)
+        if fetch is None:
+            return None
+        try:
+            rows, _ = self._call(fetch, table_name)
+        except IRWMCPError:
+            state.add(
+                "Covariate value labels could not be loaded; cov_* codes are "
+                "undecoded in this response."
+            )
+            return None
+        if rows is None:
+            state.add(
+                "The irw_meta version in use has no covariate_labels table, so "
+                "cov_* codes are undecoded in this response."
+            )
+            return None
+        labels: Dict[str, Dict[str, str]] = {}
+        n = 0
+        for covariate, code, label in zip(rows["covariate"], rows["code"], rows["label"]):
+            if n >= COVARIATE_LABELS_MAX_CODES:
+                state.add(
+                    f"covariate_labels truncated at {COVARIATE_LABELS_MAX_CODES} "
+                    "codes; irw.covariate_labels() returns them all."
+                )
+                break
+            labels.setdefault(str(covariate), {})[str(code)] = str(label)
+            n += 1
+        if labels:
+            state.add(
+                "covariate_labels are the source's own value labels, verbatim "
+                "and per table: the same code can mean different things in "
+                "different tables. Codes absent from a covariate's map have no "
+                "recorded label; '[institution name withheld]' marks codes that "
+                "name institutions."
+            )
+        return labels
 
     def fetch_table(
         self,
@@ -2145,7 +2215,14 @@ def create_server(
 
     @typed_tool(name="describe_table", annotations=read_only, structured_output=True)
     def describe_table(table_name: str) -> Dict[str, Any]:
-        """Return metadata and statistics for one IRW table without fetching rows."""
+        """Return metadata and statistics for one IRW table without fetching rows.
+
+        ``covariate_labels`` maps each coded cov_* column to the source's own
+        value labels (``{"cov_gender": {"1": "female", "2": "male"}}``),
+        verbatim and per table -- 1 can mean female in one table and male in
+        another. It is ``{}`` when the table has none and null when they could
+        not be loaded.
+        """
         return deliver(lambda: tools.describe_table(table_name))
 
     @typed_tool(name="fetch_table", annotations=read_only, structured_output=True)

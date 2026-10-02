@@ -47,6 +47,8 @@ class Description(Result):
     table: str
     metadata: Dict[str, Any]
     table_schema: Any = Field(alias="schema")
+    # {covariate: {code: label}}; {} = none for this table, None = unavailable.
+    covariate_labels: Optional[Dict[str, Dict[str, str]]] = None
 
 
 class Column(BaseModel):

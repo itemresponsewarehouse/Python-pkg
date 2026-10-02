@@ -54,6 +54,7 @@ from .operations.merge import merge as merge
 from .operations.recode import recode as recode, decode as decode
 from .operations.imv import imv as imv
 from .operations.covariates import covariates as covariates
+from .operations.covariates import covariate_labels as covariate_labels
 from .utils.redivis.table_metadata import (
     get_collections_table as _get_collections_table,
     get_collection_members_table as _get_collection_members_table,
