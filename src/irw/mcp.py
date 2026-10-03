@@ -2281,7 +2281,8 @@ class IRWTools:
         for row in rows:
             kind = (row.get("how_found") or "").strip()
             if kind not in ("recorded_at_ingest", "typed_codebook", "package_doc", "name_codebook",
-                            "readme_names_columns", "name_readme", "dataverse_ddi"):
+                            "readme_names_columns", "doc_names_columns", "name_readme",
+                            "questionnaire", "dataverse_ddi"):
                 continue
             shown[kind] = shown.get(kind, 0) + 1
             if shown[kind] > SOURCE_CODEBOOKS_MAX_PER_KIND:
@@ -2311,9 +2312,12 @@ class IRWTools:
                 "repository types as a codebook (typed_codebook), the CRAN help page "
                 "for the dataset (package_doc), a codebook-named "
                 "file (name_codebook), a README whose text names this table's "
-                "columns (readme_names_columns; evidence lists them), a README that "
-                "does not (name_readme), or Dataverse's DDI variable export. Only "
-                "the READMEs were read, and only to match names: open a file before "
+                "columns (readme_names_columns; evidence lists them), a journal "
+                "supplementary document whose text names them (doc_names_columns), a "
+                "README that does not (name_readme), the article's questionnaire "
+                "(questionnaire: it shows the items, not how they were coded), or "
+                "Dataverse's DDI variable export. Only the READMEs and journal "
+                "documents were read, and only to match names: open a file before "
                 "relying on it."
             )
         return out
