@@ -198,6 +198,10 @@ CODEBOOK_LINKS_CSV = (
     "alpha_depression,https://search.r-project.org/CRAN/refmans/p/html/d.html,p::d,cran,package_doc,1,,,2026-10-02\n"
     "alpha_depression,https://example.org/f/2,README.md,zenodo,readme_names_columns,1,https://example.org/d,"
     "\"names 4/9: treat, male, mystery, math\",2026-10-02\n"
+    "alpha_depression,https://journals.plos.org/plosone/article/file?type=supplementary&id=x.s002,S2_File.docx,plos,"
+    "doc_names_columns,1,https://journals.plos.org/plosone/article?id=x,\"names 3/9: treat, male, math\",2026-10-02\n"
+    "alpha_depression,https://journals.plos.org/plosone/article/file?type=supplementary&id=x.s003,S1_Questionnaire.pdf,plos,"
+    "questionnaire,1,https://journals.plos.org/plosone/article?id=x,caption: Questionnaire. (PDF),2026-10-02\n"
     + "".join(f"alpha_depression,https://example.org/ddi/{i},d{i}.tab,dataverse,dataverse_ddi,,https://example.org/d,,2026-10-02\n"
               for i in range(7))
 )
@@ -228,6 +232,7 @@ def test_source_codebooks_are_listed_with_how_each_was_found():
     assert [b["how_found"] for b in books[2:4]] == ["typed_codebook", "package_doc"]
     assert books[4]["how_found"] == "readme_names_columns"
     assert books[4]["evidence"].startswith("names 4/9")
+    assert [b["how_found"] for b in books[5:7]] == ["doc_names_columns", "questionnaire"]
     assert [b["how_found"] for b in books].count("dataverse_ddi") == 5   # capped per kind
     assert any("dataverse_ddi files; the first 5" in w for w in result["warnings"])
     assert any("open a file before relying on it" in w for w in result["warnings"])
