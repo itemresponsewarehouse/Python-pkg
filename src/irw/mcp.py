@@ -2280,7 +2280,7 @@ class IRWTools:
         shown: Dict[str, int] = {}
         for row in rows:
             kind = (row.get("how_found") or "").strip()
-            if kind not in ("recorded_at_ingest", "typed_codebook", "package_doc", "name_codebook",
+            if kind not in ("recorded_at_ingest", "recorded_by_review", "typed_codebook", "package_doc", "name_codebook",
                             "readme_names_columns", "doc_names_columns", "name_readme",
                             "questionnaire", "dataverse_ddi"):
                 continue
@@ -2308,7 +2308,8 @@ class IRWTools:
         if out:
             state.add(
                 "source_codebooks are the source's own files: the codebook named by "
-                "whoever built the table (recorded_at_ingest), a document the "
+                "whoever built the table (recorded_at_ingest), a statistics office's "
+                "codebook found by review with its evidence (recorded_by_review), a document the "
                 "repository types as a codebook (typed_codebook), the CRAN help page "
                 "for the dataset (package_doc), a codebook-named "
                 "file (name_codebook), a README whose text names this table's "

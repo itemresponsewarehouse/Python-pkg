@@ -194,6 +194,8 @@ CODEBOOK_LINKS_CSV = (
     "table,url,file_name,host,how_found,n_same_kind_in_deposit,deposit_url,evidence,checked_at\n"
     "alpha_depression,https://example.org/f/1,Codebook.pdf,zenodo,name_codebook,1,https://example.org/d,,2026-10-02\n"
     "alpha_depression,https://example.org/f/9,Codebook_v2.pdf,example.org,recorded_at_ingest,1,,,2026-10-02\n"
+    "alpha_depression,https://www.cis.es/documents/20117/1/MD2913.zip,codigo2913.pdf (inside MD2913.zip),cis.es,"
+    "recorded_by_review,1,,CIS study 2913,2026-10-04\n"
     "alpha_depression,https://ldbase.org/documents/x,Master Codebook,ldbase,typed_codebook,1,,,2026-10-02\n"
     "alpha_depression,https://search.r-project.org/CRAN/refmans/p/html/d.html,p::d,cran,package_doc,1,,,2026-10-02\n"
     "alpha_depression,https://example.org/f/2,README.md,zenodo,readme_names_columns,1,https://example.org/d,"
@@ -229,10 +231,12 @@ def test_source_codebooks_are_listed_with_how_each_was_found():
                         "n_same_kind_in_deposit": 1, "deposit_url": "https://example.org/d",
                         "evidence": None}
     assert books[1]["how_found"] == "recorded_at_ingest"
-    assert [b["how_found"] for b in books[2:4]] == ["typed_codebook", "package_doc"]
-    assert books[4]["how_found"] == "readme_names_columns"
-    assert books[4]["evidence"].startswith("names 4/9")
-    assert [b["how_found"] for b in books[5:7]] == ["doc_names_columns", "questionnaire"]
+    assert books[2]["how_found"] == "recorded_by_review"
+    assert books[2]["evidence"] == "CIS study 2913"
+    assert [b["how_found"] for b in books[3:5]] == ["typed_codebook", "package_doc"]
+    assert books[5]["how_found"] == "readme_names_columns"
+    assert books[5]["evidence"].startswith("names 4/9")
+    assert [b["how_found"] for b in books[6:8]] == ["doc_names_columns", "questionnaire"]
     assert [b["how_found"] for b in books].count("dataverse_ddi") == 5   # capped per kind
     assert any("dataverse_ddi files; the first 5" in w for w in result["warnings"])
     assert any("open a file before relying on it" in w for w in result["warnings"])

@@ -129,7 +129,7 @@ class ColumnInfo(BaseModel):
 class SourceCodebook(BaseModel):
     file_name: str
     url: str
-    how_found: Literal["recorded_at_ingest", "typed_codebook", "package_doc", "name_codebook",
+    how_found: Literal["recorded_at_ingest", "recorded_by_review", "typed_codebook", "package_doc", "name_codebook",
                        "readme_names_columns", "doc_names_columns", "name_readme",
                        "questionnaire", "dataverse_ddi"]
     host: Optional[str] = None
