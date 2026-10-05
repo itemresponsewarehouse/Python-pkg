@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "irw"
-version = "0.7.2"
+version = "0.7.3"
 authors = [
   { name="Hansol Lee", email="hansol@stanford.edu" },
   { name="Ben Domingue", email="bdomingu@stanford.edu" }
