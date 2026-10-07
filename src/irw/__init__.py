@@ -37,6 +37,8 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
+from .utils.conj_long import conj_long
+
 # Export all API functions
 from .api import (
     list_tables,
@@ -94,6 +96,7 @@ __all__ = [
     "save_bibtex",
     "download",
     "long2resp",
+    "conj_long",
     "resp2long",
     "check_resp",
     "get_filters",

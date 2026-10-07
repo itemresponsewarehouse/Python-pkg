@@ -4,7 +4,7 @@ import logging
 import os
 import time
 from typing import Any, List, Optional, Tuple
-from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF
+from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, CONJ_REF
 from .cache import metadata_cache
 from .pins import (
     ABSENT,
@@ -431,5 +431,17 @@ def _init_nom_dataset() -> Any:
         return cached
     
     dataset = _init_dataset(*NOM_REF)
+    metadata_cache.set(cache_key, dataset)
+    return dataset
+
+
+def _init_conj_dataset() -> Any:
+    """Initialize conjoint-experiment dataset (cached)."""
+    cache_key = "conj_dataset" + _pins_fingerprint([CONJ_REF])
+    cached = metadata_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    dataset = _init_dataset(*CONJ_REF)
     metadata_cache.set(cache_key, dataset)
     return dataset

@@ -89,7 +89,7 @@ _NOT_FOUND_PATTERN = re.compile(r"not[_\s]*found", re.IGNORECASE)
 # who never typed them. Ported from Rpkg/R/redivis-errors.R:79, with the nom
 # warehouse added -- R's arm predates irw_nominal being reachable from Python.
 _DATASET_REF_PATTERN = re.compile(
-    r"(?:item_response_warehouse(?:_\d+)?|irw_nominal|irw_simsyn|irw_competitions"
+    r"(?:item_response_warehouse(?:_\d+)?|irw_nominal|irw_simsyn|irw_competitions|irw_conjoint"
     r"|irw_text(?:_\d+)?|irw_meta):[a-z0-9]+",
     re.IGNORECASE,
 )
