@@ -406,7 +406,8 @@ def itemtext(table_name: str) -> Union[pd.DataFrame, str]:
 
 def save_bibtex(
     table_names: Union[str, List[str]], 
-    output_file: Optional[str] = None
+    output_file: Optional[str] = None,
+    source: str = "main",
 ) -> List[str]:
     """
     Get/save BibTeX entries for one or more IRW tables.
@@ -426,6 +427,10 @@ def save_bibtex(
         Single table name or list of table names for which BibTeX entries are generated.
     output_file : str, optional
         File path to save BibTeX entries. If None, returns entries instead.
+    source : str, default "main"
+        Which warehouse the tables are in: "main", "nom", "sim", "comp" or
+        "conj". Each source has its own bibliography, so a table is only found
+        under its own source (as in R's ``irw_save_bibtex(source = )``).
         
     Returns
     -------
@@ -441,6 +446,9 @@ def save_bibtex(
     >>> 
     >>> # Save BibTeX for multiple tables to file
     >>> irw.save_bibtex(["agn_kay_2025", "pks_probability"], "refs.bib")
+    >>>
+    >>> # A table from another source
+    >>> irw.save_bibtex("kreps_2020_covid_vaccine", source="conj")
     """
     import re
     import urllib.request
@@ -460,8 +468,8 @@ def save_bibtex(
     from .utils.redivis.table_metadata import get_biblio_table
     from .utils.redivis.table_metadata import _get_existing_tables
     
-    biblio_df = get_biblio_table()
-    existing_tables = _get_existing_tables()
+    biblio_df = get_biblio_table(source)
+    existing_tables = _get_existing_tables(source)
     
     # Process each table name
     for table_name in table_names:

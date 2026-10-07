@@ -109,6 +109,7 @@ irw.filter(source="comp", n_actors=[2, 10])  # R's irw_filter_comp()
 
 # Get BibTeX citation
 irw.save_bibtex("agn_kay_2025")  # Returns BibTeX entry
+irw.save_bibtex("amboseli_baboons_g1", source="comp")  # any source: main, nom, sim, comp, conj
 # Download table
 irw.download("agn_kay_2025", path="data.csv")
 
