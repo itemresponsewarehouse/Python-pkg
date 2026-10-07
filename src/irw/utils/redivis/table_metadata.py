@@ -28,6 +28,7 @@ from .datasets import (
     _init_dataset,
     _init_main_datasets,
     _init_nom_dataset,
+    _init_conj_dataset,
     _init_sim_dataset,
     _main_datasets_cache_key,
 )
@@ -42,6 +43,17 @@ def _check_source(source: str) -> Dict[str, str]:
             + ", ".join(f"'{s}'" for s in SOURCES)
         )
     return SOURCE_META_TABLES[source]
+
+
+def _meta_table(source: str, kind: str) -> str:
+    """The irw_meta table holding `kind` ("metadata"/"biblio") for `source`."""
+    tables = _check_source(source)
+    if kind not in tables:
+        raise ValueError(
+            f"{kind} is not available for source '{source}' yet: it is not published "
+            f"to irw_meta. list_tables(source='{source}') and fetch(..., source='{source}') work."
+        )
+    return tables[kind]
 
 
 def _check_tag_source(source: str) -> None:
@@ -78,7 +90,13 @@ def _source_datasets(source: str) -> List[Any]:
         return [_init_nom_dataset()]
     if source == "sim":
         return [_init_sim_dataset()]
-    return [_init_comp_dataset()]
+    if source == "conj":
+        return [_init_conj_dataset()]
+    if source == "comp":
+        return [_init_comp_dataset()]
+    # Unreachable while _check_source() guards SOURCES; kept explicit so a new
+    # source can never fall through to the competitions dataset again.
+    raise ValueError(f"No dataset configured for source '{source}'.")
 
 
 def _get_meta_dataset() -> Any:
@@ -143,7 +161,7 @@ def get_metadata_table(source: str = "main") -> pd.DataFrame:
     pd.DataFrame
         Metadata information for the source's tables.
     """
-    table_name = _check_source(source)["metadata"]
+    table_name = _meta_table(source, "metadata")
     cache_key = _meta_cache_key("metadata", source)
     dataset = _get_meta_dataset()
     latest_version_tag = _cache_version(_dataset_version_tag(dataset))
@@ -367,7 +385,7 @@ def get_biblio_table(source: str = "main") -> pd.DataFrame:
     pd.DataFrame
         Bibliography information for the source's tables.
     """
-    table_name = _check_source(source)["biblio"]
+    table_name = _meta_table(source, "biblio")
     cache_key = _meta_cache_key("biblio", source)
     dataset = _get_meta_dataset()
     latest_version_tag = _cache_version(_dataset_version_tag(dataset))

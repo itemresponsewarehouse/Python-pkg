@@ -24,7 +24,7 @@ import warnings
 import datetime
 from typing import Optional, Union, Dict, List, Literal, Tuple
 import pandas as pd
-from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset
+from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_dataset
 from .utils.redivis.item_text import _list_itemtext_tables, _itemtext_disclaimer
 from .utils.redivis.source_note import _source_note, disable_source_note as disable_source_note, aggregator_bibtex
 from .utils.long2resp import long2resp as _long2resp
@@ -76,8 +76,10 @@ def _get_datasets(source: str = "main"):
         return [_init_comp_dataset()]
     elif source == "nom":
         return [_init_nom_dataset()]
+    elif source == "conj":
+        return [_init_conj_dataset()]
     else:
-        raise ValueError(f"Unknown source '{source}'. Must be one of: 'main', 'sim', 'comp', 'nom'")
+        raise ValueError(f"Unknown source '{source}'. Must be one of: 'main', 'sim', 'comp', 'nom', 'conj'")
 
 
 def list_tables(source: str = "main", include_metadata: bool = False) -> pd.DataFrame:
@@ -160,7 +162,8 @@ def info(table_name: Optional[str] = None, source: str = "main", return_dict: bo
             "main": "IRW Database Information",
             "sim": "IRW Simulation Database Information",
             "comp": "IRW Competition Database Information",
-            "nom": "IRW Nominal Response Database Information"
+            "nom": "IRW Nominal Response Database Information",
+            "conj": "IRW Conjoint Database Information"
         }.get(source, "IRW Database Information")
         return info_for(datasets, title=title)
     else:

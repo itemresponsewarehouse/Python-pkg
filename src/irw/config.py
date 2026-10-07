@@ -30,6 +30,12 @@ COMP_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_competitions:cmd7")
 # collections() must keep erroring for it rather than returning an empty frame.
 NOM_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_nominal:614n")
 
+# Conjoint experiments (experimental): one row per respondent x task x profile,
+# no item/resp (see conj_long()). Its metadata and biblio are not published to
+# irw_meta yet, so SOURCE_META_TABLES["conj"] is empty and asking for them
+# raises rather than reading a table that does not exist.
+CONJ_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_conjoint:5wjx")
+
 # Main IRW metadata dataset references (only for main IRW)
 META_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_meta:bdxt")
 
@@ -70,7 +76,7 @@ META_TABLES: ClassVar[dict[str, str]] = {
 }
 
 # The table sources, in Python's spelling (R calls "main" "core").
-SOURCES: Tuple[str, ...] = ("main", "nom", "sim", "comp")
+SOURCES: Tuple[str, ...] = ("main", "nom", "sim", "comp", "conj")
 
 # Each source's metadata, tags and bibliography tables in irw_meta, by bare name
 # for the reason given above META_TABLES. A source with no "tags" entry has no
@@ -81,6 +87,7 @@ SOURCE_META_TABLES: ClassVar[dict[str, dict[str, str]]] = {
     "nom": {"metadata": "nominal_metadata", "tags": "nominal_tags", "biblio": "nominal_biblio"},
     "sim": {"metadata": "simsyn_metadata", "biblio": "simsyn_biblio"},
     "comp": {"metadata": "comps_metadata", "biblio": "comps_biblio"},
+    "conj": {},
 }
 
 # Rpkg's .irw_tag_sources and .irw_collection_sources. Code tests membership
@@ -101,7 +108,7 @@ PACKAGE_NAME: str = "irw"
 # the briefing's `pip install git+...` line resolves the version, sees it
 # already installed and SKIPS -- even with --upgrade -- so an unchanged version
 # string means users silently keep the old code.
-VERSION: str = "0.7.3"
+VERSION: str = "0.7.4"
 DESCRIPTION: str = "A Python package for the Item Response Warehouse (IRW)"
 
 __all__ = [
@@ -109,6 +116,7 @@ __all__ = [
     "SIM_REF", 
     "COMP_REF",
     "NOM_REF",
+    "CONJ_REF",
     "META_REF",
     "ITEMTEXT_REFS",
     "META_TABLES",
