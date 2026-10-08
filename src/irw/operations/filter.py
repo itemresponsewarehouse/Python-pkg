@@ -13,6 +13,7 @@ from ..operations.list_tables import list_tables, IRWMetadataUnavailable
 NUMERIC_FILTERS = frozenset({
     'n_responses', 'n_categories', 'n_participants', 'n_items',
     'responses_per_participant', 'responses_per_item', 'density', 'n_actors',
+    'n_respondents', 'n_attributes',
 })
 BOOLEAN_FILTERS = frozenset({'longitudinal', 'has_item_text'})
 
@@ -26,6 +27,13 @@ TAG_FILTERS = (
 # there.
 COMP_FILTERS = ('n_responses', 'n_actors', 'license')
 COMP_ONLY_FILTERS = ('n_actors',)
+# The conjoint source (Rpkg's irw_filter(source = "conj")), over conj_metadata:
+# n_respondents/n_attributes ranges; outcome "choice"/"rating" (the table has
+# EVERY type named; choice_<name>/rating_<name> count as their type); country
+# ISO codes (fielded in ANY; a pooled "AT;DE;GB" counts for each); license.
+CONJ_FILTERS = ('n_respondents', 'n_attributes', 'outcome', 'country', 'license')
+CONJ_ONLY_FILTERS = ('n_respondents', 'n_attributes', 'outcome', 'country')
+CONJ_OUTCOMES = ('choice', 'rating')
 
 # The column each filter reads in list_tables(); a filter not named here reads
 # the column of its own name.
@@ -263,11 +271,18 @@ def _check_filters_for_source(source: str, supplied: dict) -> None:
     Each is an error rather than an empty result: an empty result is
     indistinguishable from "nothing matched".
     """
-    if source == 'conj':
+    conj_only = [name for name in CONJ_ONLY_FILTERS if name in supplied]
+    if conj_only and source != 'conj':
         raise ValueError(
-            "filter() is not available for source='conj' yet: its filters have not been "
-            "chosen. irw.metadata(source='conj') returns the per-table design facts "
-            "to select on by hand.")
+            "These filters are only available when source='conj': "
+            f"{', '.join(conj_only)}.")
+    if source == 'conj':
+        unsupported = [name for name in supplied if name not in CONJ_FILTERS]
+        if unsupported:
+            raise ValueError(
+                "These filters are not available for source='conj': "
+                f"{', '.join(unsupported)}. Conjoint filters: {', '.join(CONJ_FILTERS)}.")
+        return
 
     actors = [name for name in COMP_ONLY_FILTERS if name in supplied]
     if actors and source != 'comp':
@@ -320,6 +335,10 @@ def filter_tables(
     license: Optional[Union[str, List[str]]] = None,
     collection: Optional[Union[str, List[str]]] = None,
     n_actors: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
+    n_respondents: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
+    n_attributes: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
+    outcome: Optional[Union[str, List[str]]] = None,
+    country: Optional[Union[str, List[str]]] = None,
     source: str = "main",
 ) -> pd.Series:
     """
@@ -433,8 +452,21 @@ def filter_tables(
     n_actors : float, int, or list of length 1 or 2, optional
         Filter competition tables by number of actors. Only for source="comp".
 
+    n_respondents, n_attributes : float, int, or list of length 1 or 2, optional
+        Conjoint only (source="conj"): number of respondents; number of
+        attributes varied on each profile.
+
+    outcome : str or list of str, optional
+        Conjoint only: "choice" and/or "rating". Keeps tables that have every
+        type named, so a table with both matches either.
+
+    country : str or list of str, optional
+        Conjoint only: ISO 3166 alpha-2 codes (e.g. "US"). Keeps tables fielded
+        in any of them; a table pooling several countries matches each.
+
     source : str, default "main"
-        Table source: "main", "nom", "sim" or "comp".
+        Table source: "main", "nom", "sim", "comp" or "conj". "conj" takes only
+        n_respondents, n_attributes, outcome, country and license.
 
     Returns
     -------
@@ -470,6 +502,7 @@ def filter_tables(
     >>> # Other sources
     >>> filtered = irw.filter(source="nom", construct_type="Cognitive/educational", density=None)
     >>> filtered = irw.filter(source="comp", n_actors=[2, 10])
+    >>> filtered = irw.filter(source="conj", outcome="rating", country=["US", "GB"])
     """
     params = dict(locals())
     supplied = {
@@ -488,6 +521,9 @@ def filter_tables(
     for filter_name, filter_value in supplied.items():
         validate_filter_value(filter_name, filter_value)
     _check_filters_for_source(source, supplied)
+    if source == 'conj':
+        return _filter_conj(n_respondents=n_respondents, n_attributes=n_attributes,
+                            outcome=outcome, country=country, license=license)
 
     # Get all tables with metadata
     df = list_tables(datasets, source=source)
@@ -605,3 +641,54 @@ def filter_tables(
     
     result = df['name'].sort_values().reset_index(drop=True)
     return result
+
+
+def _as_list(value):
+    return [value] if isinstance(value, str) else list(value)
+
+
+def _filter_conj(n_respondents=None, n_attributes=None, outcome=None, country=None,
+                 license=None) -> pd.Series:
+    """filter(source="conj"): the conjoint filters over conj_metadata and conj_biblio."""
+    from ..utils.redivis.table_metadata import get_biblio_table, get_metadata_table
+
+    meta = get_metadata_table("conj").copy()
+    need = ["table", "n_respondents", "n_attributes", "outcomes", "country"]
+    missing = [c for c in need if c not in meta.columns]
+    if missing:
+        raise IRWMetadataUnavailable(
+            f"conj_metadata lacks column(s) {', '.join(missing)}; cannot filter source='conj'.")
+
+    if license is not None:
+        bib = get_biblio_table("conj")
+        keep = bib["table"][bib["Derived_License"].isin(_as_list(license))]
+        meta = meta[meta["table"].isin(keep)]
+
+    if outcome is not None:
+        wanted = _as_list(outcome)
+        bad = [o for o in wanted if o not in CONJ_OUTCOMES]
+        if bad:
+            raise ValueError(f"outcome must be 'choice' and/or 'rating', not: {', '.join(bad)}.")
+        types = meta["outcomes"].fillna("").map(
+            lambda s: {o.split("_", 1)[0] for o in s.split(";") if o})
+        meta = meta[types.map(lambda t: all(o in t for o in wanted))]
+
+    if country is not None:
+        wanted = {c.upper() for c in _as_list(country)}
+        has = meta["country"].fillna("").map(lambda s: {c.upper() for c in s.split(";")})
+        meta = meta[has.map(lambda h: bool(h & wanted))]
+
+    for name, rng in (("n_respondents", n_respondents), ("n_attributes", n_attributes)):
+        if rng is None:
+            continue
+        values = rng if isinstance(rng, list) else [rng]
+        lo, hi = (values[0], values[0]) if len(values) == 1 else values
+        col = pd.to_numeric(meta[name], errors="coerce")
+        keep = col.notna()
+        if lo is not None:
+            keep &= col >= lo
+        if hi is not None:
+            keep &= col <= hi
+        meta = meta[keep]
+
+    return pd.Series(sorted(meta["table"].unique()), dtype=str, name="name")

@@ -68,14 +68,51 @@ def test_metadata_is_public_and_takes_a_source(monkeypatch):
     assert seen == ["conj", "main"]
 
 
-def test_conj_filters_are_refused_not_skipped():
+def _fake_conj(monkeypatch):
+    import irw.utils.redivis.table_metadata as tm
+    meta = pd.DataFrame({
+        "table": ["a_us_choice", "b_pooled_both", "c_gb_rating", "d_named"],
+        "n_respondents": [300, 18000, 900, 2000], "n_attributes": [4, 9, 6, 11],
+        "outcomes": ["choice", "choice;rating", "rating", "choice_neighbor;rating_neighbor"],
+        "country": ["US", "AT;DE;GB", "GB", "TR"]})
+    bib = pd.DataFrame({"table": list(meta.table),
+                        "Derived_License": ["CC0 1.0", "CC0 1.0", "CC BY 4.0", "CC0 1.0"]})
+    monkeypatch.setattr(tm, "get_metadata_table", lambda source="main": meta)
+    monkeypatch.setattr(tm, "get_biblio_table", lambda source="main": bib)
+
+
+def test_conj_filters(monkeypatch):
+    from irw.operations.filter import filter_tables
+    _fake_conj(monkeypatch)
+
+    def f(**kw):
+        return list(filter_tables([], source="conj", **kw))
+
+    assert f() == ["a_us_choice", "b_pooled_both", "c_gb_rating", "d_named"]
+    assert f(outcome="rating") == ["b_pooled_both", "c_gb_rating", "d_named"]
+    assert f(outcome=["choice", "rating"]) == ["b_pooled_both", "d_named"]
+    assert f(country="gb") == ["b_pooled_both", "c_gb_rating"]
+    assert f(n_respondents=[1000, None]) == ["b_pooled_both", "d_named"]
+    assert f(n_attributes=9) == ["b_pooled_both"]
+    assert f(license="CC BY 4.0") == ["c_gb_rating"]
+    assert f(country="US", outcome="rating") == []
+    with pytest.raises(ValueError, match="choice"):
+        f(outcome="vote")
+
+
+def test_conj_and_other_filters_do_not_cross():
     from irw.operations.filter import _check_filters_for_source
     from irw.operations.filter_info import get_filters
     with pytest.raises(ValueError, match="not available for source='conj'"):
-        _check_filters_for_source("conj", {"n_responses": [0, 10]})
-    with pytest.raises(ValueError, match="not available for source='conj'"):
-        _check_filters_for_source("conj", {})
-    assert get_filters("conj") == []
+        _check_filters_for_source("conj", {"n_items": [5, 10]})
+    with pytest.raises(ValueError, match="only available when source='conj'"):
+        _check_filters_for_source("main", {"country": "US"})
+    with pytest.raises(ValueError, match="only available when source='conj'"):
+        _check_filters_for_source("comp", {"outcome": "choice"})
+    _check_filters_for_source("conj", {"country": "US", "license": "CC0 1.0"})
+    assert get_filters("conj") == ["license", "n_respondents", "n_attributes", "outcome", "country"]
+    assert "country" not in get_filters("main") and "outcome" not in get_filters("nom")
+
 
 
 def test_conj_biblio_is_conj_biblio():
