@@ -90,7 +90,7 @@ def list_tables(source: str = "main", include_metadata: bool = False) -> pd.Data
     Parameters
     ----------
     source : str, default "main"
-        Dataset source to use. Options: "main", "sim", "comp", "nom"
+        The data family. Options: "main" (core), "sim", "comp", "nom"
     include_metadata : bool, default False
         If True and source="main", return enriched IRW metadata.
         If False, return basic Redivis properties.
@@ -121,7 +121,7 @@ def metadata(source: str = "main") -> pd.DataFrame:
     Parameters
     ----------
     source : str, default "main"
-        "main", "nom", "sim", "comp" or "conj".
+        The data family: "main" (core), "nom", "sim", "comp" or "conj".
 
     Returns
     -------
@@ -143,7 +143,7 @@ def filter(*, source: str = "main", **kwargs) -> pd.Series:
     Parameters
     ----------
     source : str, default "main"
-        Dataset source to filter. Options: "main", "nom", "sim", "comp", "conj".
+        The data family to filter. Options: "main", "nom", "sim", "comp", "conj".
         Tag filters need "main" or "nom"; `collection` needs "main"; "comp"
         takes only `n_responses`, `n_actors` and `license`; "conj" takes only
         `n_respondents`, `n_attributes`, `outcome`, `country` and `license`. A filter the
@@ -176,8 +176,8 @@ def info(table_name: Optional[str] = None, source: str = "main", return_dict: bo
     table_name : str, optional
         If provided, returns info for that table. If None, returns database info.
     source : str, default "main"
-        Dataset source: "main", "nom", "sim", "comp" or "conj". For a table,
-        its source's own metadata columns and bibliography are shown (R's
+        The data family: "main" (core), "nom", "sim", "comp" or "conj". For a
+        table, its family's own metadata columns and bibliography are shown (R's
         ``irw_info(table, source = )``).
     return_dict : bool, default False
         If True and table_name provided, returns dictionary instead of formatted string.
@@ -234,7 +234,7 @@ def fetch(
     table_name : str or list of str
         Single table name or list of table names.
     source : str, default "main"
-        Dataset source to use. Options: "main", "sim", "comp", "nom".
+        The data family. Options: "main" (core), "sim", "comp", "nom".
     dedup : bool, default False
         Apply deduplication to responses.
     wide : bool, default False
@@ -345,7 +345,7 @@ def table_sets(
     table_name : str
         Name of a single IRW table.
     source : str, default "main"
-        Dataset source to use. Options: "main", "sim", "comp", "nom".
+        The data family. Options: "main" (core), "sim", "comp", "nom".
     per_item : bool, default False
         If True, also return a per-item summary. One extra query; the result
         has one row per distinct item.
@@ -458,9 +458,9 @@ def save_bibtex(
     output_file : str, optional
         File path to save BibTeX entries. If None, returns entries instead.
     source : str, default "main"
-        Which warehouse the tables are in: "main", "nom", "sim", "comp" or
-        "conj". Each source has its own bibliography, so a table is only found
-        under its own source (as in R's ``irw_save_bibtex(source = )``).
+        The data family the tables are in: "main" (core), "nom", "sim",
+        "comp" or "conj". Each family has its own bibliography, so a table is
+        only found under its own family (as in R's ``irw_save_bibtex(source = )``).
         
     Returns
     -------
@@ -719,8 +719,8 @@ def get_filters(source: str = "main") -> List[str]:
     Parameters
     ----------
     source : str, default "main"
-        Dataset source. Options: "main", "nom", "sim", "comp". Filters the
-        source refuses outright are left out.
+        The data family. Options: "main" (core), "nom", "sim", "comp". Filters
+        the family refuses outright are left out.
     
     Returns
     -------
@@ -745,8 +745,8 @@ def describe_filter(filter_name: str, source: str = "main") -> Optional[Dict]:
     filter_name : str
         Name of the filter to describe.
     source : str, default "main"
-        Dataset source whose values to report. Options: "main", "nom",
-        "sim", "comp". Raises ValueError for a filter the source refuses,
+        The data family whose values to report. Options: "main" (core),
+        "nom", "sim", "comp". Raises ValueError for a filter the family refuses,
         e.g. a tag filter for "sim" or "comp".
         
     Returns

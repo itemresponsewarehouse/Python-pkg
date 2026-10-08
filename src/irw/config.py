@@ -30,11 +30,11 @@ COMP_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_competitions:cmd7")
 # collections() must keep erroring for it rather than returning an empty frame.
 NOM_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_nominal:614n")
 
-# Conjoint experiments (experimental): one row per respondent x task x profile,
-# no item/resp (see conj_long()). irw_meta publishes its conj_metadata (design
-# counts and design facts per experiment -- its own shape, as every non-main
-# source has) and conj_biblio. filter() refuses conj until its filters are
-# chosen (operations/filter.py).
+# Conjoint experiments: one row per respondent x task x profile, no item/resp
+# (see conj_long()). irw_meta publishes its conj_metadata (design counts and
+# design facts per experiment -- its own shape, as every family outside main
+# has) and conj_biblio; filter() takes its own conj filters
+# (operations/filter.py).
 CONJ_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_conjoint:5wjx")
 
 # Main IRW metadata dataset references (only for main IRW)
