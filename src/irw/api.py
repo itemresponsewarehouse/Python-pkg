@@ -143,9 +143,10 @@ def filter(*, source: str = "main", **kwargs) -> pd.Series:
     Parameters
     ----------
     source : str, default "main"
-        Dataset source to filter. Options: "main", "nom", "sim", "comp".
+        Dataset source to filter. Options: "main", "nom", "sim", "comp", "conj".
         Tag filters need "main" or "nom"; `collection` needs "main"; "comp"
-        takes only `n_responses`, `n_actors` and `license`. A filter the
+        takes only `n_responses`, `n_actors` and `license`; "conj" takes only
+        `n_respondents`, `n_attributes`, `outcome`, `country` and `license`. A filter the
         source cannot answer raises ValueError rather than matching nothing.
     **kwargs
         Filter parameters (n_responses, construct_type, etc.). See

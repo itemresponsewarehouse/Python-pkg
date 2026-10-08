@@ -14,6 +14,8 @@ from ..utils.redivis.item_text import _list_itemtext_tables
 from ..operations.list_tables import _build_base_table_list
 from ..operations.filter import (
     COMP_FILTERS,
+    CONJ_FILTERS,
+    CONJ_ONLY_FILTERS,
     COMP_ONLY_FILTERS,
     TAG_FILTERS,
     _check_filters_for_source,
@@ -45,6 +47,10 @@ FILTER_DESCRIPTIONS = {
     'license': 'Dataset license type (e.g., "CC BY 4.0"). Use a single string or a list of strings for OR logic.',
     'collection': 'Collection membership (e.g., "rct", "big_five", "depression"). Collections are labelled groupings of IRW tables -- study designs, instrument families and constructs. A table can be in several at once. Use a single string or a list of strings for OR logic (the union, not the intersection). See irw.collections() for what exists, and note the coverage column: collections derived from tags searched only ~62% of tables, so they are not exhaustive.',
     'n_actors': 'Number of actors in a competition table. Competition source only (source="comp"). Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
+    'n_respondents': 'Number of respondents in a conjoint table. Conjoint source only (source="conj"). Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
+    'n_attributes': 'Number of attributes varied on each conjoint profile. Conjoint source only (source="conj"). A single number or a list [min, max].',
+    'outcome': 'Conjoint outcome type: "choice" and/or "rating". Conjoint source only (source="conj"). Keeps tables that have every type named, so a table with both matches either.',
+    'country': 'Country a conjoint table was fielded in, as ISO 3166 alpha-2 codes (e.g. "US"). Conjoint source only (source="conj"). A single string or a list (OR logic); a table pooling several countries matches each.',
 }
 
 
@@ -83,8 +89,9 @@ def get_filters(source: str = "main") -> List[str]:
     if source == "comp":
         return [name for name in FILTER_DESCRIPTIONS if name in COMP_FILTERS]
     if source == "conj":
-        return []          # filter() refuses conj until its filters are chosen
-    names = [name for name in FILTER_DESCRIPTIONS if name not in COMP_ONLY_FILTERS]
+        return [name for name in FILTER_DESCRIPTIONS if name in CONJ_FILTERS]
+    names = [name for name in FILTER_DESCRIPTIONS
+             if name not in COMP_ONLY_FILTERS and name not in CONJ_ONLY_FILTERS]
     if source not in TAG_SOURCES:
         names = [name for name in names if name not in TAG_FILTERS]
     if source not in COLLECTION_SOURCES:
@@ -187,6 +194,8 @@ def describe_filter(datasets: List, filter_name: str, source: str = "main") -> O
         'responses_per_item',
         'density',
         'n_actors',
+        'n_respondents',
+        'n_attributes',
     ]
     
     if filter_name in numeric_filters:
@@ -216,6 +225,22 @@ def describe_filter(datasets: List, filter_name: str, source: str = "main") -> O
         }
         return result
     
+    # Conjoint outcome/country: tables per value, from conj_metadata
+    if filter_name in ('outcome', 'country'):
+        meta = get_metadata_table(source)
+        col = 'outcomes' if filter_name == 'outcome' else 'country'
+        if meta.empty or col not in meta.columns:
+            return None
+        values = meta[col].fillna('').map(
+            lambda s: sorted({(v.split('_', 1)[0] if filter_name == 'outcome' else v.upper())
+                              for v in s.split(';') if v}))
+        counts = values.explode().dropna().value_counts()
+        result_df = counts.reset_index()
+        result_df.columns = ['value', 'count']
+        result_df = result_df.sort_values(['count', 'value'], ascending=[False, True])
+        result['values'] = pd.Series(result_df['count'].values, index=result_df['value'].values, name=filter_name)
+        return result
+
     # Categorical/tag filters - only need tags table
     categorical_filters = [
         'construct_type',
