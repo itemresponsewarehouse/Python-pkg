@@ -84,7 +84,10 @@ def _fake_conj(monkeypatch):
 def test_conj_filters(monkeypatch):
     from irw.operations.filter import filter_tables
     _fake_conj(monkeypatch)
-    f = lambda **kw: list(filter_tables([], source="conj", **kw))
+
+    def f(**kw):
+        return list(filter_tables([], source="conj", **kw))
+
     assert f() == ["a_us_choice", "b_pooled_both", "c_gb_rating", "d_named"]
     assert f(outcome="rating") == ["b_pooled_both", "c_gb_rating", "d_named"]
     assert f(outcome=["choice", "rating"]) == ["b_pooled_both", "d_named"]
