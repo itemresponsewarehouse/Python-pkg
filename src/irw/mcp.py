@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 _PACKAGE_CALL_LOCK = threading.RLock()
 
 SOURCE = "main"
+from .config import SOURCES  # noqa: E402  (main first: a table is looked up there first)
 # The card returned per search hit. The full metadata record runs ~220 tokens,
 # so a default page of 20 spent ~5.5k of the assistant's context and a maximum
 # page ~28k -- most of it the `variables` string and the bibliography, which
@@ -197,7 +198,12 @@ class IRWMCPError(RuntimeError):
 
 
 class IRWBackend(Protocol):
-    """The package calls needed by the MCP adapter."""
+    """The package calls needed by the MCP adapter.
+
+    `source` is passed only for a table outside main ("nom", "sim", "comp",
+    "conj"), so a backend written before sources existed keeps working for
+    main. `source_of` is optional: without it every table is main.
+    """
 
     def list_tables(self) -> pd.DataFrame: ...
 
@@ -308,11 +314,36 @@ class PackageBackend:
         # refreshing five minutes early would need `+`). See irw#2157.
         raise IRWMCPError("authentication_required", AUTH_EXPIRED_MESSAGE)
 
-    def list_tables(self) -> pd.DataFrame:
-        return irw.list_tables(source=SOURCE, include_metadata=True)
+    def list_tables(self, source: str = SOURCE) -> pd.DataFrame:
+        if source == SOURCE:
+            return irw.list_tables(source=SOURCE, include_metadata=True)
+        # A non-main source has no combined catalogue in the package: its own
+        # metadata row per table, plus the biblio fields search reads.
+        from .utils.redivis.table_metadata import get_biblio_table
 
-    def describe_table(self, table_name: str) -> Any:
-        return irw.info(table_name, source=SOURCE, return_dict=True)
+        meta = irw.metadata(source=source)
+        keep = ("table", "Description", "Derived_License", "Original_License",
+                "DOI__for_paper_", "Reference_x")
+        bib = get_biblio_table(source)
+        bib = bib[[c for c in keep if c in bib.columns]]
+        frame = meta.merge(bib, on="table", how="left") if "table" in bib.columns else meta
+        return frame.rename(columns={"table": "name"})
+
+    def source_of(self, table_name: str) -> Optional[str]:
+        """The source holding a table, or None. Names are unique across sources."""
+        from .utils.redivis.table_metadata import _get_existing_tables
+
+        key = table_name.lower()
+        for source in SOURCES:
+            try:
+                if key in _get_existing_tables(source):
+                    return source
+            except Exception:
+                continue
+        return None
+
+    def describe_table(self, table_name: str, source: str = SOURCE) -> Any:
+        return irw.info(table_name, source=source, return_dict=True)
 
     def fetch_table(
         self,
@@ -322,10 +353,11 @@ class PackageBackend:
         dedup: bool,
         max_rows: Optional[int] = None,
         columns: Optional[List[str]] = None,
+        source: str = SOURCE,
     ) -> Any:
         return irw.fetch(
             table_name,
-            source=SOURCE,
+            source=source,
             wide=wide,
             dedup=dedup,
             max_rows=max_rows,
@@ -370,8 +402,8 @@ class PackageBackend:
     def collections(self) -> pd.DataFrame:
         return irw.collections()
 
-    def citation(self, table_name: str) -> List[str]:
-        return irw.save_bibtex(table_name)
+    def citation(self, table_name: str, source: str = SOURCE) -> List[str]:
+        return irw.save_bibtex(table_name, source=source)
 
     def version_stamp(self) -> Optional[Tuple[int, str]]:
         from .operations.version import current_version
@@ -1508,6 +1540,7 @@ class IRWTools:
         filters: Optional[Mapping[str, Any]] = None,
         limit: int = SEARCH_DEFAULT_LIMIT,
         offset: int = 0,
+        source: str = SOURCE,
     ) -> Dict[str, Any]:
         """Free-text search over the catalogue, narrowed by `irw.filter()`.
 
@@ -1523,6 +1556,16 @@ class IRWTools:
         query = _validate_text(query, "query", allow_empty=True)
         if query and not re.search(r"\w", query, flags=re.UNICODE):
             raise IRWMCPError("invalid_input", "query must contain searchable letters or numbers.")
+        if source not in SOURCES:
+            raise IRWMCPError(
+                "invalid_input",
+                f"source must be one of {', '.join(SOURCES)}, not '{source}'.")
+        if source != SOURCE and filters:
+            raise IRWMCPError(
+                "invalid_input",
+                f"filters are available for source='main' only in this server. For "
+                f"source='{source}', search by query, or use the Python package's "
+                f"irw.filter(source='{source}', ...).")
         selected = self._validate_filters(filters)
         limit = _validate_limit(limit, SEARCH_DEFAULT_LIMIT, SEARCH_MAX_LIMIT)
         offset = _validate_offset(offset)
@@ -1559,7 +1602,8 @@ class IRWTools:
                     }
                 )
 
-        frame, package_warnings = self._call(self.backend.list_tables)
+        frame, package_warnings = self._call(
+            self.backend.list_tables, **self._source_kwargs(source))
         if not isinstance(frame, pd.DataFrame):
             raise IRWMCPError(
                 "serialization_error", "IRW catalogue was not returned as a table."
@@ -1619,9 +1663,13 @@ class IRWTools:
         matches.sort(key=lambda item: (-item[0], item[1]))
         total = len(matches)
         page = [card for _, _, card in matches[offset : offset + limit]]
+        if source != SOURCE:
+            # Only main and nom carry tags, and nom's are not in this listing:
+            # an "untagged" count here would describe the listing, not the data.
+            n_untagged = None
         return self._stamp(
             {
-                "source": SOURCE,
+                "source": source,
                 "tables": page,
                 "total": total,
                 "offset": offset,
@@ -1701,9 +1749,33 @@ class IRWTools:
             }
         return self._filter_descriptions.get(filter_name)
 
+    def _source_for(self, table_name: str) -> str:
+        """Which source holds a table: main unless the backend says otherwise.
+
+        Table names are unique across sources (red_up refuses a name used in
+        another), so the name is enough. A table found nowhere stays main, and
+        the call reports not_found exactly as before.
+        """
+        lookup = getattr(self.backend, "source_of", None)
+        if lookup is None:
+            return SOURCE
+        cache = self.__dict__.setdefault("_source_cache", {})
+        key = table_name.casefold()
+        if key not in cache:
+            found, _ = self._call(lookup, table_name)
+            cache[key] = found if found in SOURCES else SOURCE
+        return cache[key]
+
+    @staticmethod
+    def _source_kwargs(source: str) -> Dict[str, Any]:
+        """Pass `source` only off main, so a main-only backend keeps working."""
+        return {} if source == SOURCE else {"source": source}
+
     def describe_table(self, table_name: str) -> Dict[str, Any]:
         table_name = _validate_table_name(table_name)
-        details, package_warnings = self._call(self.backend.describe_table, table_name)
+        source = self._source_for(table_name)
+        details, package_warnings = self._call(
+            self.backend.describe_table, table_name, **self._source_kwargs(source))
         if details is None or details == {}:
             raise IRWMCPError(
                 "not_found", f"No metadata was found for table '{table_name}'."
@@ -1717,7 +1789,7 @@ class IRWTools:
         schema = metadata.get("schema") or metadata.get("columns")
         return self._stamp(
             {
-                "source": SOURCE,
+                "source": source,
                 "table": table_name,
                 "metadata": dict(metadata),
                 "schema": schema,
@@ -1789,6 +1861,14 @@ class IRWTools:
         columns = _validate_columns(columns)
         wide = _validate_bool(wide, "wide")
         dedup = _validate_bool(dedup, "dedup")
+        source = self._source_for(table_name)
+        if source != SOURCE and (wide or dedup):
+            raise IRWMCPError(
+                "invalid_input",
+                f"'{table_name}' is in the '{source}' source; wide and dedup are only "
+                "available for core IRW tables (id/item/resp) in this server. Fetch "
+                "the raw rows, or use the Python package.",
+            )
 
         # The page is bounded on the wire, not after the download: irw.fetch()
         # takes max_rows and columns and hands both to Redivis's read session,
@@ -1801,7 +1881,8 @@ class IRWTools:
         # reshapes whatever rows it is handed. Capping either produces a
         # confident, wrong-shaped answer, so those keep the catalogue
         # pre-check instead.
-        facts = self._catalogue().get(table_name.casefold())
+        facts = (self._catalogue().get(table_name.casefold())
+                 if source == SOURCE else None)
         guard_warnings: List[str] = []
 
         # Column names now go to Redivis, which rejects an unknown one with a
@@ -1859,6 +1940,7 @@ class IRWTools:
             dedup=dedup,
             max_rows=max_rows,
             columns=None if wide else columns,
+            **self._source_kwargs(source),
         )
         if frame is None:
             raise IRWMCPError("not_found", f"Table '{table_name}' was not found.")
@@ -1904,7 +1986,7 @@ class IRWTools:
                 )
             )
         payload.update(
-            {"source": SOURCE, "table": table_name, "wide": wide, "dedup": dedup}
+            {"source": source, "table": table_name, "wide": wide, "dedup": dedup}
         )
         return self._stamp(payload)
 
@@ -2011,7 +2093,9 @@ class IRWTools:
 
     def get_citation(self, table_name: str) -> Dict[str, Any]:
         table_name = _validate_table_name(table_name)
-        entries, package_warnings = self._call(self.backend.citation, table_name)
+        source = self._source_for(table_name)
+        entries, package_warnings = self._call(
+            self.backend.citation, table_name, **self._source_kwargs(source))
         state = _ConversionState()
         for message in package_warnings:
             state.add(message)
@@ -2027,7 +2111,7 @@ class IRWTools:
             )
         return self._stamp(
             {
-                "source": SOURCE,
+                "source": source,
                 "table": table_name,
                 "available": bool(bibtex),
                 "bibtex": bibtex,
@@ -2450,7 +2534,15 @@ def _search_tables_doc(tools: "IRWTools") -> str:
         "assignment is recorded, not merely that a treatment occurred, and "
         "`longitudinal` is derived by grepping the variable string, so "
         "cov_birthdate and cov_startdate match too -- confirm a real `wave` "
-        "or `date` column before treating a table as a panel."
+        "or `date` column before treating a table as a panel.\n"
+        "\n"
+        "`source` picks the warehouse: \"main\" (default; item responses), "
+        "\"nom\" (nominal responses), \"sim\" (simulated), \"comp\" "
+        "(competitions: winner/loser pairs) or \"conj\" (conjoint experiments: "
+        "one row per respondent, task and profile, no item/resp). `filters` "
+        "work for main only; off main, search by `query`, which matches each "
+        "table's own metadata and description. describe_table, fetch_table "
+        "and get_citation find a table's source from its name and report it."
     )
     try:
         names = tools.filter_names()
@@ -2563,8 +2655,9 @@ def create_server(
         filters: Optional[Dict[str, Any]] = None,
         limit: int = SEARCH_DEFAULT_LIMIT,
         offset: int = 0,
+        source: str = SOURCE,
     ) -> Dict[str, Any]:
-        return deliver(lambda: tools.search_tables(query, filters, limit, offset))
+        return deliver(lambda: tools.search_tables(query, filters, limit, offset, source))
 
     @typed_tool(name="describe_filter", annotations=read_only, structured_output=True)
     def describe_filter(filter_name: str) -> Dict[str, Any]:
@@ -2580,6 +2673,10 @@ def create_server(
     @typed_tool(name="describe_table", annotations=read_only, structured_output=True)
     def describe_table(table_name: str) -> Dict[str, Any]:
         """Return metadata and statistics for one IRW table without fetching rows.
+
+        Works for a table in any source; `source` in the result says which.
+        Off main, `metadata.stats` holds that source's own columns (conj:
+        design counts and facts; comp: n_responses, n_actors).
 
         ``covariate_labels`` maps each coded cov_* column to the source's own
         value labels (``{"cov_gender": {"1": "female", "2": "male"}}``),
