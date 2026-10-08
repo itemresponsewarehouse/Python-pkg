@@ -82,6 +82,8 @@ def get_filters(source: str = "main") -> List[str]:
         )
     if source == "comp":
         return [name for name in FILTER_DESCRIPTIONS if name in COMP_FILTERS]
+    if source == "conj":
+        return []          # filter() refuses conj until its filters are chosen
     names = [name for name in FILTER_DESCRIPTIONS if name not in COMP_ONLY_FILTERS]
     if source not in TAG_SOURCES:
         names = [name for name in names if name not in TAG_FILTERS]

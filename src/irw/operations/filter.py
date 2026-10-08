@@ -263,6 +263,12 @@ def _check_filters_for_source(source: str, supplied: dict) -> None:
     Each is an error rather than an empty result: an empty result is
     indistinguishable from "nothing matched".
     """
+    if source == 'conj':
+        raise ValueError(
+            "filter() is not available for source='conj' yet: its filters have not been "
+            "chosen. irw.metadata(source='conj') returns the per-table design facts "
+            "to select on by hand.")
+
     actors = [name for name in COMP_ONLY_FILTERS if name in supplied]
     if actors and source != 'comp':
         raise ValueError("`n_actors` is only available when source='comp'.")

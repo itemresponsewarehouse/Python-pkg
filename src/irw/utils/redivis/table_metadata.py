@@ -154,7 +154,8 @@ def get_metadata_table(source: str = "main") -> pd.DataFrame:
     Parameters
     ----------
     source : str, default "main"
-        Table source: "main", "nom", "sim" or "comp".
+        Table source: "main", "nom", "sim", "comp" or "conj". Each has its own
+        columns; conj's are design counts and design facts per experiment.
 
     Returns
     -------
