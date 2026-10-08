@@ -42,6 +42,7 @@ from .utils.conj_long import conj_long
 # Export all API functions
 from .api import (
     list_tables,
+    metadata,
     filter,
     info,
     fetch,
@@ -87,6 +88,7 @@ __all__ = [
     "IRWVersionUnavailable",
     "CovariateLabelsUnavailable",
     "list_tables",
+    "metadata",
     "filter",
     "info",
     "fetch",

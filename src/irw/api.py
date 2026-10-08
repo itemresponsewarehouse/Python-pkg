@@ -56,6 +56,7 @@ from .operations.imv import imv as imv
 from .operations.covariates import covariates as covariates
 from .operations.covariates import covariate_labels as covariate_labels
 from .utils.redivis.table_metadata import (
+    get_metadata_table as _get_metadata_table,
     get_collections_table as _get_collections_table,
     get_collection_members_table as _get_collection_members_table,
 )
@@ -104,6 +105,35 @@ def list_tables(source: str = "main", include_metadata: bool = False) -> pd.Data
         return _list_tables(datasets)
     else:
         return list_tables_basic(datasets)
+
+
+def metadata(source: str = "main") -> pd.DataFrame:
+    """
+    The IRW metadata table for one source: one row per table.
+
+    R's ``irw_metadata(source = )``. Each source has its own columns: main has
+    response statistics, comp ``n_responses``/``n_actors``, and conj design
+    counts and design facts per experiment (``n_respondents``, ``n_tasks``,
+    ``n_profiles``, ``n_attributes``, ``outcomes``, ``n_optout_tasks``,
+    ``country``, ``display_language``, ``label_language``, ``restrictions``,
+    ``restrictions_note``, ``task_source``, ``profile_source``).
+
+    Parameters
+    ----------
+    source : str, default "main"
+        "main", "nom", "sim", "comp" or "conj".
+
+    Returns
+    -------
+    pd.DataFrame
+
+    Examples
+    --------
+    >>> import irw
+    >>> conj = irw.metadata(source="conj")
+    >>> conj[conj["country"] == "US"]
+    """
+    return _get_metadata_table(source)
 
 
 def filter(*, source: str = "main", **kwargs) -> pd.Series:

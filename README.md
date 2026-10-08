@@ -110,6 +110,8 @@ irw.filter(source="comp", n_actors=[2, 10])  # R's irw_filter_comp()
 # Get BibTeX citation
 irw.save_bibtex("agn_kay_2025")  # Returns BibTeX entry
 irw.save_bibtex("amboseli_baboons_g1", source="comp")  # any source: main, nom, sim, comp, conj
+# Per-table metadata for a source (R's irw_metadata())
+irw.metadata(source="conj")  # design counts and facts per conjoint experiment
 # Download table
 irw.download("agn_kay_2025", path="data.csv")
 

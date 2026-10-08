@@ -31,11 +31,10 @@ COMP_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_competitions:cmd7")
 NOM_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_nominal:614n")
 
 # Conjoint experiments (experimental): one row per respondent x task x profile,
-# no item/resp (see conj_long()). Its bibliography is published to irw_meta as
-# conj_biblio (same columns as the other biblios), so save_bibtex() works for it.
-# Its conj_metadata has a different shape from the other sources' metadata
-# (design counts, no item/resp statistics), so SOURCE_META_TABLES["conj"] has
-# no "metadata" entry and asking for it still raises.
+# no item/resp (see conj_long()). irw_meta publishes its conj_metadata (design
+# counts and design facts per experiment -- its own shape, as every non-main
+# source has) and conj_biblio. filter() refuses conj until its filters are
+# chosen (operations/filter.py).
 CONJ_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_conjoint:5wjx")
 
 # Main IRW metadata dataset references (only for main IRW)
@@ -89,7 +88,7 @@ SOURCE_META_TABLES: ClassVar[dict[str, dict[str, str]]] = {
     "nom": {"metadata": "nominal_metadata", "tags": "nominal_tags", "biblio": "nominal_biblio"},
     "sim": {"metadata": "simsyn_metadata", "biblio": "simsyn_biblio"},
     "comp": {"metadata": "comps_metadata", "biblio": "comps_biblio"},
-    "conj": {"biblio": "conj_biblio"},
+    "conj": {"metadata": "conj_metadata", "biblio": "conj_biblio"},
 }
 
 # Rpkg's .irw_tag_sources and .irw_collection_sources. Code tests membership

@@ -54,9 +54,28 @@ def test_source_datasets_never_falls_through_to_comp(mock_comp, mock_conj):
     mock_comp.assert_not_called()
 
 
-def test_conj_metadata_says_not_yet():
-    with pytest.raises(ValueError, match="not available for source 'conj' yet"):
-        table_metadata._meta_table("conj", "metadata")
+def test_conj_metadata_is_conj_metadata():
+    assert table_metadata._meta_table("conj", "metadata") == "conj_metadata"
+
+
+def test_metadata_is_public_and_takes_a_source(monkeypatch):
+    import irw.api as api
+    seen = []
+    monkeypatch.setattr(api, "_get_metadata_table", lambda source="main": seen.append(source) or pd.DataFrame({"table": ["t"]}))
+    assert "metadata" in irw.__all__
+    assert list(irw.metadata(source="conj").table) == ["t"]
+    assert irw.metadata().shape == (1, 1)
+    assert seen == ["conj", "main"]
+
+
+def test_conj_filters_are_refused_not_skipped():
+    from irw.operations.filter import _check_filters_for_source
+    from irw.operations.filter_info import get_filters
+    with pytest.raises(ValueError, match="not available for source='conj'"):
+        _check_filters_for_source("conj", {"n_responses": [0, 10]})
+    with pytest.raises(ValueError, match="not available for source='conj'"):
+        _check_filters_for_source("conj", {})
+    assert get_filters("conj") == []
 
 
 def test_conj_biblio_is_conj_biblio():
