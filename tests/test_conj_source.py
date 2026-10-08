@@ -54,10 +54,13 @@ def test_source_datasets_never_falls_through_to_comp(mock_comp, mock_conj):
     mock_comp.assert_not_called()
 
 
-def test_conj_metadata_and_biblio_say_not_yet():
-    for kind in ("metadata", "biblio"):
-        with pytest.raises(ValueError, match="not available for source 'conj' yet"):
-            table_metadata._meta_table("conj", kind)
+def test_conj_metadata_says_not_yet():
+    with pytest.raises(ValueError, match="not available for source 'conj' yet"):
+        table_metadata._meta_table("conj", "metadata")
+
+
+def test_conj_biblio_is_conj_biblio():
+    assert table_metadata._meta_table("conj", "biblio") == "conj_biblio"
 
 
 def _conj_df():
