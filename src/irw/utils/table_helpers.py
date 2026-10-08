@@ -1,5 +1,9 @@
 """Helper functions for table operations that only need table_name (not data)."""
 
+import textwrap
+from numbers import Integral, Real
+
+import numpy as np
 from typing import Optional, Dict, Any, Union
 import pandas as pd
 from ..utils.redivis.table_metadata import _table_info
@@ -16,10 +20,10 @@ from ..config import META_REF
 from ..utils.redivis.pins import _dataset_key, _pins, pinned_irw_version
 
 
-def _get_table_metadata(table_name: str) -> Dict[str, Any]:
-    """Get metadata dictionary for a table by name."""
+def _get_table_metadata(table_name: str, source: str = "main") -> Dict[str, Any]:
+    """Get metadata dictionary for a table by name, within one source."""
     # Get combined metadata table
-    metadata_df = _table_info()
+    metadata_df = _table_info(source)
     
     if metadata_df.empty:
         return {}
@@ -38,12 +42,43 @@ def _get_table_metadata(table_name: str) -> Dict[str, Any]:
     return {k: v for k, v in row.to_dict().items() if k != 'table_lower'}
 
 
-def _get_table_info_dict(table_name: str) -> Dict[str, Any]:
-    """Get structured info dictionary for a table."""
-    metadata_dict = _get_table_metadata(table_name)
-    
+#: The biblio fields info() reports, keyed by their raw irw_meta column names.
+_BIBLIO_FIELDS = {
+    'description': 'Description', 'reference': 'Reference_x', 'doi': 'DOI__for_paper_',
+    'url': 'URL__for_data_', 'license': 'Derived_License', 'bibtex': 'BibTex',
+}
+
+
+def _get_table_info_dict(table_name: str, source: str = "main") -> Dict[str, Any]:
+    """Get structured info dictionary for a table.
+
+    Main keeps its fixed layout (stats, tags, biblio, item text). Every other
+    source has its own metadata columns (comp: n_responses/n_actors; conj:
+    design counts and facts; ...), so its `stats` are that source's metadata
+    row as it stands, and `tags` appear only for a tagged source (nom).
+    """
+    metadata_dict = _get_table_metadata(table_name, source)
+
     if not metadata_dict:
         return {}
+
+    if source != "main":
+        from ..utils.redivis.table_metadata import get_metadata_table
+        stat_cols = [c for c in get_metadata_table(source).columns if c != 'table']
+        out = {
+            'source': source,
+            'stats': {c: metadata_dict.get(c) for c in stat_cols},
+            'biblio': {k: metadata_dict.get(v) for k, v in _BIBLIO_FIELDS.items()},
+        }
+        if 'construct_type' in metadata_dict:
+            out['tags'] = {
+                'construct_type': metadata_dict.get('construct_type'),
+                'construct_name': metadata_dict.get('construct_name'),
+                'sample': metadata_dict.get('sample'),
+                'item_format': metadata_dict.get('item_format'),
+                'language': metadata_dict.get('primary_language_s_'),
+            }
+        return out
     
     # Organize metadata into structured dict
     # Note: column names are raw from merged tables (before RENAME_MAP)
@@ -172,8 +207,48 @@ def _version_line() -> Optional[str]:
     )
 
 
+def _format_value(v: Any) -> str:
+    if v is None or (isinstance(v, float) and pd.isna(v)) or (isinstance(v, str) and not v.strip()):
+        return "N/A"
+    if isinstance(v, (bool, np.bool_)):
+        return str(bool(v))
+    if isinstance(v, Integral):
+        return f"{int(v):,}"
+    if isinstance(v, Real):
+        return f"{int(v):,}" if float(v).is_integer() else f"{float(v):.3f}"
+    return str(v)
+
+
+def _format_aux_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
+    """info() text for a non-main table: its source's own metadata columns."""
+    source = info_dict['source']
+    label = {"comp": "competition", "sim": "simulation", "nom": "nominal",
+             "conj": "conjoint"}.get(source, source)
+    lines = [f"\n{'='*60}", f"IRW Table: {table_name} ({label}, source='{source}')", f"{'='*60}"]
+    biblio = info_dict.get('biblio', {})
+    if biblio.get('description'):
+        lines += ["\nDescription:", "-" * 60]
+        lines += [f"  {line}" for line in textwrap.wrap(str(biblio['description']), 56)]
+    lines += ["\nTable Metadata:", "-" * 60]
+    for k, v in info_dict.get('stats', {}).items():
+        lines.append(f"  {k}: {_format_value(v)}")
+    if info_dict.get('tags'):
+        lines += ["\nMeasurement Information:", "-" * 60]
+        for k, v in info_dict['tags'].items():
+            lines.append(f"  {k}: {_format_value(v)}")
+    lines += ["\nBibliography:", "-" * 60]
+    for k in ('reference', 'doi', 'url', 'license'):
+        lines.append(f"  {k.upper() if k in ('doi', 'url') else k.capitalize()}: {_format_value(biblio.get(k))}")
+    lines.append("  BibTeX: " + (f"Available (use save_bibtex(..., source='{source}'))"
+                                  if biblio.get('bibtex') else "N/A"))
+    lines.append(f"\n{'='*60}\n")
+    return "\n".join(lines)
+
+
 def _format_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
     """Format table info as a string."""
+    if info_dict.get('source', 'main') != 'main':
+        return _format_aux_table_info(table_name, info_dict)
     lines = []
     lines.append(f"\n{'='*60}")
     lines.append(f"IRW Table: {table_name}")
