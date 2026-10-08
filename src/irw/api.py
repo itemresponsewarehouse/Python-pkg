@@ -176,7 +176,9 @@ def info(table_name: Optional[str] = None, source: str = "main", return_dict: bo
     table_name : str, optional
         If provided, returns info for that table. If None, returns database info.
     source : str, default "main"
-        Dataset source (only used for database info).
+        Dataset source: "main", "nom", "sim", "comp" or "conj". For a table,
+        its source's own metadata columns and bibliography are shown (R's
+        ``irw_info(table, source = )``).
     return_dict : bool, default False
         If True and table_name provided, returns dictionary instead of formatted string.
         
@@ -199,13 +201,10 @@ def info(table_name: Optional[str] = None, source: str = "main", return_dict: bo
         return info_for(datasets, title=title)
     else:
         # Table info
-        if source != "main":
-            raise ValueError(f"Table info is only available for main IRW datasets (source='main'). Current source is '{source}'.")
-        
-        result = _get_table_info_dict(table_name)
+        result = _get_table_info_dict(table_name, source)
         
         if not result:
-            message = f"No metadata available for table: {table_name}"
+            message = f"No metadata available for table: {table_name} (source='{source}')"
             print(message)
             return None if not return_dict else {}
         
