@@ -43,6 +43,7 @@ NOM_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_nominal:614n")
 # (docs/DEVELOPERS.md, "Adding a conjoint shard").
 CONJ_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "irw_conjoint:5wjx"),
+    ("datapages", "irw_conjoint_2:142p"),
 )
 
 # Main IRW metadata dataset references (only for main IRW)
