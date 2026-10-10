@@ -2,6 +2,7 @@
 
 from typing import List, Dict, Any
 import logging
+import warnings
 import pandas as pd
 from ..utils.redivis.table_metadata import _table_info
 from ..utils.redivis.item_text import _list_itemtext_tables
@@ -82,11 +83,17 @@ TAGS_SET = {
 # Helper functions
 # =====================
 
-def _build_base_table_list(datasets: List[Any]) -> pd.DataFrame:
+def _build_base_table_list(datasets: List[Any], source: str = "main") -> pd.DataFrame:
     """Build base table list from datasets, using cached table lists when possible.
 
     A warehouse that cannot be listed is skipped rather than aborting the
     catalogue, matching `_init_datasets_from_refs(skip_unavailable=True)`.
+
+    `datasets` arrive newest-first, so a name present in more than one shard
+    keeps its newest copy. Main resolves such a name silently (the pipeline's
+    drift report watches for it); for the other shard lists -- conj today -- a
+    duplicate is an upload mistake that must not be merged away without a word,
+    so it is warned about before the newest copy is kept.
     """
     rows: List[Dict[str, Any]] = []
     for ds in datasets:
@@ -100,7 +107,17 @@ def _build_base_table_list(datasets: List[Any]) -> pd.DataFrame:
     
     if not rows:
         return pd.DataFrame(columns=["name"])
-    out = pd.DataFrame(rows).drop_duplicates(subset=["name"], keep="first")
+    frame = pd.DataFrame(rows)
+    if source != "main":
+        dup = sorted(frame.loc[frame.duplicated(subset=["name"]), "name"].dropna().unique())
+        if dup:
+            warnings.warn(
+                f"{len(dup)} table name(s) appear in more than one {source} shard: "
+                f"{', '.join(dup)}. Only the newest copy is listed and read; please "
+                f"report this at https://github.com/ben-domingue/irw/issues.",
+                stacklevel=3,
+            )
+    out = frame.drop_duplicates(subset=["name"], keep="first")
     return out.sort_values("name", kind="stable").reset_index(drop=True)
 
 
@@ -218,7 +235,7 @@ def list_tables(datasets: List[Any], source: str = "main") -> pd.DataFrame:
         return cached_result.copy()
     
     # Base table list from Redivis (uses cached table lists)
-    out = _build_base_table_list(datasets)
+    out = _build_base_table_list(datasets, source)
     
     # Get metadata and merge
     try:

@@ -1,4 +1,4 @@
-"""Offline coverage for the experimental `conj` (conjoint) source.
+"""Offline coverage for the `conj` (conjoint) source.
 
 Rpkg gained source = "conj" in itemresponsewarehouse/Rpkg#186; the pipeline's
 parity check (ben-domingue/irw metadata/check_config_parity.py) requires this
@@ -11,9 +11,10 @@ import pandas as pd
 import pytest
 
 import irw
-from irw.config import CONJ_REF, SOURCES
+from irw.config import CONJ_REFS, SOURCES
 from irw.utils.redivis.cache import metadata_cache
-from irw.utils.redivis.datasets import _init_conj_dataset
+from irw.utils.redivis import datasets as ds_mod
+from irw.utils.redivis.datasets import _init_conj_datasets
 from irw.utils.redivis import table_metadata
 
 
@@ -24,32 +25,82 @@ def clear_cache():
     metadata_cache.clear()
 
 
-def test_conj_ref_matches_the_r_package_spec():
-    """Rpkg/R/redivis-config.R: conj = datapages / irw_conjoint:5wjx."""
-    assert CONJ_REF == ("datapages", "irw_conjoint:5wjx")
+def test_conj_refs_match_the_r_package_spec():
+    """Rpkg/R/redivis-config.R: .irw_datasource_specs$conj, oldest to newest."""
+    assert CONJ_REFS[0] == ("datapages", "irw_conjoint:5wjx")
+    assert all(ref.startswith("irw_conjoint") for _user, ref in CONJ_REFS)
     assert "conj" in SOURCES
 
 
 @patch("irw.utils.redivis.datasets._init_dataset")
-def test_init_conj_dataset_opens_conj_ref_and_caches(mock_init_dataset):
-    mock_init_dataset.return_value = MagicMock()
-    assert _init_conj_dataset() is _init_conj_dataset()
-    mock_init_dataset.assert_called_once_with(*CONJ_REF)
+def test_init_conj_datasets_opens_every_shard_and_caches(mock_init_dataset):
+    mock_init_dataset.side_effect = lambda user, ref: f"ds:{ref}"
+    first = _init_conj_datasets()
+    assert first == [f"ds:{ref}" for _user, ref in reversed(CONJ_REFS)]
+    assert _init_conj_datasets() is first
+    assert mock_init_dataset.call_count == len(CONJ_REFS)
 
 
-@patch("irw.api._init_conj_dataset")
+# conj is a shard list (irw_conjoint is near Redivis' 1000-table cap) with the
+# semantics MAIN_REFS has: every shard opened, searched newest-first, and an
+# unreleased shard skipped with a warning rather than taking the source down.
+
+TWO_SHARDS = (("datapages", "irw_conjoint:5wjx"), ("datapages", "irw_conjoint_2:zzzz"))
+
+
+def test_conj_shards_are_searched_newest_first(monkeypatch):
+    monkeypatch.setattr(ds_mod, "CONJ_REFS", TWO_SHARDS)
+    monkeypatch.setattr(ds_mod, "_init_dataset", lambda user, ref: f"ds:{ref}")
+    assert _init_conj_datasets() == ["ds:irw_conjoint_2:zzzz", "ds:irw_conjoint:5wjx"]
+
+
+def test_an_unreleased_conj_shard_is_skipped_not_fatal(monkeypatch, caplog):
+    monkeypatch.setattr(ds_mod, "CONJ_REFS", TWO_SHARDS)
+
+    def init(user, ref):
+        if ref.startswith("irw_conjoint_2"):
+            raise RuntimeError("403 insufficient_scope: no released version")
+        return f"ds:{ref}"
+
+    monkeypatch.setattr(ds_mod, "_init_dataset", init)
+    with caplog.at_level("WARNING"):
+        assert _init_conj_datasets() == ["ds:irw_conjoint:5wjx"]
+    assert "irw_conjoint_2" in caplog.text
+
+
+def test_list_tables_flags_a_name_present_in_two_conj_shards(monkeypatch):
+    import importlib
+    lt = importlib.import_module("irw.operations.list_tables")
+
+    class _T:
+        def __init__(self, name): self.name = name
+
+    newest, oldest = object(), object()
+    listing = {newest: [_T("shared_2025"), _T("zeta_2026")], oldest: [_T("alpha_2024"), _T("shared_2025")]}
+    monkeypatch.setattr(lt, "_dataset_table_list", lambda ds: listing[ds])
+    with pytest.warns(UserWarning, match="more than one conj shard: shared_2025"):
+        out = lt._build_base_table_list([newest, oldest], "conj")
+    assert list(out.name) == ["alpha_2024", "shared_2025", "zeta_2026"]
+    # Main keeps resolving silently to the newest copy.
+    import warnings as _w
+    with _w.catch_warnings():
+        _w.simplefilter("error")
+        lt._build_base_table_list([newest, oldest], "main")
+
+
+@patch("irw.api._init_conj_datasets")
 def test_get_datasets_dispatches_conj(mock_init_conj):
     ds = MagicMock()
-    mock_init_conj.return_value = ds
+    mock_init_conj.return_value = [ds]
     from irw.api import _get_datasets
     assert _get_datasets("conj") == [ds]
 
 
-@patch("irw.utils.redivis.table_metadata._init_conj_dataset")
+@patch("irw.utils.redivis.table_metadata._init_conj_datasets")
 @patch("irw.utils.redivis.table_metadata._init_comp_dataset")
 def test_source_datasets_never_falls_through_to_comp(mock_comp, mock_conj):
     """Before conj existed, any source not main/nom/sim got the competitions dataset."""
-    mock_conj.return_value = "conj-ds"
+    mock_conj.return_value = ["conj-ds"]
     assert table_metadata._source_datasets("conj") == ["conj-ds"]
     mock_comp.assert_not_called()
 

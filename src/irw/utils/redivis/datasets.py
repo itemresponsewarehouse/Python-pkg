@@ -4,7 +4,7 @@ import logging
 import os
 import time
 from typing import Any, List, Optional, Tuple
-from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, CONJ_REF
+from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, CONJ_REFS
 from .cache import metadata_cache
 from .pins import (
     ABSENT,
@@ -305,12 +305,13 @@ def _dataset_table_list(ds: Any) -> List[Any]:
     return tables
 
 def _order_main_datasets(datasets: List[Any]) -> List[Any]:
-    """Return main warehouses in search order: newest first.
+    """Return a shard list in search order: newest first.
 
-    MAIN_REFS is declared oldest-to-newest (mirroring the R package's
-    ``.irw_datasource_specs$core``), so reversing makes a table that exists in
-    more than one warehouse resolve to its most recent copy -- matching what the
-    R package's ``.irw_order_datasources`` does.
+    MAIN_REFS and CONJ_REFS are declared oldest-to-newest (mirroring the R
+    package's ``.irw_datasource_specs``), so reversing makes a table that exists
+    in more than one shard resolve to its most recent copy -- matching what the
+    R package's ``.irw_order_datasources`` does. The name predates the conjoint
+    shard list; it is the ordering for any shard list.
     """
     return list(reversed(datasets))
 
@@ -435,13 +436,22 @@ def _init_nom_dataset() -> Any:
     return dataset
 
 
-def _init_conj_dataset() -> Any:
-    """Initialize conjoint-experiment dataset (cached)."""
-    cache_key = "conj_dataset" + _pins_fingerprint([CONJ_REF])
+def _init_conj_datasets() -> List[Any]:
+    """Initialize every conjoint shard in CONJ_REFS, newest first (cached).
+
+    Same contract as `_init_main_datasets()`: a shard that cannot be opened
+    (typically one created on Redivis but not yet released) is skipped with a
+    warning rather than taking the whole source down, and the cache key carries
+    the configured refs and the session's pins.
+    """
+    cache_key = ("conj_datasets:" + "|".join(f"{user}/{ref}" for user, ref in CONJ_REFS)
+                 + _pins_fingerprint(CONJ_REFS))
     cached = metadata_cache.get(cache_key)
     if cached is not None:
         return cached
 
-    dataset = _init_dataset(*CONJ_REF)
-    metadata_cache.set(cache_key, dataset)
-    return dataset
+    datasets = _order_main_datasets(
+        _init_datasets_from_refs(CONJ_REFS, skip_unavailable=True)
+    )
+    metadata_cache.set(cache_key, datasets)
+    return datasets
