@@ -24,7 +24,7 @@ import warnings
 import datetime
 from typing import Optional, Union, Dict, List, Literal, Tuple
 import pandas as pd
-from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_dataset
+from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_datasets
 from .utils.redivis.item_text import _list_itemtext_tables, _itemtext_disclaimer
 from .utils.redivis.source_note import _source_note, disable_source_note as disable_source_note, aggregator_bibtex
 from .utils.long2resp import long2resp as _long2resp
@@ -78,7 +78,7 @@ def _get_datasets(source: str = "main"):
     elif source == "nom":
         return [_init_nom_dataset()]
     elif source == "conj":
-        return [_init_conj_dataset()]
+        return _init_conj_datasets()
     else:
         raise ValueError(f"Unknown source '{source}'. Must be one of: 'main', 'sim', 'comp', 'nom', 'conj'")
 

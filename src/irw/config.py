@@ -3,8 +3,9 @@
 To add another main IRW Redivis warehouse, append a (user, dataset_ref) tuple to
 MAIN_REFS below. All package operations (list_tables, fetch, filter, download,
 info, etc.) discover tables across every entry in MAIN_REFS automatically — no
-other code changes are required. Item text works the same way via ITEMTEXT_REFS.
-Both are lists because Redivis caps a dataset at 1000 tables.
+other code changes are required. Item text works the same way via ITEMTEXT_REFS,
+and the conjoint source via CONJ_REFS. All three are lists because Redivis caps
+a dataset at 1000 tables.
 
 See docs/DEVELOPERS.md for the full contributor checklist and test commands.
 """
@@ -35,7 +36,14 @@ NOM_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_nominal:614n")
 # design facts per experiment -- its own shape, as every family outside main
 # has) and conj_biblio; filter() takes its own conj filters
 # (operations/filter.py).
-CONJ_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_conjoint:5wjx")
+#
+# A shard list like MAIN_REFS, oldest-to-newest, searched newest-first:
+# irw_conjoint is near Redivis' 1000-table cap. Append the next shard only once
+# it has a PUBLISHED release, and in Rpkg and ben-domingue/irw too
+# (docs/DEVELOPERS.md, "Adding a conjoint shard").
+CONJ_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
+    ("datapages", "irw_conjoint:5wjx"),
+)
 
 # Main IRW metadata dataset references (only for main IRW)
 META_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_meta:bdxt")
@@ -109,7 +117,7 @@ PACKAGE_NAME: str = "irw"
 # the briefing's `pip install git+...` line resolves the version, sees it
 # already installed and SKIPS -- even with --upgrade -- so an unchanged version
 # string means users silently keep the old code.
-VERSION: str = "0.7.4"
+VERSION: str = "0.7.5"
 DESCRIPTION: str = "A Python package for the Item Response Warehouse (IRW)"
 
 __all__ = [
@@ -117,7 +125,7 @@ __all__ = [
     "SIM_REF", 
     "COMP_REF",
     "NOM_REF",
-    "CONJ_REF",
+    "CONJ_REFS",
     "META_REF",
     "ITEMTEXT_REFS",
     "META_TABLES",

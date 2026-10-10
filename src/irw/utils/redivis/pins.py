@@ -31,7 +31,7 @@ table list, or a version tag cached from the current release, or the reverse.
 import re
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from ...config import COMP_REF, CONJ_REF, ITEMTEXT_REFS, MAIN_REFS, META_REF, NOM_REF, SIM_REF
+from ...config import COMP_REF, CONJ_REFS, ITEMTEXT_REFS, MAIN_REFS, META_REF, NOM_REF, SIM_REF
 from .cache import metadata_cache
 
 #: Accepted form of a Redivis version tag: ``v32.0`` or ``32.0``.
@@ -72,7 +72,7 @@ def _pinnable_refs() -> Dict[str, Tuple[str, str]]:
     Order follows R's `.irw_pinnable_specs()`: sources, then meta, then text.
     """
     refs: List[Tuple[str, str]] = [
-        *MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, CONJ_REF, META_REF, *ITEMTEXT_REFS,
+        *MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, *CONJ_REFS, META_REF, *ITEMTEXT_REFS,
     ]
     return {_dataset_key(ref): (user, ref) for user, ref in refs}
 

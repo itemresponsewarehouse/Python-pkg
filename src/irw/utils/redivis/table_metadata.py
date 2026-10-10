@@ -28,7 +28,7 @@ from .datasets import (
     _init_dataset,
     _init_main_datasets,
     _init_nom_dataset,
-    _init_conj_dataset,
+    _init_conj_datasets,
     _init_sim_dataset,
     _main_datasets_cache_key,
 )
@@ -91,7 +91,7 @@ def _source_datasets(source: str) -> List[Any]:
     if source == "sim":
         return [_init_sim_dataset()]
     if source == "conj":
-        return [_init_conj_dataset()]
+        return _init_conj_datasets()
     if source == "comp":
         return [_init_comp_dataset()]
     # Unreachable while _check_source() guards SOURCES; kept explicit so a new

@@ -67,6 +67,19 @@ is unreadable with a read-only token, and the package skips it with a logged
 warning rather than an error, so its tables are simply missing and nobody sees
 a failure.
 
+## Adding a conjoint shard
+
+`irw_conjoint` neared the cap in October 2026, so the conjoint source is a shard
+list too, on `CONJ_REFS`, with the shape and trap of the two above:
+`_init_conj_datasets()` opens every entry (an unreleased one is skipped with a
+logged warning), orders them newest-first, and `list_tables(source="conj")`
+warns when a table name is published in more than one shard rather than merging
+the copies silently. Ship the entry together with `.irw_datasource_specs$conj`
+in the R package and `IRW_CONJ_DATASETS` in `ben-domingue/irw`, Rpkg first; the
+irw repo's parity check compares shard order for `conj`. Where NEW conjoint
+tables are uploaded is `CONJ_DEFAULT` in the irw repo's `red_up/targets.py`,
+not anything here.
+
 Two things must ship together with this: `IRW_TEXT_DATASETS` in
 `src/metadata/redivis_config.R` (the `ben-domingue/irw` repo) and
 `.irw_itemtext_specs` in the R package. A config naming a shard the other two do
@@ -198,7 +211,7 @@ in three runtimes with no shared build:
 | `irw` | `metadata/redivis_config.R` | dataset **names** only |
 
 All three must list the same datasets, in the same order for the sharded
-sources (`MAIN_REFS` and `ITEMTEXT_REFS` here). The order is not cosmetic: every
+sources (`MAIN_REFS`, `ITEMTEXT_REFS` and `CONJ_REFS` here). The order is not cosmetic: every
 client searches shards newest-first so a table resolves to its most recent copy,
 and a file listing them differently would quietly resolve some tables to a stale
 shard while every name still matched.
