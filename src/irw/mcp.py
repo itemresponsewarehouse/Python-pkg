@@ -219,13 +219,15 @@ class IRWBackend(Protocol):
         columns: Optional[List[str]] = None,
     ) -> Any: ...
 
+    # `source` arrives as a keyword only off main (see _source_kwargs), so a
+    # main-only backend keeps working for main.
     def filter_tables(self, **filters: Any) -> Any: ...
 
-    def filter_names(self) -> List[str]: ...
+    def filter_names(self, source: str = SOURCE) -> List[str]: ...
 
     def filter_descriptions(self) -> Mapping[str, str]: ...
 
-    def describe_filter(self, filter_name: str) -> Any: ...
+    def describe_filter(self, filter_name: str, source: str = SOURCE) -> Any: ...
 
     def itemtext(self, table_name: str) -> Any: ...
 
@@ -367,8 +369,8 @@ class PackageBackend:
     def filter_tables(self, **filters: Any) -> Any:
         return irw.filter(**filters)
 
-    def filter_names(self) -> List[str]:
-        return list(irw.get_filters())
+    def filter_names(self, source: str = SOURCE) -> List[str]:
+        return list(irw.get_filters(source))
 
     def filter_descriptions(self) -> Mapping[str, str]:
         # The descriptions are a module-level dict. describe_filter() also
@@ -379,8 +381,8 @@ class PackageBackend:
 
         return dict(FILTER_DESCRIPTIONS)
 
-    def describe_filter(self, filter_name: str) -> Any:
-        return irw.describe_filter(filter_name)
+    def describe_filter(self, filter_name: str, source: str = SOURCE) -> Any:
+        return irw.describe_filter(filter_name, source=source)
 
     def itemtext(self, table_name: str) -> Any:
         return irw.itemtext(table_name)
@@ -1281,7 +1283,7 @@ class IRWTools:
         self._irw_released_at: Optional[str] = None
         self._irw_version_checked = False
         self._catalogue_cache: Optional[Dict[str, Dict[str, Any]]] = None
-        self._filter_names: Optional[List[str]] = None
+        self._filter_names: Dict[str, List[str]] = {}
         self._filter_descriptions: Dict[str, Optional[str]] = {}
 
     def _catalogue(self) -> Dict[str, Dict[str, Any]]:
@@ -1454,30 +1456,35 @@ class IRWTools:
                 warning_list.append(message)
         return _bound_payload(payload)
 
-    def filter_names(self) -> List[str]:
-        """The package's own filter list, cached per process.
+    def filter_names(self, source: str = SOURCE) -> List[str]:
+        """The package's own filter list for a source, cached per process.
 
         Read rather than restated: a hand-kept copy is a list that goes stale
         the first time `irw.filter()` gains an argument, and the failure mode
         is an assistant reporting that IRW cannot filter on something it can.
+        Each source has its own list (conj filters on design facts and topic
+        tags, comp on n_actors), so the cache is keyed by source.
         """
-        if self._filter_names is None:
-            names, _ = self._call(self.backend.filter_names, requires_auth=False)
-            self._filter_names = [str(name) for name in names]
-        return self._filter_names
+        if source not in self._filter_names:
+            names, _ = self._call(
+                self.backend.filter_names, requires_auth=False,
+                **self._source_kwargs(source))
+            self._filter_names[source] = [str(name) for name in names]
+        return self._filter_names[source]
 
-    def describe_filter(self, filter_name: str) -> Dict[str, Any]:
+    def describe_filter(self, filter_name: str, source: str = SOURCE) -> Dict[str, Any]:
         """What one filter means and which values it actually takes."""
         filter_name = _validate_text(filter_name, "filter_name")
-        known = self.filter_names()
+        source = self._validate_source(source)
+        known = self.filter_names(source)
         if filter_name not in known:
             raise IRWMCPError(
                 "invalid_input",
-                f"Unknown filter '{filter_name}'. IRW filters on: "
+                f"Unknown filter '{filter_name}' for source='{source}'. It filters on: "
                 f"{', '.join(known)}.",
             )
         details, package_warnings = self._call(
-            self.backend.describe_filter, filter_name
+            self.backend.describe_filter, filter_name, **self._source_kwargs(source)
         )
         state = _ConversionState()
         for message in package_warnings:
@@ -1496,7 +1503,7 @@ class IRWTools:
         normalised = _filter_values(raw_values, state)
         return self._stamp(
             {
-                "source": SOURCE,
+                "source": source,
                 "filter": filter_name,
                 "description": None if _is_missing(description) else str(description),
                 **normalised,
@@ -1504,8 +1511,16 @@ class IRWTools:
             }
         )
 
-    def _validate_filters(self, filters: Any) -> Dict[str, Any]:
-        """Check filter names against the package before spending a call on them."""
+    @staticmethod
+    def _validate_source(source: Any) -> str:
+        if source not in SOURCES:
+            raise IRWMCPError(
+                "invalid_input",
+                f"source must be one of {', '.join(SOURCES)}, not '{source}'.")
+        return str(source)
+
+    def _validate_filters(self, filters: Any, source: str = SOURCE) -> Dict[str, Any]:
+        """Check filter names against the package's list for the source."""
         if filters is None:
             return {}
         if not isinstance(filters, Mapping):
@@ -1514,16 +1529,16 @@ class IRWTools:
                 "filters must be an object of filter name to value, for "
                 'example {"construct_type": "Cognitive", "n_items": [10, 50]}.',
             )
-        known = self.filter_names()
+        known = self.filter_names(source)
         cleaned: Dict[str, Any] = {}
         for key, value in filters.items():
             name = str(key)
             if name not in known:
                 raise IRWMCPError(
                     "invalid_input",
-                    f"Unknown filter '{name}'. IRW filters on: "
-                    f"{', '.join(known)}. Call describe_filter for the values "
-                    "one of them takes.",
+                    f"Unknown filter '{name}' for source='{source}'. It filters on: "
+                    f"{', '.join(known)}. Call describe_filter(filter_name, source) "
+                    "for the values one of them takes.",
                 )
             if value is None:
                 continue
@@ -1556,17 +1571,11 @@ class IRWTools:
         query = _validate_text(query, "query", allow_empty=True)
         if query and not re.search(r"\w", query, flags=re.UNICODE):
             raise IRWMCPError("invalid_input", "query must contain searchable letters or numbers.")
-        if source not in SOURCES:
-            raise IRWMCPError(
-                "invalid_input",
-                f"source must be one of {', '.join(SOURCES)}, not '{source}'.")
-        if source != SOURCE and filters:
-            raise IRWMCPError(
-                "invalid_input",
-                f"filters are available for source='main' only in this server. For "
-                f"source='{source}', search by query, or use the Python package's "
-                f"irw.filter(source='{source}', ...).")
-        selected = self._validate_filters(filters)
+        source = self._validate_source(source)
+        # Filters off main go to irw.filter(source=...) like everything else;
+        # each source has its own list (filter_names(source)), so a conj
+        # filter on main or a tag filter on conj is refused by name here.
+        selected = self._validate_filters(filters, source)
         limit = _validate_limit(limit, SEARCH_DEFAULT_LIMIT, SEARCH_MAX_LIMIT)
         offset = _validate_offset(offset)
 
@@ -1577,9 +1586,11 @@ class IRWTools:
             # drops tables. A caller who asked for nothing about density did
             # not ask for sparse tables to disappear, so opt out unless they
             # named it -- and let the package's own warning through when they
-            # did.
+            # did. Only main has a density filter.
             call_filters = dict(selected)
-            call_filters.setdefault("density", None)
+            if source == SOURCE:
+                call_filters.setdefault("density", None)
+            call_filters.update(self._source_kwargs(source))
             names, filter_warnings = self._call(
                 self.backend.filter_tables, **call_filters
             )
@@ -1589,7 +1600,7 @@ class IRWTools:
             if not allowed:
                 return self._stamp(
                     {
-                        "source": SOURCE,
+                        "source": source,
                         "tables": [],
                         "total": 0,
                         "offset": offset,
@@ -1597,7 +1608,7 @@ class IRWTools:
                         "has_more": False,
                         "n_untagged_in_catalogue": None,
                         "filters_applied": selected,
-                        "caveats": self._search_caveats(selected, None, None),
+                        "caveats": self._search_caveats(selected, None, None, source),
                         "warnings": state.warnings,
                     }
                 )
@@ -1678,7 +1689,7 @@ class IRWTools:
                 "n_untagged_in_catalogue": n_untagged,
                 "filters_applied": selected,
                 "caveats": self._search_caveats(
-                    selected, n_untagged, len(seen_names)
+                    selected, n_untagged, len(seen_names), source
                 ),
                 "warnings": state.warnings,
             }
@@ -1689,15 +1700,27 @@ class IRWTools:
         selected: Mapping[str, Any],
         n_untagged: Optional[int],
         n_total: Optional[int],
+        source: str = SOURCE,
     ) -> List[str]:
         """Caveats for this search, with the package's own filter text attached.
 
         Each applied filter contributes the description the package already
         keeps for it, so a caveat added to FILTER_DESCRIPTIONS reaches the
-        assistant without anyone editing this file.
+        assistant without anyone editing this file. The tag-coverage and
+        density caveats are main's: the other sources carry no core tags (conj's
+        topic tags cover every table) and have no density filter.
         """
         caveats: List[str] = []
-        if n_untagged is not None and n_total:
+        if source != SOURCE:
+            if source == "conj":
+                caveats.append(
+                    "Every conjoint table carries `domain` (what the study is "
+                    "about; one or more values) and `choice_object` (what a "
+                    "profile represents). They are judgement calls from the "
+                    "study descriptions, so a borderline study may sit under a "
+                    "neighbouring domain; try the neighbour before concluding "
+                    "there is no data.")
+        elif n_untagged is not None and n_total:
             caveats.append(
                 f"Tags are human-added and incomplete: {n_untagged} of "
                 f"{n_total} tables carry no tags at all (see `tagged` on each "
@@ -1711,7 +1734,7 @@ class IRWTools:
                 "not a non-matching table, and any tag-based filter silently "
                 "restricts you to the tagged subset."
             )
-        if selected:
+        if selected and source == SOURCE:
             caveats.append(
                 "No density filter was applied unless you asked for one; "
                 "irw.filter() defaults to density=[0.5, 1], which would have "
@@ -2539,10 +2562,14 @@ def _search_tables_doc(tools: "IRWTools") -> str:
         "`source` picks the warehouse: \"main\" (default; item responses), "
         "\"nom\" (nominal responses), \"sim\" (simulated), \"comp\" "
         "(competitions: winner/loser pairs) or \"conj\" (conjoint experiments: "
-        "one row per respondent, task and profile, no item/resp). `filters` "
-        "work for main only; off main, search by `query`, which matches each "
-        "table's own metadata and description. describe_table, fetch_table "
-        "and get_citation find a table's source from its name and report it."
+        "one row per respondent, task and profile, no item/resp). Each source "
+        "has its own filters, listed below; `query` matches each table's own "
+        "metadata and description in any source. For conjoint, start with "
+        "`domain` (\"the immigration conjoints\": {\"domain\": "
+        "\"immigration_asylum\"}) and `choice_object`; call "
+        "describe_filter(\"domain\", source=\"conj\") for the vocabulary with "
+        "counts. describe_table, fetch_table and get_citation find a table's "
+        "source from its name and report it."
     )
     try:
         names = tools.filter_names()
@@ -2555,6 +2582,17 @@ def _search_tables_doc(tools: "IRWTools") -> str:
     for name in names:
         description = tools._filter_description(name)
         lines.append(f"- {name}: {description}" if description else f"- {name}")
+    for other in ("conj", "comp"):
+        try:
+            other_names = tools.filter_names(other)
+        except Exception:
+            continue
+        if not other_names:
+            continue
+        lines += ["", f"Filters for source=\"{other}\":"]
+        for name in other_names:
+            description = tools._filter_description(name)
+            lines.append(f"- {name}: {description}" if description else f"- {name}")
     return "\n".join(lines)
 
 
@@ -2660,15 +2698,17 @@ def create_server(
         return deliver(lambda: tools.search_tables(query, filters, limit, offset, source))
 
     @typed_tool(name="describe_filter", annotations=read_only, structured_output=True)
-    def describe_filter(filter_name: str) -> Dict[str, Any]:
+    def describe_filter(filter_name: str, source: str = SOURCE) -> Dict[str, Any]:
         """Explain one search filter and list the values it actually takes.
 
         Call this before guessing a filter value: the tag vocabularies are
         closed sets with specific spellings ("Affective/mental health", not
         "mental health"), and a value that matches nothing returns an empty
-        result that looks exactly like an absence of data.
+        result that looks exactly like an absence of data. `source` picks the
+        family whose filters to describe: the conjoint `domain` and
+        `choice_object` vocabularies need source="conj".
         """
-        return deliver(lambda: tools.describe_filter(filter_name))
+        return deliver(lambda: tools.describe_filter(filter_name, source))
 
     @typed_tool(name="describe_table", annotations=read_only, structured_output=True)
     def describe_table(table_name: str) -> Dict[str, Any]:

@@ -125,7 +125,10 @@ def _fake_conj(monkeypatch):
         "table": ["a_us_choice", "b_pooled_both", "c_gb_rating", "d_named"],
         "n_respondents": [300, 18000, 900, 2000], "n_attributes": [4, 9, 6, 11],
         "outcomes": ["choice", "choice;rating", "rating", "choice_neighbor;rating_neighbor"],
-        "country": ["US", "AT;DE;GB", "GB", "TR"]})
+        "country": ["US", "AT;DE;GB", "GB", "TR"],
+        "domain": ["candidate_choice", "immigration_asylum", "health_covid;consumer_products",
+                   "social_identity_interpersonal"],
+        "choice_object": ["person", "person", "product_service", "person"]})
     bib = pd.DataFrame({"table": list(meta.table),
                         "Derived_License": ["CC0 1.0", "CC0 1.0", "CC BY 4.0", "CC0 1.0"]})
     monkeypatch.setattr(tm, "get_metadata_table", lambda source="main": meta)
@@ -151,6 +154,54 @@ def test_conj_filters(monkeypatch):
         f(outcome="vote")
 
 
+def test_conj_topic_tag_filters(monkeypatch):
+    from irw.operations.filter import filter_tables
+    _fake_conj(monkeypatch)
+
+    def f(**kw):
+        return list(filter_tables([], source="conj", **kw))
+
+    assert f(domain="immigration_asylum") == ["b_pooled_both"]
+    assert f(domain="consumer_products") == ["c_gb_rating"]           # a secondary domain counts
+    assert f(domain=["candidate_choice", "Health_Covid"]) == ["a_us_choice", "c_gb_rating"]
+    assert f(choice_object="person") == ["a_us_choice", "b_pooled_both", "d_named"]
+    assert f(domain="candidate_choice", choice_object="product_service") == []
+    assert f(domain="health_covid", outcome="rating", country="GB") == ["c_gb_rating"]
+    # a value no table carries is an error naming the vocabulary, not an empty result
+    with pytest.raises(ValueError, match="immigration_asylum"):
+        f(domain="immigration")
+    with pytest.raises(ValueError, match="product_service"):
+        f(choice_object="people")
+    # the check sees every table, not the ones earlier filters left
+    assert f(country="US", choice_object="product_service") == []
+
+
+def test_conj_topic_tag_filters_explain_an_old_release(monkeypatch):
+    from irw.operations.filter import filter_tables
+    from irw.operations.list_tables import IRWMetadataUnavailable
+    import irw.utils.redivis.table_metadata as tm
+    _fake_conj(monkeypatch)
+    old = tm.get_metadata_table("conj").drop(columns=["domain", "choice_object"])
+    monkeypatch.setattr(tm, "get_metadata_table", lambda source="main": old)
+    with pytest.raises(IRWMetadataUnavailable, match="no 'domain' column"):
+        filter_tables([], source="conj", domain="health_covid")
+    assert list(filter_tables([], source="conj", country="US")) == ["a_us_choice"]
+
+
+def test_describe_filter_counts_conj_topic_tags(monkeypatch):
+    from irw.operations import filter_info
+    import irw.utils.redivis.table_metadata as tm
+    _fake_conj(monkeypatch)
+    monkeypatch.setattr(filter_info, "get_metadata_table", tm.get_metadata_table)
+    monkeypatch.setattr(filter_info, "_build_base_table_list",
+                        lambda ds: pd.DataFrame({"name": list(tm.get_metadata_table("conj").table)}))
+    domain = filter_info.describe_filter([], "domain", source="conj")["values"]
+    assert dict(domain) == {"candidate_choice": 1, "consumer_products": 1, "health_covid": 1,
+                            "immigration_asylum": 1, "social_identity_interpersonal": 1}
+    obj = filter_info.describe_filter([], "choice_object", source="conj")["values"]
+    assert dict(obj) == {"person": 3, "product_service": 1}
+
+
 def test_conj_and_other_filters_do_not_cross():
     from irw.operations.filter import _check_filters_for_source
     from irw.operations.filter_info import get_filters
@@ -160,9 +211,13 @@ def test_conj_and_other_filters_do_not_cross():
         _check_filters_for_source("main", {"country": "US"})
     with pytest.raises(ValueError, match="only available when source='conj'"):
         _check_filters_for_source("comp", {"outcome": "choice"})
+    with pytest.raises(ValueError, match="only available when source='conj'"):
+        _check_filters_for_source("main", {"domain": "health_covid"})
     _check_filters_for_source("conj", {"country": "US", "license": "CC0 1.0"})
-    assert get_filters("conj") == ["license", "n_respondents", "n_attributes", "outcome", "country"]
+    assert get_filters("conj") == ["license", "n_respondents", "n_attributes", "outcome", "country",
+                                   "domain", "choice_object"]
     assert "country" not in get_filters("main") and "outcome" not in get_filters("nom")
+    assert "domain" not in get_filters("main") and "choice_object" not in get_filters("comp")
 
 
 

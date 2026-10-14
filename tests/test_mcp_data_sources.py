@@ -49,6 +49,31 @@ class SourcedBackend(FakeBackend):
         self.calls.append(("citation", source))
         return ["@article{kreps_2020_covid_vaccine, title={T}}"] if source == "conj" else []
 
+    # The conj filter list is the package's (irw.get_filters("conj")); its
+    # filtering is irw.filter(source="conj", ...), stood in for here.
+    CONJ_FILTERS = ["license", "n_respondents", "n_attributes", "outcome", "country",
+                    "domain", "choice_object"]
+
+    def filter_names(self, source="main"):
+        self.calls.append(("filter_names", source))
+        return list(self.CONJ_FILTERS) if source == "conj" else super().filter_names()
+
+    def filter_tables(self, **filters):
+        source = filters.pop("source", "main")
+        self.calls.append(("filter_tables", source, dict(filters)))
+        if source != "conj":
+            return super().filter_tables(**filters)
+        if filters.get("domain") == "immigration_asylum":
+            return pd.Series([], name="name", dtype=str)
+        return pd.Series(["kreps_2020_covid_vaccine"], name="name", dtype=str)
+
+    def describe_filter(self, filter_name, source="main"):
+        self.calls.append(("describe_filter", source, filter_name))
+        if source == "conj":
+            return {"description": "What the study is about.",
+                    "values": pd.Series([3, 1], index=["health_covid", "candidate_choice"], name=filter_name)}
+        return super().describe_filter(filter_name)
+
 
 @pytest.fixture
 def backend():
@@ -99,9 +124,38 @@ def test_search_tables_takes_a_source(tools, backend):
     assert ("list_tables", "conj") in backend.calls
 
 
-def test_search_filters_off_main_are_refused(tools):
-    with pytest.raises(IRWMCPError, match="source='main' only"):
-        tools.search_tables("", filters={"license": "CC0"}, source="conj")
+def test_search_filters_off_main_go_to_the_package_with_the_source(tools, backend):
+    r = tools.search_tables("", filters={"domain": "health_covid", "choice_object": "policy"}, source="conj")
+    assert [t["name"] for t in r["tables"]] == ["kreps_2020_covid_vaccine"]
+    assert r["filters_applied"] == {"domain": "health_covid", "choice_object": "policy"}
+    # the package's own filter, called with the source and with no density default (main-only)
+    assert ("filter_tables", "conj", {"domain": "health_covid", "choice_object": "policy"}) in backend.calls
+    assert not any(c[0] == "filter_tables" and "density" in c[2] for c in backend.calls)
+    assert any("domain" in c and "choice_object" in c for c in r["caveats"])
+    assert not any("density" in c for c in r["caveats"])
+    # no match is an empty result that still names the source
+    empty = tools.search_tables("", filters={"domain": "immigration_asylum"}, source="conj")
+    assert empty["tables"] == [] and empty["source"] == "conj" and empty["total"] == 0
+
+
+def test_filter_names_are_per_source(tools):
+    # a conj filter on main, or a main filter on conj, is refused by name
+    with pytest.raises(IRWMCPError, match="for source='main'"):
+        tools.search_tables("", filters={"domain": "health_covid"})
+    with pytest.raises(IRWMCPError, match="for source='conj'"):
+        tools.search_tables("", filters={"construct_type": "Cognitive"}, source="conj")
+
+
+def test_describe_filter_takes_a_source(tools, backend):
+    r = tools.describe_filter("domain", source="conj")
+    assert r["source"] == "conj" and r["filter"] == "domain"
+    assert ("describe_filter", "conj", "domain") in backend.calls
+    assert r["available_values"] == ["health_covid", "candidate_choice"]
+    assert r["value_counts"] == {"health_covid": 3, "candidate_choice": 1}
+    with pytest.raises(IRWMCPError, match="for source='main'"):
+        tools.describe_filter("domain")
+    with pytest.raises(IRWMCPError, match="source must be one of"):
+        tools.describe_filter("domain", source="nope")
 
 
 def test_unknown_source_is_refused(tools):

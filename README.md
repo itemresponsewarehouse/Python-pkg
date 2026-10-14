@@ -111,7 +111,8 @@ irw.filter(source="comp", n_actors=[2, 10])  # R's irw_filter_comp()
 irw.save_bibtex("agn_kay_2025")  # Returns BibTeX entry
 irw.save_bibtex("amboseli_baboons_g1", source="comp")  # any source: main, nom, sim, comp, conj
 # Per-table metadata for a source (R's irw_metadata())
-irw.metadata(source="conj")  # design counts and facts per conjoint experiment
+irw.metadata(source="conj")  # design counts, facts and topic tags per conjoint experiment
+irw.filter(source="conj", domain="immigration_asylum")  # the immigration conjoints; see describe_filter("domain", source="conj")
 # Download table
 irw.download("agn_kay_2025", path="data.csv")
 
