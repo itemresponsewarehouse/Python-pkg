@@ -118,7 +118,7 @@ PACKAGE_NAME: str = "irw"
 # the briefing's `pip install git+...` line resolves the version, sees it
 # already installed and SKIPS -- even with --upgrade -- so an unchanged version
 # string means users silently keep the old code.
-VERSION: str = "0.7.5"
+VERSION: str = "0.7.6"
 DESCRIPTION: str = "A Python package for the Item Response Warehouse (IRW)"
 
 __all__ = [

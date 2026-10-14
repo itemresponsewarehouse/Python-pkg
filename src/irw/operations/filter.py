@@ -30,9 +30,19 @@ COMP_ONLY_FILTERS = ('n_actors',)
 # The conjoint source (Rpkg's irw_filter(source = "conj")), over conj_metadata:
 # n_respondents/n_attributes ranges; outcome "choice"/"rating" (the table has
 # EVERY type named; choice_<name>/rating_<name> count as their type); country
+# (ISO codes, ANY of them); domain and choice_object (topic tags from the irw
+# repo's data/conjoint/tags.csv, README "Topic tags": domain is one or more
+# values joined with ";", primary first; a table matches when ANY requested
+# value is among its tags; choice_object is one value per table). The tag
+# vocabularies are closed sets kept in the irw repo, not here: a value no table
+# carries is an error naming the values in use, since an empty result would
+# read as an absence of data.
 # ISO codes (fielded in ANY; a pooled "AT;DE;GB" counts for each); license.
-CONJ_FILTERS = ('n_respondents', 'n_attributes', 'outcome', 'country', 'license')
-CONJ_ONLY_FILTERS = ('n_respondents', 'n_attributes', 'outcome', 'country')
+CONJ_FILTERS = ('n_respondents', 'n_attributes', 'outcome', 'country',
+                'domain', 'choice_object', 'license')
+CONJ_ONLY_FILTERS = ('n_respondents', 'n_attributes', 'outcome', 'country',
+                     'domain', 'choice_object')
+CONJ_TAG_FILTERS = ('domain', 'choice_object')
 CONJ_OUTCOMES = ('choice', 'rating')
 
 # The column each filter reads in list_tables(); a filter not named here reads
@@ -339,6 +349,8 @@ def filter_tables(
     n_attributes: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
     outcome: Optional[Union[str, List[str]]] = None,
     country: Optional[Union[str, List[str]]] = None,
+    domain: Optional[Union[str, List[str]]] = None,
+    choice_object: Optional[Union[str, List[str]]] = None,
     source: str = "main",
 ) -> pd.Series:
     """
@@ -464,9 +476,32 @@ def filter_tables(
         Conjoint only: ISO 3166 alpha-2 codes (e.g. "US"). Keeps tables fielded
         in any of them; a table pooling several countries matches each.
 
+    domain : str or list of str, optional
+        Conjoint only: what the study is about -- its setting, not the
+        attribute it manipulates (a candidate conjoint that varies gender is
+        "candidate_choice"). A table carries one or more domains, primary
+        first; it matches when any value named is among them. Vocabulary:
+        candidate_choice, immigration_asylum, climate_energy_environment,
+        international_economy, democracy_institutions, foreign_policy_security,
+        health_covid, tax_welfare_economy, consumer_products,
+        social_identity_interpersonal, labour_hiring, crime_justice_policing,
+        technology_ai_privacy, political_communication, parties_platforms,
+        public_administration, corruption_accountability,
+        housing_neighbourhoods, other. A value no table carries raises
+        ValueError listing the values in use; irw.describe_filter("domain",
+        source="conj") gives the counts.
+
+    choice_object : str or list of str, optional
+        Conjoint only: what one profile represents, one value per table:
+        person (candidate, applicant, patient, neighbour), policy, scenario (a
+        situation or case), product_service, place, organisation or message (a
+        text or media artefact judged as such). Any value named matches.
+
     source : str, default "main"
         Table source: "main", "nom", "sim", "comp" or "conj". "conj" takes only
-        n_respondents, n_attributes, outcome, country and license.
+        n_respondents, n_attributes, outcome, country, domain, choice_object
+        and license. The two tag columns are defined in the irw repo's
+        data/conjoint/README.md ("Topic tags").
 
     Returns
     -------
@@ -503,6 +538,9 @@ def filter_tables(
     >>> filtered = irw.filter(source="nom", construct_type="Cognitive/educational", density=None)
     >>> filtered = irw.filter(source="comp", n_actors=[2, 10])
     >>> filtered = irw.filter(source="conj", outcome="rating", country=["US", "GB"])
+    >>> immigration = irw.filter(source="conj", domain="immigration_asylum")
+    >>> candidates = irw.filter(source="conj", domain=["candidate_choice", "parties_platforms"],
+    ...                         choice_object="person")
     """
     params = dict(locals())
     supplied = {
@@ -523,7 +561,8 @@ def filter_tables(
     _check_filters_for_source(source, supplied)
     if source == 'conj':
         return _filter_conj(n_respondents=n_respondents, n_attributes=n_attributes,
-                            outcome=outcome, country=country, license=license)
+                            outcome=outcome, country=country,
+                            domain=domain, choice_object=choice_object, license=license)
 
     # Get all tables with metadata
     df = list_tables(datasets, source=source)
@@ -647,8 +686,31 @@ def _as_list(value):
     return [value] if isinstance(value, str) else list(value)
 
 
+def _split_conj_tags(cells: pd.Series) -> pd.Series:
+    """Each ";"-joined tag cell as a set of lower-cased atoms (NaN -> empty set)."""
+    return cells.fillna("").map(
+        lambda s: {a.strip().lower() for a in str(s).split(";") if a.strip()})
+
+
+def _filter_conj_tag(meta: pd.DataFrame, full: pd.DataFrame, column: str, value) -> pd.DataFrame:
+    """Keep the rows whose `column` tags include any requested value.
+
+    `full` is the unfiltered metadata: the vocabulary check must see every
+    table, not the ones earlier filters left, or a valid value reads as unknown.
+    """
+    wanted = {v.strip().lower() for v in _as_list(value)}
+    known = set().union(*_split_conj_tags(full[column])) if len(full) else set()
+    unknown = sorted(wanted - known)
+    if unknown:
+        raise ValueError(
+            f"Unknown {column} value(s): {', '.join(repr(u) for u in unknown)}. "
+            f"The {column} tags in use are: {', '.join(sorted(known))}.")
+    has = _split_conj_tags(meta[column])
+    return meta[has.map(lambda h: bool(h & wanted))]
+
+
 def _filter_conj(n_respondents=None, n_attributes=None, outcome=None, country=None,
-                 license=None) -> pd.Series:
+                 domain=None, choice_object=None, license=None) -> pd.Series:
     """filter(source="conj"): the conjoint filters over conj_metadata and conj_biblio."""
     from ..utils.redivis.table_metadata import get_biblio_table, get_metadata_table
 
@@ -658,6 +720,15 @@ def _filter_conj(n_respondents=None, n_attributes=None, outcome=None, country=No
     if missing:
         raise IRWMetadataUnavailable(
             f"conj_metadata lacks column(s) {', '.join(missing)}; cannot filter source='conj'.")
+    full = meta
+    for column, value in (("domain", domain), ("choice_object", choice_object)):
+        if value is None:
+            continue
+        if column not in meta.columns:
+            raise IRWMetadataUnavailable(
+                f"The conjoint metadata in this irw_meta release has no '{column}' column; "
+                "topic tags were published on 2026-10-13. Use a newer release (irw.use_version).")
+        meta = _filter_conj_tag(meta, full, column, value)
 
     if license is not None:
         bib = get_biblio_table("conj")

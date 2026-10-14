@@ -132,6 +132,7 @@ def metadata(source: str = "main") -> pd.DataFrame:
     >>> import irw
     >>> conj = irw.metadata(source="conj")
     >>> conj[conj["country"] == "US"]
+    >>> conj["domain"].str.split(";").explode().value_counts()  # topic tags
     """
     return _get_metadata_table(source)
 
@@ -146,7 +147,8 @@ def filter(*, source: str = "main", **kwargs) -> pd.Series:
         The data family to filter. Options: "main", "nom", "sim", "comp", "conj".
         Tag filters need "main" or "nom"; `collection` needs "main"; "comp"
         takes only `n_responses`, `n_actors` and `license`; "conj" takes only
-        `n_respondents`, `n_attributes`, `outcome`, `country` and `license`. A filter the
+        `n_respondents`, `n_attributes`, `outcome`, `country`, `domain`,
+        `choice_object` and `license`. A filter the
         source cannot answer raises ValueError rather than matching nothing.
     **kwargs
         Filter parameters (n_responses, construct_type, etc.). See

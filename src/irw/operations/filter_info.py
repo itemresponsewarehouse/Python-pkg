@@ -51,6 +51,8 @@ FILTER_DESCRIPTIONS = {
     'n_attributes': 'Number of attributes varied on each conjoint profile. Conjoint source only (source="conj"). A single number or a list [min, max].',
     'outcome': 'Conjoint outcome type: "choice" and/or "rating". Conjoint source only (source="conj"). Keeps tables that have every type named, so a table with both matches either.',
     'country': 'Country a conjoint table was fielded in, as ISO 3166 alpha-2 codes (e.g. "US"). Conjoint source only (source="conj"). A single string or a list (OR logic); a table pooling several countries matches each.',
+    'domain': 'What a conjoint study is about: its setting, not the attribute it manipulates (a candidate conjoint that varies gender is "candidate_choice", not a gender tag). Conjoint source only (source="conj"). Closed vocabulary of 19 values, e.g. "immigration_asylum", "candidate_choice", "health_covid", "consumer_products", "other"; describe_filter lists them with counts. A table carries one or more domains (primary first) and matches when any value named is among them. A single string or a list (OR logic). Every conjoint table is tagged.',
+    'choice_object': 'What one profile in a conjoint table represents: "person" (candidate, applicant, patient, neighbour), "policy", "scenario" (a situation or case), "product_service", "place", "organisation" or "message" (a text or media artefact judged as such). Conjoint source only (source="conj"). One value per table; a single string or a list (OR logic).',
 }
 
 
@@ -122,7 +124,8 @@ def describe_filter(datasets: List, filter_name: str, source: str = "main") -> O
     filter_name : str
         Name of the filter to describe (e.g., 'n_responses', 'construct_type', 'var').
     source : str, default "main"
-        Table source whose values to report: "main", "nom", "sim" or "comp".
+        Table source whose values to report: "main", "nom", "sim", "comp" or
+        "conj" (whose `domain` and `choice_object` are tables per topic tag).
         `describe_filter('license', source=...)` is R's
         `irw_license_options(source = ...)`, and a tag filter is
         `irw_tag_options(column, source = ...)`.
@@ -225,15 +228,17 @@ def describe_filter(datasets: List, filter_name: str, source: str = "main") -> O
         }
         return result
     
-    # Conjoint outcome/country: tables per value, from conj_metadata
-    if filter_name in ('outcome', 'country'):
+    # Conjoint outcome/country/domain/choice_object: tables per value, from
+    # conj_metadata. A ";"-joined cell counts once for each value it holds.
+    if filter_name in ('outcome', 'country', 'domain', 'choice_object'):
         meta = get_metadata_table(source)
-        col = 'outcomes' if filter_name == 'outcome' else 'country'
+        col = 'outcomes' if filter_name == 'outcome' else filter_name
         if meta.empty or col not in meta.columns:
             return None
         values = meta[col].fillna('').map(
-            lambda s: sorted({(v.split('_', 1)[0] if filter_name == 'outcome' else v.upper())
-                              for v in s.split(';') if v}))
+            lambda s: sorted({(v.split('_', 1)[0] if filter_name == 'outcome'
+                               else v.upper() if filter_name == 'country' else v.strip().lower())
+                              for v in s.split(';') if v.strip()}))
         counts = values.explode().dropna().value_counts()
         result_df = counts.reset_index()
         result_df.columns = ['value', 'count']
