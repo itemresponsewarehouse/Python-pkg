@@ -145,3 +145,83 @@ def _itemtext_disclaimer() -> None:
         return
     _disclaimer_state["shown"] = True
     warnings.warn(_DISCLAIMER, UserWarning, stacklevel=3)
+
+
+# --- licence on the wording itself -------------------------------------------
+#
+# Most item text carries no licence of its own (see _DISCLAIMER). A minority of
+# tables republish wording their source released under an open licence
+# (CC BY-SA 4.0, CC BY-NC 4.0, ...), and that licence has to travel with the
+# data, not only sit on the Redivis page. The record is the IRW repository's
+# itemtext/itemtext_licences.csv, fetched once per session.
+
+_ITEMTEXT_LICENCES_URL = (
+    "https://raw.githubusercontent.com/ben-domingue/irw/main/"
+    "itemtext/itemtext_licences.csv"
+)
+_LICENCE_COLUMNS = ("table", "licence", "licence_url", "attribution", "changes", "basis")
+_licence_state: Dict[str, Any] = {"table": None, "failed": False, "noticed": set()}
+
+
+def _itemtext_licences() -> Optional[Dict[str, Dict[str, str]]]:
+    """The wording-licence record, keyed by lowercase table name.
+
+    None when it could not be fetched (warned once per session): a missing
+    record must not read as "no licence", so callers get None, not {}.
+    """
+    if _licence_state["table"] is not None:
+        return _licence_state["table"]
+    if _licence_state["failed"]:
+        return None
+    try:
+        import csv
+        import io
+        import requests  # a dependency of redivis
+        response = requests.get(_ITEMTEXT_LICENCES_URL, timeout=(5, 15))
+        response.raise_for_status()
+        rows = list(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"))))
+        if not rows or any(c not in rows[0] for c in _LICENCE_COLUMNS):
+            raise ValueError("unexpected columns in itemtext_licences.csv")
+    except Exception as error:
+        _licence_state["failed"] = True
+        warnings.warn(
+            "Could not fetch the item-text licence record from "
+            f"{_ITEMTEXT_LICENCES_URL} ({type(error).__name__}); wording licences "
+            "will not be reported this session.",
+            UserWarning, stacklevel=3,
+        )
+        return None
+    table = {r["table"].lower(): {c: r[c] for c in _LICENCE_COLUMNS} for r in rows}
+    _licence_state["table"] = table
+    return table
+
+
+def itemtext_licence(table_name: str) -> Optional[Dict[str, str]]:
+    """Return the licence record for a table's item wording, or None.
+
+    None means either that the wording carries no licence of its own (the
+    usual case: inclusion implies no licence to reuse the instrument) or that
+    the record could not be fetched, which is warned about separately.
+    """
+    table = _itemtext_licences()
+    if not table:
+        return None
+    return table.get(table_name.lower())
+
+
+def _itemtext_licence_notice(table_name: str) -> Optional[Dict[str, str]]:
+    """Warn once per table with its wording licence, if it has one."""
+    hit = itemtext_licence(table_name)
+    if hit is None:
+        return None
+    if table_name.lower() not in _licence_state["noticed"]:
+        _licence_state["noticed"].add(table_name.lower())
+        warnings.warn(
+            f"Item wording licence for {hit['table']}: {hit['licence']} ({hit['licence_url']})\n"
+            f"  Source: {hit['attribution']}\n"
+            f"  Changes: {hit['changes']}\n"
+            "  This licence covers the item text as published here; it implies no "
+            "licence to reuse the original source instrument.",
+            UserWarning, stacklevel=3,
+        )
+    return hit

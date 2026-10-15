@@ -166,6 +166,17 @@ AUTH_UNREADABLE_MESSAGE = (
     "and re-authenticate. " + AUTH_SETUP_HOWTO
 )
 
+WORDING_LICENCE_NOTE = (
+    "The item wording in this table was released by its source under the stated "
+    "licence and IRW republishes it under that licence, with the attribution and "
+    "changes given. The licence covers the item text as published here; it implies "
+    "no licence to reuse the original source instrument."
+)
+WORDING_LICENCE_NONE_NOTE = (
+    "No licence is recorded for this table's item wording: the response-data "
+    "licence does not extend to the instrument, and inclusion implies no licence "
+    "to reuse it."
+)
 ITEMTEXT_DISCLAIMER = (
     "IRW item text is reconstructed from published sources with partial human "
     "review. Verify it against the original source; availability does not grant "
@@ -1375,9 +1386,31 @@ class IRWTools:
             original_note = ORIGINAL_LICENSE_BLANK_NOTE
         else:
             original_note = ORIGINAL_LICENSE_RECORDED_NOTE
+        wording_licence: Optional[Dict[str, str]] = None
+        wording_note = WORDING_LICENCE_NONE_NOTE
+        try:
+            from .utils.redivis.item_text import itemtext_licence
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                wording_licence = itemtext_licence(table_name)
+            for w in caught:
+                notes_warnings.append(str(w.message))
+        except Exception as error:
+            notes_warnings.append(
+                f"The item-wording licence record could not be read ({type(error).__name__})."
+            )
+        if wording_licence is not None:
+            wording_note = WORDING_LICENCE_NOTE
+            notes_warnings.append(
+                f"This table's item wording is licensed {wording_licence['licence']}; "
+                "read rights.wording_licence and carry the attribution and licence "
+                "link with any reuse."
+            )
         rights = {
             "response_data_license": facts.get("license"),
             "response_data_license_field": "Derived License",
+            "wording_licence": wording_licence,
+            "wording_licence_note": wording_note,
             "original_license": original,
             "original_license_note": original_note,
             "instrument_rights": INSTRUMENT_RIGHTS_NOTE,
