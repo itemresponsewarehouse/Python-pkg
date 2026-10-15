@@ -23,11 +23,13 @@ MAIN_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "item_response_warehouse_3:5xaj"),
     ("datapages", "item_response_warehouse_4:980f"),
     ("datapages", "item_response_warehouse_5:3ykx"),
-    ("datapages", "item_response_warehouse_6:xxxx"),  # new warehouse
+    ("datapages", "item_response_warehouse_6:fpe6"),
+    ("datapages", "item_response_warehouse_7:ej0d"),
+    ("datapages", "item_response_warehouse_8:xxxx"),  # new warehouse
 )
 ```
 
-Each entry is `(redivis_user, dataset_ref)`, where `dataset_ref` is the Redivis dataset slug (e.g. `item_response_warehouse_6:xxxx`).
+Each entry is `(redivis_user, dataset_ref)`, where `dataset_ref` is the Redivis dataset slug (e.g. `item_response_warehouse_7:ej0d`).
 
 No other code change is needed **here** -- but this package is one of three
 that declare the same dataset list, and the other two are not optional. See
