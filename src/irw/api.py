@@ -25,7 +25,10 @@ import datetime
 from typing import Optional, Union, Dict, List, Literal, Tuple
 import pandas as pd
 from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_datasets
-from .utils.redivis.item_text import _list_itemtext_tables, _itemtext_disclaimer
+from .utils.redivis.item_text import (
+    _list_itemtext_tables, _itemtext_disclaimer, _itemtext_licence_notice,
+    itemtext_licence as itemtext_licence,
+)
 from .utils.redivis.source_note import _source_note, disable_source_note as disable_source_note, aggregator_bibtex
 from .utils.long2resp import long2resp as _long2resp
 from .utils.long2resp import check_resp as check_resp, resp2long as resp2long
@@ -430,10 +433,20 @@ def itemtext(table_name: str) -> Union[pd.DataFrame, str]:
     the instruments themselves. Inclusion of item text here implies no license
     to reuse an instrument; copyright and related rights remain with the
     original rights holders, and users are responsible for obtaining any
-    permissions their intended use requires.
+    permissions their intended use requires. The exception is a table whose
+    wording its source released under an open licence (CC BY-SA, CC BY-NC,
+    ...): that licence is warned about after the fetch, stored on the frame as
+    ``df.attrs["wording_licence"]`` and returned by :func:`itemtext_licence`.
     """
     _itemtext_disclaimer()
-    return _get_table_itemtext(table_name)
+    result = _get_table_itemtext(table_name)
+    if isinstance(result, pd.DataFrame):
+        # A licensed wording table says so every time it is fetched, and the
+        # record rides on the frame: the licence travels with the data.
+        licence = _itemtext_licence_notice(table_name)
+        if licence is not None:
+            result.attrs["wording_licence"] = dict(licence)
+    return result
 
 
 def save_bibtex(
