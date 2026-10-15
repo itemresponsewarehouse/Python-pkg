@@ -223,7 +223,7 @@ def _format_aux_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
     """info() text for a non-main table: its source's own metadata columns."""
     source = info_dict['source']
     label = {"comp": "competition", "sim": "simulation", "nom": "nominal",
-             "conj": "conjoint"}.get(source, source)
+             "conj": "conjoint", "rank": "rankings"}.get(source, source)
     lines = [f"\n{'='*60}", f"IRW Table: {table_name} ({label}, source='{source}')", f"{'='*60}"]
     biblio = info_dict.get('biblio', {})
     if biblio.get('description'):

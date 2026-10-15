@@ -24,7 +24,7 @@ import warnings
 import datetime
 from typing import Optional, Union, Dict, List, Literal, Tuple
 import pandas as pd
-from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_datasets
+from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_datasets, _init_rank_datasets
 from .utils.redivis.item_text import (
     _list_itemtext_tables, _itemtext_disclaimer, _itemtext_licence_notice,
     itemtext_licence as itemtext_licence,
@@ -82,8 +82,10 @@ def _get_datasets(source: str = "main"):
         return [_init_nom_dataset()]
     elif source == "conj":
         return _init_conj_datasets()
+    elif source == "rank":
+        return _init_rank_datasets()
     else:
-        raise ValueError(f"Unknown source '{source}'. Must be one of: 'main', 'sim', 'comp', 'nom', 'conj'")
+        raise ValueError(f"Unknown source '{source}'. Must be one of: 'main', 'sim', 'comp', 'nom', 'conj', 'rank'")
 
 
 def list_tables(source: str = "main", include_metadata: bool = False) -> pd.DataFrame:
@@ -124,7 +126,11 @@ def metadata(source: str = "main") -> pd.DataFrame:
     Parameters
     ----------
     source : str, default "main"
-        The data family: "main" (core), "nom", "sim", "comp" or "conj".
+        The data family: "main" (core), "nom", "sim", "comp", "conj" or "rank".
+        For "rank" a row is one rankings table: the counts (``n_respondents``,
+        ``n_rows``, ``n_tasks``, ``n_items``, ``max_resp``, ``n_duplicate_marks``)
+        and the design record (``method``, ``seats``, ``n_positions``,
+        ``n_candidates``, ``n_ballots_cast``, ``n_ballots_with_marks``, ...).
 
     Returns
     -------
@@ -201,7 +207,8 @@ def info(table_name: Optional[str] = None, source: str = "main", return_dict: bo
             "sim": "IRW Simulation Database Information",
             "comp": "IRW Competition Database Information",
             "nom": "IRW Nominal Response Database Information",
-            "conj": "IRW Conjoint Database Information"
+            "conj": "IRW Conjoint Database Information",
+            "rank": "IRW Rankings Database Information",
         }.get(source, "IRW Database Information")
         return info_for(datasets, title=title)
     else:
@@ -239,7 +246,8 @@ def fetch(
     table_name : str or list of str
         Single table name or list of table names.
     source : str, default "main"
-        The data family. Options: "main" (core), "sim", "comp", "nom".
+        The data family. Options: "main" (core), "sim", "comp", "nom", "conj", "rank".
+        For "rank" ``resp`` is a position as recorded; see ``rank_compress()``.
     dedup : bool, default False
         Apply deduplication to responses.
     wide : bool, default False
@@ -290,6 +298,17 @@ def fetch(
             UserWarning,
             stacklevel=2,
         )
+    if dedup and source == "rank":
+        # A rankings table keeps duplicate marks as recorded (a candidate marked
+        # at two positions is two rows with the same id and item); collapsing
+        # them would be a counting rule, which is rank_compress()'s job.
+        warnings.warn(
+            "Deduplication skipped for source='rank': a rankings table keeps "
+            "duplicate marks as recorded; see irw.rank_compress().",
+            UserWarning,
+            stacklevel=2,
+        )
+        dedup = False
     result = _fetch(
         datasets, table_name, dedup=dedup, max_rows=max_rows,
         columns=None if wide else columns
@@ -350,7 +369,8 @@ def table_sets(
     table_name : str
         Name of a single IRW table.
     source : str, default "main"
-        The data family. Options: "main" (core), "sim", "comp", "nom".
+        The data family. Options: "main" (core), "sim", "comp", "nom", "conj", "rank".
+        For "rank" ``resp`` is a position as recorded; see ``rank_compress()``.
     per_item : bool, default False
         If True, also return a per-item summary. One extra query; the result
         has one row per distinct item.

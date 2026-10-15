@@ -4,8 +4,8 @@ To add another main IRW Redivis warehouse, append a (user, dataset_ref) tuple to
 MAIN_REFS below. All package operations (list_tables, fetch, filter, download,
 info, etc.) discover tables across every entry in MAIN_REFS automatically — no
 other code changes are required. Item text works the same way via ITEMTEXT_REFS,
-and the conjoint source via CONJ_REFS. All three are lists because Redivis caps
-a dataset at 1000 tables.
+the conjoint source via CONJ_REFS and the rankings source via RANK_REFS. All
+four are lists because Redivis caps a dataset at 1000 tables.
 
 See docs/DEVELOPERS.md for the full contributor checklist and test commands.
 """
@@ -45,6 +45,19 @@ NOM_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_nominal:614n")
 CONJ_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "irw_conjoint:5wjx"),
     ("datapages", "irw_conjoint_2:142p"),
+)
+
+# Rankings: one row per respondent x task x marked position, resp a position
+# (see rank_compress()). irw_meta publishes rank_metadata (counts plus the
+# design record per table) and rank_biblio.
+#
+# A shard list from day one, oldest-to-newest, searched newest-first: the
+# family will pass Redivis' 1000-table cap (FairVote alone is 657 contests).
+# The dataset's display name on Redivis is IRW_rank; the reference id resolves
+# it. Append the next shard only once it has a PUBLISHED release, and in Rpkg
+# and ben-domingue/irw too (docs/DEVELOPERS.md, "Adding a rankings shard").
+RANK_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
+    ("datapages", "irw_rank:93f5"),
 )
 
 # Main IRW metadata dataset references (only for main IRW)
@@ -87,7 +100,7 @@ META_TABLES: ClassVar[dict[str, str]] = {
 }
 
 # The table sources, in Python's spelling (R calls "main" "core").
-SOURCES: Tuple[str, ...] = ("main", "nom", "sim", "comp", "conj")
+SOURCES: Tuple[str, ...] = ("main", "nom", "sim", "comp", "conj", "rank")
 
 # Each source's metadata, tags and bibliography tables in irw_meta, by bare name
 # for the reason given above META_TABLES. A source with no "tags" entry has no
@@ -99,6 +112,7 @@ SOURCE_META_TABLES: ClassVar[dict[str, dict[str, str]]] = {
     "sim": {"metadata": "simsyn_metadata", "biblio": "simsyn_biblio"},
     "comp": {"metadata": "comps_metadata", "biblio": "comps_biblio"},
     "conj": {"metadata": "conj_metadata", "biblio": "conj_biblio"},
+    "rank": {"metadata": "rank_metadata", "biblio": "rank_biblio"},
 }
 
 # Rpkg's .irw_tag_sources and .irw_collection_sources. Code tests membership
@@ -119,7 +133,7 @@ PACKAGE_NAME: str = "irw"
 # the briefing's `pip install git+...` line resolves the version, sees it
 # already installed and SKIPS -- even with --upgrade -- so an unchanged version
 # string means users silently keep the old code.
-VERSION: str = "0.7.6"
+VERSION: str = "0.7.7"
 DESCRIPTION: str = "A Python package for the Item Response Warehouse (IRW)"
 
 __all__ = [
@@ -128,6 +142,7 @@ __all__ = [
     "COMP_REF",
     "NOM_REF",
     "CONJ_REFS",
+    "RANK_REFS",
     "META_REF",
     "ITEMTEXT_REFS",
     "META_TABLES",

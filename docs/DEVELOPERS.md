@@ -82,6 +82,20 @@ irw repo's parity check compares shard order for `conj`. Where NEW conjoint
 tables are uploaded is `CONJ_DEFAULT` in the irw repo's `red_up/targets.py`,
 not anything here.
 
+## Adding a rankings shard
+
+The rankings source (`source="rank"`, `RANK_REFS`) was registered as a shard
+list from day one (October 2026, ben-domingue/irw#3024): FairVote's cast vote
+records alone are 657 contests, so the 1000-table cap is a matter of time. One
+shard, `irw_rank:93f5` (the dataset's display name on Redivis is `IRW_rank`; the
+reference id is what resolves it). `_init_rank_datasets()` has the shape and
+trap of `_init_conj_datasets()` above, and the checklist is the conjoint one with
+`irw_rank_2`, `.irw_datasource_specs$rank`, `IRW_RANK_DATASETS`, `RANK_DEFAULT`
+and `18_rankings.R` in place of their conjoint twins. Rankings tables do have
+`id`/`item`/`resp`, so the core helpers (`long2resp`, `table_sets`) read them;
+what they need first is `rank_compress()`, and `fetch(dedup=True)` skips them
+because duplicate marks are data.
+
 Two things must ship together with this: `IRW_TEXT_DATASETS` in
 `src/metadata/redivis_config.R` (the `ben-domingue/irw` repo) and
 `.irw_itemtext_specs` in the R package. A config naming a shard the other two do
@@ -213,7 +227,7 @@ in three runtimes with no shared build:
 | `irw` | `metadata/redivis_config.R` | dataset **names** only |
 
 All three must list the same datasets, in the same order for the sharded
-sources (`MAIN_REFS`, `ITEMTEXT_REFS` and `CONJ_REFS` here). The order is not cosmetic: every
+sources (`MAIN_REFS`, `ITEMTEXT_REFS`, `CONJ_REFS` and `RANK_REFS` here). The order is not cosmetic: every
 client searches shards newest-first so a table resolves to its most recent copy,
 and a file listing them differently would quietly resolve some tables to a stale
 shard while every name still matched.

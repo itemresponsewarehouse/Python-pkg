@@ -4,7 +4,7 @@ import logging
 import os
 import time
 from typing import Any, List, Optional, Tuple
-from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, CONJ_REFS
+from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, CONJ_REFS, RANK_REFS
 from .cache import metadata_cache
 from .pins import (
     ABSENT,
@@ -307,7 +307,7 @@ def _dataset_table_list(ds: Any) -> List[Any]:
 def _order_main_datasets(datasets: List[Any]) -> List[Any]:
     """Return a shard list in search order: newest first.
 
-    MAIN_REFS and CONJ_REFS are declared oldest-to-newest (mirroring the R
+    MAIN_REFS, CONJ_REFS and RANK_REFS are declared oldest-to-newest (mirroring the R
     package's ``.irw_datasource_specs``), so reversing makes a table that exists
     in more than one shard resolve to its most recent copy -- matching what the
     R package's ``.irw_order_datasources`` does. The name predates the conjoint
@@ -452,6 +452,26 @@ def _init_conj_datasets() -> List[Any]:
 
     datasets = _order_main_datasets(
         _init_datasets_from_refs(CONJ_REFS, skip_unavailable=True)
+    )
+    metadata_cache.set(cache_key, datasets)
+    return datasets
+
+
+def _init_rank_datasets() -> List[Any]:
+    """Initialize every rankings shard in RANK_REFS, newest first (cached).
+
+    Same contract as `_init_conj_datasets()`: an unreleased shard is skipped
+    with a warning, and the cache key carries the configured refs and the
+    session's pins.
+    """
+    cache_key = ("rank_datasets:" + "|".join(f"{user}/{ref}" for user, ref in RANK_REFS)
+                 + _pins_fingerprint(RANK_REFS))
+    cached = metadata_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    datasets = _order_main_datasets(
+        _init_datasets_from_refs(RANK_REFS, skip_unavailable=True)
     )
     metadata_cache.set(cache_key, datasets)
     return datasets

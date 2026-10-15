@@ -368,6 +368,9 @@ def filter_tables(
     - "comp" takes only ``n_responses``, ``n_actors`` and ``license`` (this is
       R's ``irw_filter_comp()``); anything else raises, and the density
       default is not applied.
+    - "rank" takes ``license``; its metadata (``metadata(source="rank")``) has
+      no column for the other criteria, which are refused by name. Filter on
+      the design record (method, seats, positions offered, ...) directly.
 
     A source's metadata may still lack a column a filter needs (nom has no
     ``density`` or ``variables``); passing that filter raises ValueError, and

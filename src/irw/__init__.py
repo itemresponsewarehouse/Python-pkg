@@ -38,6 +38,7 @@ warnings.filterwarnings(
 )
 
 from .utils.conj_long import conj_long
+from .utils.rank_compress import rank_compress
 
 # Export all API functions
 from .api import (
@@ -101,6 +102,7 @@ __all__ = [
     "download",
     "long2resp",
     "conj_long",
+    "rank_compress",
     "resp2long",
     "check_resp",
     "get_filters",
