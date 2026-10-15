@@ -109,10 +109,12 @@ irw.filter(source="comp", n_actors=[2, 10])  # R's irw_filter_comp()
 
 # Get BibTeX citation
 irw.save_bibtex("agn_kay_2025")  # Returns BibTeX entry
-irw.save_bibtex("amboseli_baboons_g1", source="comp")  # any source: main, nom, sim, comp, conj
+irw.save_bibtex("amboseli_baboons_g1", source="comp")  # any source: main, nom, sim, comp, conj, rank
 # Per-table metadata for a source (R's irw_metadata())
 irw.metadata(source="conj")  # design counts, facts and topic tags per conjoint experiment
 irw.filter(source="conj", domain="immigration_asylum")  # the immigration conjoints; see describe_filter("domain", source="conj")
+irw.metadata(source="rank")  # rankings tables (ranked-choice ballots, jury rankings): counts and the design record per table
+irw.rank_compress(irw.fetch("eurovision_2016_final", source="rank"))  # positions renumbered 1..k per ranking, later repeat marks dropped
 # Download table
 irw.download("agn_kay_2025", path="data.csv")
 

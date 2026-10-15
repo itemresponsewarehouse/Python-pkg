@@ -29,6 +29,7 @@ from .datasets import (
     _init_main_datasets,
     _init_nom_dataset,
     _init_conj_datasets,
+    _init_rank_datasets,
     _init_sim_dataset,
     _main_datasets_cache_key,
 )
@@ -92,6 +93,8 @@ def _source_datasets(source: str) -> List[Any]:
         return [_init_sim_dataset()]
     if source == "conj":
         return _init_conj_datasets()
+    if source == "rank":
+        return _init_rank_datasets()
     if source == "comp":
         return [_init_comp_dataset()]
     # Unreachable while _check_source() guards SOURCES; kept explicit so a new
@@ -154,8 +157,9 @@ def get_metadata_table(source: str = "main") -> pd.DataFrame:
     Parameters
     ----------
     source : str, default "main"
-        Table source: "main", "nom", "sim", "comp" or "conj". Each has its own
-        columns; conj's are design counts and design facts per experiment.
+        Table source: "main", "nom", "sim", "comp", "conj" or "rank". Each has its
+        own columns; conj's are design counts and design facts per experiment,
+        rank's the counts and design record per rankings table.
 
     Returns
     -------
@@ -379,7 +383,7 @@ def get_biblio_table(source: str = "main") -> pd.DataFrame:
     Parameters
     ----------
     source : str, default "main"
-        Table source: "main", "nom", "sim", "comp" or "conj".
+        Table source: "main", "nom", "sim", "comp", "conj" or "rank".
 
     Returns
     -------
