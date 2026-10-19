@@ -132,6 +132,50 @@ class _Result:
                              "URL__for_data_": ["https://zenodo.org/records/22763396"]})
 
 
+class _ResultWithNAs:
+    """What the live biblio actually returns: "NA" strings, not SQL NULL."""
+
+    def to_pandas_dataframe(self, progress=False):
+        return pd.DataFrame({
+            "table": ["Bailon_2020_CovidAffect", "environment_ltm", "pks_probability"],
+            "Source_via": ["openESM", "NA", "  na  "],
+            "URL__for_data_": ["https://zenodo.org/records/22763396", "NA", "NA"],
+        })
+
+
+def test_the_na_string_is_not_a_source(monkeypatch):
+    """biblio writes an absent Source_via as "NA", which must not become a note."""
+    _live_loader(monkeypatch, lambda sql: _ResultWithNAs())
+    assert _notes(lambda: sn._source_note(["environment_ltm"])) == []
+    assert _notes(lambda: sn._source_note(["pks_probability"])) == []
+    notes = _notes(lambda: sn._source_note(["bailon_2020_covidaffect"]))
+    assert len(notes) == 1 and "openESM" in notes[0]
+
+
+def test_the_query_excludes_the_na_string(monkeypatch):
+    calls = []
+    _live_loader(monkeypatch, lambda sql: calls.append(sql) or _ResultWithNAs())
+    sn._source_note(["bailon_2020_covidaffect"])
+    assert "'na'" in calls[0].lower()
+
+
+def test_a_cache_holding_na_rows_heals_on_read(monkeypatch):
+    """A cache written before the fix must not keep mislabelling for its week."""
+    _live_loader(monkeypatch, lambda sql: _ResultWithNAs())
+    sn._source_note(["bailon_2020_covidaffect"])          # writes the cache
+    import csv as _csv
+    path = sn._cache_path()
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = _csv.writer(f)
+        w.writerow(["table", "via", "url"])
+        w.writerow(["environment_ltm", "NA", ""])
+        w.writerow(["bailon_2020_covidaffect", "openESM", ""])
+    monkeypatch.setitem(sn._state, "lookup", None)
+    monkeypatch.setitem(sn._state, "shown", set())
+    assert _notes(lambda: sn._source_note(["environment_ltm"])) == []
+    assert len(_notes(lambda: sn._source_note(["bailon_2020_covidaffect"]))) == 1
+
+
 def test_the_lookup_is_kept_on_disk_for_the_next_session(monkeypatch):
     calls = []
     _live_loader(monkeypatch, lambda sql: calls.append(sql) or _Result())
