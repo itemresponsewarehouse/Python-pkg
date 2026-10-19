@@ -66,6 +66,19 @@ def aggregator_bibtex(sources) -> list:
             out.append(entry)
     return out
 
+# biblio stores an absent Source_via as the literal string "NA" (it is written
+# from R), not as SQL NULL, so neither IS NOT NULL nor a non-empty test
+# excludes those rows. Without this every table would carry a via of "NA" and
+# fetching any of them would print "was found via NA." (ben-domingue/irw#2421).
+# Applied to the cache as well as the query -- the filter sits in
+# _load_lookup(), the one seam both paths pass through.
+_NOT_A_SOURCE = ("", "na", "nan", "null", "none")
+
+
+def _is_a_source(via) -> bool:
+    return via is not None and str(via).strip().lower() not in _NOT_A_SOURCE
+
+
 _state = {"enabled": True, "shown": set(), "lookup": None}
 
 CACHE_FILE = "source_via.csv"
@@ -118,11 +131,12 @@ def _write_cached(lookup: Dict[str, Dict[str, Optional[str]]]) -> None:
 def _load_lookup() -> Dict[str, Dict[str, Optional[str]]]:
     """lowercased table -> {"via": key, "url": URL__for_data_}; {} on any failure."""
     cached = _read_cached()
-    if cached is not None:
-        return cached
-    lookup = _query_lookup()
-    _write_cached(lookup)
-    return lookup
+    if cached is None:
+        cached = _query_lookup()
+        _write_cached(cached)
+    # One seam for both paths, so a cache written before this fix heals on read
+    # rather than mislabelling for the rest of its week.
+    return {t: hit for t, hit in cached.items() if _is_a_source(hit["via"])}
 
 
 def _query_lookup() -> Dict[str, Dict[str, Optional[str]]]:
@@ -134,7 +148,8 @@ def _query_lookup() -> Dict[str, Dict[str, Optional[str]]]:
         table = _get_meta_dataset().table(SOURCE_META_TABLES["main"]["biblio"])
         sql = (f"SELECT `table`, Source_via, URL__for_data_ "
                f"FROM `{table.qualified_reference}` "
-               f"WHERE Source_via IS NOT NULL AND TRIM(Source_via) != ''")
+               f"WHERE Source_via IS NOT NULL AND TRIM(Source_via) != '' "
+               f"AND LOWER(TRIM(Source_via)) NOT IN ('na', 'nan', 'null', 'none')")
         df = redivis.query(sql).to_pandas_dataframe(progress=False)
         return {
             str(r["table"]).lower(): {
