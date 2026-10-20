@@ -5,10 +5,13 @@
 # this, `import irw` raises TypeError on 3.9.
 from __future__ import annotations
 
+import logging
 import re
 import time
 from typing import Any, Callable, List, Optional, Tuple, TypeVar
 import warnings
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -238,6 +241,8 @@ def _format_error(err: Exception | None) -> str:
 def _search_datasets(
     datasets: List[Any],
     callback: Callable[[Any], T],
+    *,
+    on_miss: Optional[Callable[[List[Any]], List[Any]]] = None,
 ) -> Tuple[Optional[T], Optional[Exception], Optional[Exception]]:
     """
     Try callback(ds) for each Redivis dataset, in order, until one succeeds.
@@ -250,16 +255,48 @@ def _search_datasets(
     datasource, and an invalid format is a property of the table itself. Pass
     it to _terminal_error_message() for the text to show the user -- the class
     matters, since quota arrives looking like an invalid request.
+
+    `on_miss` is the hook shard resolution hangs on (see
+    `shard_resolution.py`): once the first dataset has reported not-found, it
+    is handed the datasets not yet tried and returns them reordered, so the
+    shard the metadata names is tried next instead of last. It is called at
+    most once, it may only reorder what it was given -- a hook that drops a
+    dataset would silently turn a hit into a not-found -- and a hook that
+    raises, or returns anything other than a permutation, is ignored.
     """
     last_other: Exception | None = None
-    for ds in datasets:
+    remaining = list(datasets)
+    i = 0
+    while i < len(remaining):
+        ds = remaining[i]
         try:
             return callback(ds), None, None
         except Exception as e:
             kind = _classify_error(e)
             if kind in _TERMINAL_ERROR_KINDS:
                 return None, None, e
-            if kind == "not_found":
-                continue
-            last_other = e
+            if kind != "not_found":
+                last_other = e
+        if on_miss is not None and i == 0:
+            tail = remaining[1:]
+            try:
+                reordered = on_miss(tail)
+            except Exception as hook_error:  # pragma: no cover - never a fetch error
+                logger.debug("Shard resolution hook failed: %s", hook_error)
+                reordered = None
+            if _is_permutation(reordered, tail):
+                remaining = remaining[:1] + list(reordered)
+            on_miss = None
+        i += 1
     return None, last_other, None
+
+
+def _is_permutation(candidate: Any, original: List[Any]) -> bool:
+    """Whether `candidate` holds exactly the objects in `original`.
+
+    Identity, not equality: these are Redivis dataset handles, and what has
+    to be guaranteed is that the search still visits every one of them.
+    """
+    if not isinstance(candidate, list) or len(candidate) != len(original):
+        return False
+    return sorted(map(id, candidate)) == sorted(map(id, original))

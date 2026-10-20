@@ -18,6 +18,7 @@ from ..utils.redivis.tables import (
     _terminal_error_message,
 )
 from ..utils.redivis.pins import _pinned_not_found_hint
+from ..utils.redivis.shard_resolution import shard_first, shard_first_after_miss
 from ..utils.redivis import disk_cache
 
 logger = logging.getLogger(__name__)
@@ -300,7 +301,17 @@ def _fetch_one_table(
 
         return pd.DataFrame(df)
 
-    result, last_other, terminal = _search_datasets(datasets, _load_table)
+    # Which shard holds this table is recorded in the metadata, so the search
+    # does not have to discover it one not-found lookup at a time. Resolved
+    # here only if the map is already in hand (build=False, so this costs
+    # nothing); otherwise the newest shard is probed first as before and the
+    # map is built from `on_miss`, once that probe has actually missed. Both
+    # calls reorder and never drop, so the not-found path below is reached in
+    # exactly the cases it was before. See shard_resolution.py (irw#3127).
+    datasets = shard_first(datasets, name)
+    result, last_other, terminal = _search_datasets(
+        datasets, _load_table, on_miss=lambda tail: shard_first_after_miss(tail, name)
+    )
     if terminal is not None:
         # Names the actual condition -- quota exhaustion used to be reported
         # here as an invalid format. warn-and-return-None is kept deliberately:

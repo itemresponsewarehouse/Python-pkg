@@ -26,6 +26,7 @@ from ..utils.redivis.tables import (
     _search_datasets,
     _terminal_error_message,
 )
+from ..utils.redivis.shard_resolution import shard_first, shard_first_after_miss
 
 # `resp` is stored as a string and a missing response is the literal "NA"
 # token, sometimes "". Without this filter the distinct-response set gains a
@@ -111,8 +112,13 @@ def table_sets(
     if not isinstance(name, str) or not name:
         raise ValueError("table_name must be a single non-empty table name.")
 
+    # Same shard resolution as fetch(): reorder the shards from the metadata
+    # when it is free, probe first and build the map on a miss otherwise.
+    datasets = shard_first(datasets, name)
     tbl, last_other, terminal = _search_datasets(
-        datasets, lambda ds: _get_table(ds, name)
+        datasets,
+        lambda ds: _get_table(ds, name),
+        on_miss=lambda tail: shard_first_after_miss(tail, name),
     )
     if terminal is not None:
         raise ValueError(_terminal_error_message(terminal, name)) from terminal
