@@ -32,6 +32,7 @@ import re
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from ...config import COMP_REF, CONJ_REFS, ITEMTEXT_REFS, MAIN_REFS, META_REF, NOM_REF, RANK_REFS, SIM_REF
+from .shard_discovery import effective_refs
 from .cache import metadata_cache
 
 #: Accepted form of a Redivis version tag: ``v32.0`` or ``32.0``.
@@ -71,8 +72,19 @@ def _pinnable_refs() -> Dict[str, Tuple[str, str]]:
     so a pinned session is reproducible in its metadata as well as its data.
     Order follows R's `.irw_pinnable_specs()`: sources, then meta, then text.
     """
+    # Effective, not configured: a shard found by discovery has to be pinnable
+    # like any other dataset, or use_version() would read it at its current
+    # release while every configured shard honoured the pin -- mixing today's
+    # data into a run meant to reproduce an old one. The version manifest is
+    # built from the warehouse rather than from this package, so it already
+    # carries rows for shards the installed version has never heard of.
     refs: List[Tuple[str, str]] = [
-        *MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, *CONJ_REFS, *RANK_REFS, META_REF, *ITEMTEXT_REFS,
+        *effective_refs(MAIN_REFS, "warehouse"),
+        SIM_REF, COMP_REF, NOM_REF,
+        *effective_refs(CONJ_REFS, "conjoint shard"),
+        *effective_refs(RANK_REFS, "rankings shard"),
+        META_REF,
+        *effective_refs(ITEMTEXT_REFS, "item text shard"),
     ]
     return {_dataset_key(ref): (user, ref) for user, ref in refs}
 

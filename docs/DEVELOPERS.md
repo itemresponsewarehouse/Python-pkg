@@ -10,6 +10,45 @@ are two shard lists in `src/irw/config.py`, `MAIN_REFS` and `ITEMTEXT_REFS`, and
 they behave identically: declared oldest-to-newest, searched newest-first, an
 unopenable shard skipped rather than fatal.
 
+## Discovery: the ref lists are a floor, not the whole truth
+
+Since 2026-10-20, `utils/redivis/shard_discovery.py` reads the Redivis
+organization catalog once per process
+(`GET /api/v1/organizations/datapages/datasets` — documented, public, no
+credentials) and appends any shard that continues a family already in
+`config.py`. A shard seeded after a release used to be invisible to every
+installed copy, and invisible *silently*: absent from the ref list, it was
+never opened, never listed and never warned about, so `list_tables()`,
+`metadata()` and `filter()` just came back short. The seventh core warehouse
+released on 2026-10-15 with 761 tables that no released client could see
+(ben-domingue/irw#3091).
+
+Verified live against the warehouse with `MAIN_REFS` truncated to six — the
+same numbers the R package produces, which is the point of keeping both
+clients on one rule:
+
+| configured | discovery | `list_tables()` |
+|---|---|---|
+| 6 shards | off | 5,689 |
+| 6 shards | **on** | **6,450** |
+| 7 shards | off | 6,450 |
+
+**Edit `config.py` anyway.** Discovery is a safety net for users on an old
+release, not a substitute for the config:
+
+- it extends a family, it never invents one, so a *new family* still needs
+  everything below;
+- it adopts a shard only once that shard has a published version and is
+  publicly readable;
+- the filter vocabularies, docs and shard ordering still come from `config.py`;
+- `sim`, `comp` and `nom` are single refs here and their initializers return
+  one handle, so a continuation shard for them cannot be appended — it is
+  *warned about* instead (`warn_if_extended`), which keeps the gap loud;
+- off under `IRW_SHARD_DISCOVERY=0`, and silently inert with no network.
+
+A process that discovers a shard logs a warning once, saying the installed irw
+predates it.
+
 ## Adding a main IRW Redivis warehouse
 
 Main IRW response tables can span multiple Redivis datasets ("warehouses").

@@ -2,7 +2,7 @@
 
 import pytest
 
-from irw.utils.redivis import disk_cache
+from irw.utils.redivis import disk_cache, shard_discovery
 
 
 @pytest.fixture(autouse=True)
@@ -18,6 +18,20 @@ def _isolated_disk_cache(tmp_path_factory, monkeypatch):
     disk_cache._state["announced"] = True
     yield
     disk_cache.set_enabled(None)
+
+
+@pytest.fixture(autouse=True)
+def _no_shard_discovery(monkeypatch):
+    """Keep shard discovery from reading the Redivis catalog in unit tests.
+
+    It is on by default in real sessions (see utils/redivis/shard_discovery.py)
+    and makes one HTTP request per process. tests/test_shard_discovery.py
+    clears this and supplies a fixture catalog.
+    """
+    monkeypatch.setenv("IRW_SHARD_DISCOVERY", "0")
+    shard_discovery.reset_state()
+    yield
+    shard_discovery.reset_state()
 
 
 @pytest.fixture(autouse=True)

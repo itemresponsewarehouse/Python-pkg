@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Set
 import warnings
 
 from ...config import ITEMTEXT_REFS
+from .shard_discovery import effective_refs
 from .cache import metadata_cache
 from .datasets import (
     _cache_version,
@@ -21,8 +22,9 @@ def _itemtext_datasets_cache_key() -> str:
     change is a cache miss by construction rather than something to remember to
     invalidate. The session's version pins are in the key for the same reason.
     """
-    return ("itemtext_datasets:" + "|".join(f"{u}/{r}" for u, r in ITEMTEXT_REFS)
-            + _pins_fingerprint(ITEMTEXT_REFS))
+    refs = effective_refs(ITEMTEXT_REFS, "item text shard")
+    return ("itemtext_datasets:" + "|".join(f"{u}/{r}" for u, r in refs)
+            + _pins_fingerprint(refs))
 
 
 def _get_itemtext_datasets() -> List[Any]:
@@ -40,7 +42,9 @@ def _get_itemtext_datasets() -> List[Any]:
         return cached
 
     datasets = list(reversed(
-        _init_datasets_from_refs(ITEMTEXT_REFS, skip_unavailable=True)
+        _init_datasets_from_refs(
+            effective_refs(ITEMTEXT_REFS, "item text shard"), skip_unavailable=True
+        )
     ))
     metadata_cache.set(cache_key, datasets)
     return datasets

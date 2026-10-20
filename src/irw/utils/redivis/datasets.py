@@ -6,6 +6,7 @@ import time
 from typing import Any, List, Optional, Tuple
 from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, CONJ_REFS, RANK_REFS
 from .cache import metadata_cache
+from .shard_discovery import effective_refs, warn_if_extended
 from .pins import (
     ABSENT,
     IRWVersionUnavailable,
@@ -25,8 +26,9 @@ def _main_datasets_cache_key() -> str:
     The session's version pins are part of the key, so a pinned session and an
     unpinned one can never share warehouse handles.
     """
-    return ("main_datasets:" + "|".join(f"{user}/{ref}" for user, ref in MAIN_REFS)
-            + _pins_fingerprint(MAIN_REFS))
+    refs = effective_refs(MAIN_REFS, "warehouse")
+    return ("main_datasets:" + "|".join(f"{user}/{ref}" for user, ref in refs)
+            + _pins_fingerprint(refs))
 
 
 def _datasets_cache_key(datasets: List[Any]) -> str:
@@ -394,7 +396,7 @@ def _init_main_datasets() -> List[Any]:
         return cached
 
     datasets = _order_main_datasets(
-        _init_datasets_from_refs(MAIN_REFS, skip_unavailable=True)
+        _init_datasets_from_refs(effective_refs(MAIN_REFS, "warehouse"), skip_unavailable=True)
     )
     metadata_cache.set(cache_key, datasets)
     return datasets
@@ -407,6 +409,7 @@ def _init_sim_dataset() -> Any:
     if cached is not None:
         return cached
     
+    warn_if_extended(SIM_REF, "simsyn dataset")
     dataset = _init_dataset(*SIM_REF)
     metadata_cache.set(cache_key, dataset)
     return dataset
@@ -419,6 +422,7 @@ def _init_comp_dataset() -> Any:
     if cached is not None:
         return cached
     
+    warn_if_extended(COMP_REF, "competitions dataset")
     dataset = _init_dataset(*COMP_REF)
     metadata_cache.set(cache_key, dataset)
     return dataset
@@ -431,6 +435,7 @@ def _init_nom_dataset() -> Any:
     if cached is not None:
         return cached
     
+    warn_if_extended(NOM_REF, "nominal dataset")
     dataset = _init_dataset(*NOM_REF)
     metadata_cache.set(cache_key, dataset)
     return dataset
@@ -444,14 +449,14 @@ def _init_conj_datasets() -> List[Any]:
     warning rather than taking the whole source down, and the cache key carries
     the configured refs and the session's pins.
     """
-    cache_key = ("conj_datasets:" + "|".join(f"{user}/{ref}" for user, ref in CONJ_REFS)
-                 + _pins_fingerprint(CONJ_REFS))
+    cache_key = ("conj_datasets:" + "|".join(f"{user}/{ref}" for user, ref in effective_refs(CONJ_REFS, "conjoint shard"))
+                 + _pins_fingerprint(effective_refs(CONJ_REFS, "conjoint shard")))
     cached = metadata_cache.get(cache_key)
     if cached is not None:
         return cached
 
     datasets = _order_main_datasets(
-        _init_datasets_from_refs(CONJ_REFS, skip_unavailable=True)
+        _init_datasets_from_refs(effective_refs(CONJ_REFS, "conjoint shard"), skip_unavailable=True)
     )
     metadata_cache.set(cache_key, datasets)
     return datasets
@@ -464,14 +469,14 @@ def _init_rank_datasets() -> List[Any]:
     with a warning, and the cache key carries the configured refs and the
     session's pins.
     """
-    cache_key = ("rank_datasets:" + "|".join(f"{user}/{ref}" for user, ref in RANK_REFS)
-                 + _pins_fingerprint(RANK_REFS))
+    cache_key = ("rank_datasets:" + "|".join(f"{user}/{ref}" for user, ref in effective_refs(RANK_REFS, "rankings shard"))
+                 + _pins_fingerprint(effective_refs(RANK_REFS, "rankings shard")))
     cached = metadata_cache.get(cache_key)
     if cached is not None:
         return cached
 
     datasets = _order_main_datasets(
-        _init_datasets_from_refs(RANK_REFS, skip_unavailable=True)
+        _init_datasets_from_refs(effective_refs(RANK_REFS, "rankings shard"), skip_unavailable=True)
     )
     metadata_cache.set(cache_key, datasets)
     return datasets
