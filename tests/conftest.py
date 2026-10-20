@@ -2,7 +2,7 @@
 
 import pytest
 
-from irw.utils.redivis import disk_cache, shard_discovery
+from irw.utils.redivis import disk_cache, shard_discovery, shard_resolution
 
 
 @pytest.fixture(autouse=True)
@@ -32,6 +32,18 @@ def _no_shard_discovery(monkeypatch):
     shard_discovery.reset_state()
     yield
     shard_discovery.reset_state()
+
+
+@pytest.fixture(autouse=True)
+def _no_shard_map_leak():
+    """Clear the resolved shard map between tests.
+
+    It is process state keyed on the metadata version, so a map built by one
+    test would otherwise decide another test's shard order.
+    """
+    shard_resolution.reset_state()
+    yield
+    shard_resolution.reset_state()
 
 
 @pytest.fixture(autouse=True)

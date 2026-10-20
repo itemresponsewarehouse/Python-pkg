@@ -49,6 +49,51 @@ release, not a substitute for the config:
 A process that discovers a shard logs a warning once, saying the installed irw
 predates it.
 
+## Resolution: the metadata already knows which shard holds a table
+
+The shard search is newest-first and stops at the first hit, so a table in
+`item_response_warehouse` costs a not-found lookup in every newer shard before
+it is reached -- six of them today, one more per 1000 tables. The published
+`irw_meta` `metadata` table has carried a `dataset` column naming the exact
+core shard for every table since #3127, so `utils/redivis/shard_resolution.py`
+reads it and puts that shard first.
+
+Two properties keep it honest:
+
+- **Probe first, build on a miss.** The newest shard is tried before the map is
+  read, so a just-uploaded table that the metadata does not mention yet still
+  resolves by search, and a fetch from the newest shard pays nothing at all --
+  not even the two requests that read the metadata version, which is why the
+  free path (`shard_map(build=False)`) never touches the network.
+- **Reorder, never truncate.** Every shard stays in the list, so the not-found
+  path is reached in exactly the cases it was before. `_search_datasets`
+  enforces this: its `on_miss` hook is ignored unless what it returns is a
+  permutation of what it was given.
+
+Measured live against the warehouse (requests counted by wrapping
+`redivis.common.api_request.make_request`, disk cache off):
+
+| fetch | resolution off | resolution on |
+|---|---|---|
+| `immer09_immer` (shard 1), first in process | 17 requests | **18** |
+| `immer09_immer`, again in the same process | 10 requests | **4** |
+| `rumangkit_2026b_eh` (shard 7), first | 11 requests | 11 |
+| `rumangkit_2026b_eh`, again | 4 requests | 4 |
+
+So the first fetch of an old table costs one extra request (the map read is
+~6, the lookups it replaces ~5) and about 2s more wall time, and every later
+fetch in that session saves six. That trade was ruled deliberately: in these
+clients, fewer round trips beats wall time (#3127). A session that has already
+called `filter()`, `metadata()` or `info()` has the metadata frame cached, and
+then even the first fetch is a straight saving.
+
+The deliberate wrong case: a table that exists in two shards with stale
+metadata returns the older copy. Shadowed copies are a defect either way --
+`red_up`'s `ELSEWHERE` check exists to stop them arising.
+
+Off under `IRW_SHARD_RESOLUTION=0`. The R twin is `Rpkg/R/shard-resolution.R`;
+keep the two in step.
+
 ## Adding a main IRW Redivis warehouse
 
 Main IRW response tables can span multiple Redivis datasets ("warehouses").
