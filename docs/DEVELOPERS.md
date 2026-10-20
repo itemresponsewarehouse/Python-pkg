@@ -293,6 +293,30 @@ limitation to work around -- during that window the configs genuinely disagree.
 The full cross-repo runbook, including the Redivis and metadata steps that have
 no Python side, is `Rpkg/inst/developer/warehouses.md`.
 
+## Cadence: when to release, and what waits
+
+Decided in [ben-domingue/irw#3091](https://github.com/ben-domingue/irw/issues/3091),
+which is the decision of record; the R side's half is `inst/developer/releases.md`
+in `Rpkg`.
+
+**This package releases continuously** — on merge of anything user-visible.
+PyPI imposes no frequency norm, so the Python client can track the warehouse
+closely. The R package cannot: CRAN's policy asks an established package for no
+more than one release every one to two months, so `irw` on CRAN goes out four
+times a year (mid-March, mid-June, mid-September, mid-December). The two
+packages are therefore on different clocks by design, and do not release
+together.
+
+**One rule couples them.** A release that changes *corpus reach* — a new shard,
+a new family, anything that changes which tables a user can see — does not go
+out unless the matching R change is on `main` and queued for the next CRAN cut.
+The R README carries a note about what the CRAN version lacks; that note is
+honest only if the R change exists. Shipping reach to PyPI first and leaving R
+to catch up turns it into a stale apology.
+
+This does not apply to fixes, new functions or anything that errors loudly when
+missing — those go out when they are ready, as they always have.
+
 ## Cutting a release
 
 The package is on PyPI as [`irw`](https://pypi.org/project/irw/). Users install
