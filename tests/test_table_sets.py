@@ -145,7 +145,14 @@ def test_resolution_walks_shards_past_not_found_like_fetch(fake):
     assert out["table"] == REF
 
 
-def test_a_table_in_no_shard_raises_does_not_exist(fake):
+def test_a_table_in_no_shard_raises_does_not_exist(fake, monkeypatch):
+    # The metadata decides which of the two messages applies (irw#3127), and
+    # this file is offline, so say that the name is not listed rather than
+    # letting the lookup reach irw_meta. The listed-but-absent case lives in
+    # test_metadata_authority.py.
+    monkeypatch.setattr(
+        "irw.operations.table_sets.listed_in_metadata", lambda *a, **k: False
+    )
     with pytest.raises(ValueError, match="does not exist in the IRW database"):
         table_sets([_Dataset(missing=True), _Dataset(missing=True)], "nope")
     assert fake.sql == []

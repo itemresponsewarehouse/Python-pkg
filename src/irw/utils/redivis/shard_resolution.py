@@ -269,3 +269,40 @@ def shard_first_after_miss(ds_list: List[Any], name: str) -> List[Any]:
     `_search_datasets(..., on_miss=...)`.
     """
     return shard_first(ds_list, name, build=True)
+
+
+def listed_in_metadata(name: str, source: str = "main") -> bool:
+    """Whether the published metadata lists this core table.
+
+    Reads the map above, so it costs nothing once a session has it. Never
+    raises: it only chooses which of two messages to show, and a metadata read
+    that fails must leave the plain not-found standing rather than replace one
+    error with another.
+    """
+    if source != "main" or not isinstance(name, str) or not name:
+        return False
+    try:
+        mapping = shard_map(build=True)
+    except Exception:  # pragma: no cover - never a fetch error
+        return False
+    if not mapping:
+        return False
+    return name.strip().lower() in mapping
+
+
+def metadata_only_message(name: str) -> str:
+    """The explanation for a table the metadata lists and the warehouse lacks.
+
+    The published metadata is the authority for which core tables exist
+    (ben-domingue/irw#3127), so a table can be listed and already gone for the
+    two to seven days between a withdrawal and the next `irw_meta` publish.
+    Saying only "does not exist" for a table the user has just seen in a
+    listing is the worse half of that trade; explaining it is the load-bearing
+    part of the ruling, not a nicety. Wording matches Rpkg's
+    `.irw_metadata_only_table_message()`.
+    """
+    return (
+        f"Table '{name}' is in the IRW metadata but not in the warehouse. "
+        "It was most likely withdrawn after the metadata was last published; "
+        "the listing catches up on the next pipeline run."
+    )

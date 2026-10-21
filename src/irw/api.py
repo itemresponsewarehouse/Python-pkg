@@ -531,10 +531,13 @@ def save_bibtex(
     
     # Fetch the full biblio table once (uses cache)
     from .utils.redivis.table_metadata import get_biblio_table
-    from .utils.redivis.table_metadata import _get_existing_tables
+    from .utils.redivis.table_metadata import _known_table_names
     
     biblio_df = get_biblio_table(source)
-    existing_tables = _get_existing_tables(source)
+    # The metadata, not a live listing of the warehouses: a citation for a
+    # table withdrawn last week is still the right citation, and asking the
+    # warehouses would cost a listing per shard (ben-domingue/irw#3127).
+    existing_tables = _known_table_names(source)
     
     # Process each table name
     for table_name in table_names:

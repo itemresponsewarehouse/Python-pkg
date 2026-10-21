@@ -229,7 +229,9 @@ def _fake_biblio(monkeypatch, with_column=True):
         rows["Source_via"] = ["openESM", "openESM", None]
     import irw.utils.redivis.table_metadata as tm
     monkeypatch.setattr(tm, "get_biblio_table", lambda *a, **k: pd.DataFrame(rows))
-    monkeypatch.setattr(tm, "_get_existing_tables", lambda *a, **k: set(rows["table"]))
+    # save_bibtex() asks the metadata which tables exist, not the warehouses
+    # (ben-domingue/irw#3127); faked here so this file stays offline.
+    monkeypatch.setattr(tm, "_known_table_names", lambda *a, **k: set(rows["table"]))
 
 
 def test_save_bibtex_adds_the_openesm_entry_once_after_the_tables(monkeypatch):

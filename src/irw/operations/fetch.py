@@ -18,7 +18,12 @@ from ..utils.redivis.tables import (
     _terminal_error_message,
 )
 from ..utils.redivis.pins import _pinned_not_found_hint
-from ..utils.redivis.shard_resolution import shard_first, shard_first_after_miss
+from ..utils.redivis.shard_resolution import (
+    listed_in_metadata,
+    metadata_only_message,
+    shard_first,
+    shard_first_after_miss,
+)
 from ..utils.redivis import disk_cache
 
 logger = logging.getLogger(__name__)
@@ -334,9 +339,14 @@ def _fetch_one_table(
             )
     else:
         # Under a version pin, "not in IRW" and "not in the release you pinned"
-        # are the same not-found; say which releases were searched.
-        msg = (f"Table '{name}' does not exist in the IRW database."
-               + _pinned_not_found_hint(datasets))
+        # are the same not-found; say which releases were searched. A table the
+        # metadata lists gets the reason instead of a bare not-found
+        # (ben-domingue/irw#3127).
+        if listed_in_metadata(name):
+            msg = metadata_only_message(name)
+        else:
+            msg = (f"Table '{name}' does not exist in the IRW database."
+                   + _pinned_not_found_hint(datasets))
         warnings.warn(msg, UserWarning, stacklevel=2)
         logger.warning(msg)
     return None
