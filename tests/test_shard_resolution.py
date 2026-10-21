@@ -351,7 +351,9 @@ def test_a_fetch_from_the_newest_shard_never_reads_the_map(meta):
 
 def test_fetch_still_reports_a_table_that_is_in_no_shard(meta):
     ds_list = _search_order(_shards(None))
-    meta({"t": "item_response_warehouse"})
+    # A name the metadata does not list: that one gets the plain not-found.
+    # The listed-but-absent case is piece B's, in test_metadata_authority.py.
+    meta({"other_table": "item_response_warehouse"})
     with pytest.warns(UserWarning, match="does not exist in the IRW database"):
         assert fetch(ds_list, "t") is None
     assert [d.lookups for d in ds_list] == [["t"], ["t"], ["t"]]

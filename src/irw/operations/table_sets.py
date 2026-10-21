@@ -26,7 +26,12 @@ from ..utils.redivis.tables import (
     _search_datasets,
     _terminal_error_message,
 )
-from ..utils.redivis.shard_resolution import shard_first, shard_first_after_miss
+from ..utils.redivis.shard_resolution import (
+    listed_in_metadata,
+    metadata_only_message,
+    shard_first,
+    shard_first_after_miss,
+)
 
 # `resp` is stored as a string and a missing response is the literal "NA"
 # token, sometimes "". Without this filter the distinct-response set gains a
@@ -127,6 +132,8 @@ def table_sets(
             raise ValueError(
                 f"Error looking up table '{name}': {_format_error(last_other)}"
             ) from last_other
+        if listed_in_metadata(name, source=source):
+            raise ValueError(metadata_only_message(name))
         raise ValueError(f"Table '{name}' does not exist in the IRW database.")
 
     ref = tbl.qualified_reference

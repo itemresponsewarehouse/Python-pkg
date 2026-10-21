@@ -19,12 +19,25 @@ def _fake(monkeypatch, seen):
                              "BibTex": [f"@article{{K_{source}, title={{T}}}}"],
                              "DOI__for_paper_": [None]})
 
+    def known(source="main"):
+        seen.append(("known", source))
+        return {f"t_{source}"}
+
     def existing(source="main"):
         seen.append(("existing", source))
         return {f"t_{source}"}
 
+    def metadata(source="main"):
+        seen.append(("metadata", source))
+        return pd.DataFrame({"table": [f"t_{source}"]})
+
     monkeypatch.setattr(tm, "get_biblio_table", biblio)
+    monkeypatch.setattr(tm, "_known_table_names", known)
+    # Both of the names `_known_table_names` would otherwise reach are faked
+    # too: this file is offline, and before they were, the main case exported
+    # the real 6,450-row metadata table mid-test.
     monkeypatch.setattr(tm, "_get_existing_tables", existing)
+    monkeypatch.setattr(tm, "get_metadata_table", metadata)
 
 
 @pytest.mark.parametrize("source", SOURCES)
@@ -33,7 +46,7 @@ def test_each_source_reads_its_own_biblio(monkeypatch, source):
     _fake(monkeypatch, seen)
     out = irw.save_bibtex(f"t_{source}", source=source)
     assert out == [f"@article{{t_{source}, title={{T}}}}"]
-    assert seen == [("biblio", source), ("existing", source)]
+    assert seen == [("biblio", source), ("known", source)]
 
 
 def test_default_source_is_main(monkeypatch):

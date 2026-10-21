@@ -124,12 +124,40 @@ def _get_meta_dataset() -> Any:
     return dataset
 
 
+def _known_table_names(source: str = "main") -> set[str]:
+    """Lowercased names this client considers to exist, for one source.
+
+    For main that is what the published metadata and bibliography list: since
+    ben-domingue/irw#3127 the metadata is the authority, and asking the
+    warehouses instead costs a `get()` plus a `list_tables()` per shard. Both
+    frames are consulted because they are published from the same pipeline run
+    but are not guaranteed to agree, and a name in either one is a name a user
+    can reasonably ask about.
+
+    Other sources still enumerate their dataset, which is where the ruling was
+    scoped.
+    """
+    if source != "main":
+        return _get_existing_tables(source)
+
+    names: set[str] = set()
+    for frame in (get_metadata_table("main"), get_biblio_table("main")):
+        if "table" in getattr(frame, "columns", ()):
+            names.update(
+                str(value).strip().lower()
+                for value in frame["table"]
+                if value is not None and value == value and str(value).strip()
+            )
+    return names
+
+
 def _get_existing_tables(source: str = "main") -> set[str]:
     """Get set of existing table names, lowercased, for one source.
 
     Keyed on the source's current version tags: this set is what filters
-    every metadata frame down to tables that still exist, so if it cannot
-    notice a release then neither can they (issue #51).
+    every non-main metadata frame down to tables that still exist, so if it
+    cannot notice a release then neither can they (issue #51). main no longer
+    goes through here -- see `_known_table_names`.
     """
     ds_list = _source_datasets(source)
     if source == "main":
@@ -220,16 +248,19 @@ def get_tags_table(source: str = "main") -> pd.DataFrame:
     # Clean the data
     tags_df = tags_df.replace("NA", pd.NA)
     
-    # Filter to existing tables only
-    existing_tables = _get_existing_tables(source)
-    tags_df["table_lower"] = tags_df["table"].str.lower()
-    filtered_tags = tags_df[tags_df["table_lower"].isin(existing_tables)].copy()
-    filtered_tags.drop("table_lower", axis=1, inplace=True)
+    # main's rows stand as published: the metadata is the authority for which
+    # core tables exist (ben-domingue/irw#3127). Other sources keep the
+    # intersection, which is where the ruling was scoped.
+    if source != "main":
+        existing_tables = _get_existing_tables(source)
+        tags_df["table_lower"] = tags_df["table"].str.lower()
+        tags_df = tags_df[tags_df["table_lower"].isin(existing_tables)].copy()
+        tags_df.drop("table_lower", axis=1, inplace=True)
     
     # Cache the result
-    metadata_cache.set(cache_key, filtered_tags, latest_version_tag)
+    metadata_cache.set(cache_key, tags_df, latest_version_tag)
     
-    return filtered_tags
+    return tags_df
 
 
 def _merge_on_table(left: pd.DataFrame, right: pd.DataFrame) -> pd.DataFrame:
@@ -287,7 +318,7 @@ def get_collection_members_table() -> pd.DataFrame:
     Get IRW collection membership: one row per (table, collection) pair.
 
     Long format -- `table` repeats, by design, because a table can belong to
-    many collections at once. Filtered to tables that currently exist.
+    many collections at once. Rows stand as published (ben-domingue/irw#3127).
 
     Returns
     -------
@@ -304,13 +335,8 @@ def get_collection_members_table() -> pd.DataFrame:
     table = dataset.table(META_TABLES["collection_members"])
     df = table.to_pandas_dataframe()
 
-    existing_tables = _get_existing_tables()
-    df["table_lower"] = df["table"].str.lower()
-    filtered = df[df["table_lower"].isin(existing_tables)].copy()
-    filtered.drop("table_lower", axis=1, inplace=True)
-
-    metadata_cache.set("collection_members", filtered, latest_version_tag)
-    return filtered
+    metadata_cache.set("collection_members", df, latest_version_tag)
+    return df
 
 
 COVARIATE_LABEL_COLUMNS = ("table", "covariate", "code", "label")
@@ -404,16 +430,17 @@ def get_biblio_table(source: str = "main") -> pd.DataFrame:
     table = dataset.table(table_name)
     biblio_df = table.to_pandas_dataframe()
     
-    # Filter to existing tables only
-    existing_tables = _get_existing_tables(source)
-    biblio_df["table_lower"] = biblio_df["table"].str.lower()
-    filtered_biblio = biblio_df[biblio_df["table_lower"].isin(existing_tables)].copy()
-    filtered_biblio.drop("table_lower", axis=1, inplace=True)
+    # As for tags: main stands as published, other sources stay filtered.
+    if source != "main":
+        existing_tables = _get_existing_tables(source)
+        biblio_df["table_lower"] = biblio_df["table"].str.lower()
+        biblio_df = biblio_df[biblio_df["table_lower"].isin(existing_tables)].copy()
+        biblio_df.drop("table_lower", axis=1, inplace=True)
     
     # Cache the result
-    metadata_cache.set(cache_key, filtered_biblio, latest_version_tag)
+    metadata_cache.set(cache_key, biblio_df, latest_version_tag)
     
-    return filtered_biblio
+    return biblio_df
     
 def _table_info(source: str = "main") -> pd.DataFrame:
     """

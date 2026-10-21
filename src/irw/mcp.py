@@ -344,12 +344,12 @@ class PackageBackend:
 
     def source_of(self, table_name: str) -> Optional[str]:
         """The source holding a table, or None. Names are unique across sources."""
-        from .utils.redivis.table_metadata import _get_existing_tables
+        from .utils.redivis.table_metadata import _known_table_names
 
         key = table_name.lower()
         for source in SOURCES:
             try:
-                if key in _get_existing_tables(source):
+                if key in _known_table_names(source):
                     return source
             except Exception:
                 continue
