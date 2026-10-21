@@ -32,6 +32,10 @@ FILTER_DESCRIPTIONS = {
     'n_items': 'Number of unique items. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
     'responses_per_participant': 'Average number of responses per participant. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
     'responses_per_item': 'Average number of responses per item. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
+    'difficulty_spread': "Share of the table's observed response range that its item means cover: the range of item p-values on a dichotomous table, normalised by the response range so a 1-5 Likert table is comparable. Near 0 means every item sits at the same difficulty, near 1 means they span the scale. Use a single number or a list [min, max] (None for no limit). source='main' only.",
+    'mean_item_rest_r': "Mean item-rest correlation, SIGNED. IRW does not harmonise response direction, so a scale with reverse-keyed items averages toward zero here; use mean_abs_item_rest_r to ask whether the items hang together at all. Use a single number or a list [min, max] (None for no limit). source='main' only.",
+    'mean_abs_item_rest_r': "Mean ABSOLUTE item-rest correlation, direction-invariant. A wide gap between this and mean_item_rest_r indicates reverse-keyed items. Use a single number or a list [min, max] (None for no limit). source='main' only.",
+    'prop_items_extreme': "Share of items whose mean sits within 5% of either end of the response range, i.e. floor or ceiling items. 0 keeps only tables with none. Use a single number or a list [min, max] (None for no limit). source='main' only.",
     'density': 'Matrix density (proportion of cells with valid responses). A density of 1 means every person responded to every item (100% of cells have valid responses). Lower density indicates that some individuals did not respond to all items. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit). Default is [0.5, 1] to exclude sparse matrices.',
     'var': 'Filter by presence of specific variables in the dataset. Use exact variable names (e.g., "rt", "wave") or prefix matching (e.g., "cov_" matches any variable starting with "cov_"). Provide a single string or a list of strings. All specified variables must be present (AND logic).',
     'age_range': 'Participant age group (e.g., "Adult (18+)"). Use a single string or a list of strings for OR logic (e.g., ["Adult (18+)", "Child"]).',
@@ -195,6 +199,10 @@ def describe_filter(datasets: List, filter_name: str, source: str = "main") -> O
         'n_items',
         'responses_per_participant',
         'responses_per_item',
+        'difficulty_spread',
+        'mean_item_rest_r',
+        'mean_abs_item_rest_r',
+        'prop_items_extreme',
         'density',
         'n_actors',
         'n_respondents',
@@ -211,11 +219,16 @@ def describe_filter(datasets: List, filter_name: str, source: str = "main") -> O
         base['name_lower'] = base['name'].str.lower()
         merged = base.merge(metadata_df, left_on='name_lower', right_on='name_lower', how='left')
         
-        if filter_name not in merged.columns:
-            return None
-        series = merged[filter_name].dropna()
-        if series.empty:
-            return None
+        series = (merged[filter_name].dropna() if filter_name in merged.columns
+                  else None)
+        if series is None or series.empty:
+            # The column is not in this irw_meta version, or carries no value
+            # yet. Returning None here would deny that a filter filter()
+            # accepts exists -- the "the list is a lie" failure
+            # tests/test_filter_info.py guards against. Answer with the
+            # description and no range instead; every caller already handles a
+            # result without 'values' (the tag branches return one).
+            return result
         result['values'] = {
             'min': float(series.min()),
             'max': float(series.max()),
