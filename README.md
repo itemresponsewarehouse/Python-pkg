@@ -102,6 +102,14 @@ irw.describe_filter('construct_type')  # Get values for a specific filter
 filtered = irw.filter(n_responses=[1000, None], construct_type="Affective/mental health")
 dfs = irw.fetch(filtered)
 
+# Filter by psychometric property, not just shape: how far the item means spread
+# across the response range, whether the items hang together, floor/ceiling share.
+# Classical and model-free -- no IRT model is fitted -- so defined for every core table.
+irw.filter(mean_abs_item_rest_r=[0.4, None], prop_items_extreme=0)
+# Signed near zero but absolute high means a reverse-keyed scale: IRW does not
+# harmonise response direction, so the gap between the two is the tell.
+irw.filter(mean_item_rest_r=[None, 0.1], mean_abs_item_rest_r=[0.3, None])
+
 # The other sources: "nom" (nominal responses, tagged), "sim", "comp"
 irw.filter(source="nom", construct_type="Cognitive/educational")
 irw.describe_filter("license", source="comp")

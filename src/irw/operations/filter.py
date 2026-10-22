@@ -14,6 +14,13 @@ NUMERIC_FILTERS = frozenset({
     'n_responses', 'n_categories', 'n_participants', 'n_items',
     'responses_per_participant', 'responses_per_item', 'density', 'n_actors',
     'n_respondents', 'n_attributes',
+    # Tier-0 psychometric columns (ben-domingue/irw#1710), main only. Unlike
+    # the structural columns these can be NaN -- a table whose responses are
+    # all one value has no difficulty spread, a single-item table has no rest
+    # score. pandas comparisons against NaN are False, so those tables drop out
+    # of a range filter rather than coming back as empty rows.
+    'difficulty_spread', 'mean_item_rest_r', 'mean_abs_item_rest_r',
+    'prop_items_extreme',
 })
 BOOLEAN_FILTERS = frozenset({'longitudinal', 'has_item_text'})
 
@@ -330,6 +337,10 @@ def filter_tables(
     n_items: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
     responses_per_participant: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
     responses_per_item: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
+    difficulty_spread: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
+    mean_item_rest_r: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
+    mean_abs_item_rest_r: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
+    prop_items_extreme: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
     density: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = _DEFAULT_DENSITY,
     var: Optional[Union[str, List[str]]] = None,
     age_range: Optional[Union[str, List[str]]] = None,
@@ -403,6 +414,29 @@ def filter_tables(
         Filter by average responses per item.
         - List of length 2: range [min, max], use None for infinity
     
+    difficulty_spread : float, int, or list of length 1 or 2, optional
+        Filter by the share of the table's observed response range that its item
+        means cover: the range of item p-values on a dichotomous table, and
+        normalised by the response range so a 1-5 Likert table is comparable.
+        Near 0 means every item sits at the same difficulty, near 1 means they
+        span the scale. source='main' only.
+
+    mean_item_rest_r : float, int, or list of length 1 or 2, optional
+        Filter by the mean item-rest correlation, SIGNED. IRW does not harmonise
+        response direction, so a scale with reverse-keyed items averages toward
+        zero here; use mean_abs_item_rest_r to ask whether the items hang
+        together at all. source='main' only.
+
+    mean_abs_item_rest_r : float, int, or list of length 1 or 2, optional
+        Filter by the mean ABSOLUTE item-rest correlation, which is
+        direction-invariant. A wide gap between this and mean_item_rest_r
+        indicates reverse-keyed items. source='main' only.
+
+    prop_items_extreme : float, int, or list of length 1 or 2, optional
+        Filter by the share of items whose mean sits within 5% of either end of
+        the response range, i.e. floor or ceiling items. prop_items_extreme=0
+        keeps only tables with none. source='main' only.
+
     density : float, int, list of length 1 or 2, or None, optional
         Filter by matrix density (proportion of cells with valid responses).
         A density of 1 means every person responded to every item (100% of cells have valid responses).
@@ -534,6 +568,10 @@ def filter_tables(
     >>> filtered = irw.filter(license="CC BY 4.0")
     >>> 
     >>> # Filter by response category complexity
+    >>> # Filter by psychometric property, not just shape (irw_meta tier-0 columns)
+    >>> filtered = irw.filter(mean_abs_item_rest_r=[0.4, None])   # items hang together
+    >>> filtered = irw.filter(prop_items_extreme=0,               # no floor/ceiling items
+    ...                       difficulty_spread=[0.3, None])      # spanning the scale
     >>> filtered = irw.filter(n_categories=2)  # binary
     >>> filtered = irw.filter(n_categories=[3, 5])  # small multi-category
     >>>
@@ -599,6 +637,10 @@ def filter_tables(
     df = _apply_numeric_filter(df, 'n_items', n_items)
     df = _apply_numeric_filter(df, 'responses_per_participant', responses_per_participant)
     df = _apply_numeric_filter(df, 'responses_per_item', responses_per_item)
+    df = _apply_numeric_filter(df, 'difficulty_spread', difficulty_spread)
+    df = _apply_numeric_filter(df, 'mean_item_rest_r', mean_item_rest_r)
+    df = _apply_numeric_filter(df, 'mean_abs_item_rest_r', mean_abs_item_rest_r)
+    df = _apply_numeric_filter(df, 'prop_items_extreme', prop_items_extreme)
     
     # Apply density filter (with default handling)
     # Default is [0.5, 1] to exclude sparse matrices
