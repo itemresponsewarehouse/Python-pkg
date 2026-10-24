@@ -842,9 +842,10 @@ def collections(kind: Optional[Union[str, List[str]]] = None) -> pd.DataFrame:
 
     - ``metadata-complete``  — searched every documented table.
     - ``tagged-subset-only`` — searched only the tables whose tags include a
-      construct name (about half; the definition states the exact count), and
-      far fewer in the newer warehouses. Not
-      exhaustive; do not describe these as "all".
+      construct name (about half; the definition states the exact count). The
+      gap is uneven across the warehouses and does NOT track their age: in
+      October 2026 the newest shard was 100% covered and the thinnest was
+      shard 3 at 26%. Not exhaustive; do not describe these as "all".
     - ``curated-only``       — every member chosen by hand.
 
     Parameters
