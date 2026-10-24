@@ -513,3 +513,111 @@ def test_resp2long_rejects_a_frame_with_no_item_columns():
 def test_resp2long_rejects_what_is_not_a_frame_or_matrix():
     with pytest.raises(ValueError, match="DataFrame"):
         resp2long([[1, 0], [0, 1]])
+
+
+# Occasion columns other than `wave` (review R-25, ben-domingue/irw#3223). The
+# standard defines nine ways a response can repeat; the reshape handled one,
+# and the other eight were dropped from the frame and then averaged together by
+# the default agg_method="mean".
+
+def _rater_frame():
+    return pd.DataFrame({
+        "id": ["p1"] * 4 + ["p2"] * 4,
+        "item": ["q1", "q2"] * 4,
+        "rater": ["r1", "r1", "r2", "r2"] * 2,
+        "resp": [1, 1, 5, 5, 2, 2, 4, 4],
+    })
+
+
+def test_a_repeated_rater_returns_one_raters_responses_not_their_mean():
+    wide = long2resp(_rater_frame(), id_density_threshold=None)
+
+    # The two raters disagree by four points; their mean is 3, which neither gave.
+    assert 3 not in set(wide[["q1", "q2"]].to_numpy().ravel())
+    assert wide.attrs["irw_occasion"] == {"rater": "r1"}
+
+
+def test_the_occasion_argument_chooses_for_any_occasion_column():
+    wide = long2resp(_rater_frame(), occasion={"rater": "r2"},
+                     id_density_threshold=None)
+
+    assert wide.loc[wide["id"] == "p1", ["q1", "q2"]].to_numpy().ravel().tolist() == [5, 5]
+    assert wide.attrs["irw_occasion"] == {"rater": "r2"}
+
+
+def test_an_occasion_not_in_the_table_raises():
+    with pytest.raises(ValueError, match="is not present in this table"):
+        long2resp(_rater_frame(), occasion={"rater": "r9"})
+
+
+def test_an_occasion_column_empty_on_every_row_raises():
+    df = _rater_frame()
+    df["rater"] = None
+    with pytest.raises(ValueError, match="missing on every row"):
+        long2resp(df)
+
+
+def test_trial_columns_count_as_occasions():
+    df = pd.DataFrame({
+        "id": ["p1"] * 4, "item": ["q1", "q2"] * 2,
+        "trial_number": [1, 1, 2, 2], "resp": [0, 0, 1, 1],
+    })
+    first = long2resp(df, id_density_threshold=None)
+    assert first.attrs["irw_occasion"] == {"trial_number": "1"}
+    assert first[["q1", "q2"]].to_numpy().ravel().tolist() == [0, 0]
+
+    second = long2resp(df, occasion={"trial_number": 2}, id_density_threshold=None)
+    assert second[["q1", "q2"]].to_numpy().ravel().tolist() == [1, 1]
+
+
+def test_a_column_that_does_not_key_a_repeat_is_left_alone():
+    # `subtest` can key a repeat, and here it does not: each id+item appears
+    # once and the subtests hold different items. Filtering to one subtest
+    # would throw away items rather than choose an occasion.
+    df = pd.DataFrame({
+        "id": ["p1"] * 4 + ["p2"] * 4,
+        "item": ["a1", "a2", "b1", "b2"] * 2,
+        "subtest": ["a", "a", "b", "b"] * 2,
+        "resp": [1, 0, 1, 0, 0, 1, 0, 1],
+    })
+    wide = long2resp(df, id_density_threshold=None)
+
+    assert sorted(c for c in wide.columns if c != "id") == ["a1", "a2", "b1", "b2"]
+    assert wide.attrs["irw_occasion"] == {}
+
+
+def test_an_explicit_occasion_is_honoured_even_when_nothing_repeats():
+    df = pd.DataFrame({
+        "id": ["p1"] * 4 + ["p2"] * 4,
+        "item": ["a1", "a2", "b1", "b2"] * 2,
+        "subtest": ["a", "a", "b", "b"] * 2,
+        "resp": [1, 0, 1, 0, 0, 1, 0, 1],
+    })
+    wide = long2resp(df, occasion={"subtest": "a"}, id_density_threshold=None)
+
+    assert sorted(c for c in wide.columns if c != "id") == ["a1", "a2"]
+
+
+def test_occasion_and_wave_cannot_contradict_each_other():
+    df = pd.DataFrame({"id": ["p1", "p1"], "item": ["q1", "q1"],
+                       "wave": [1, 2], "resp": [0, 1]})
+    with pytest.raises(ValueError, match="disagree"):
+        long2resp(df, wave=1, occasion={"wave": 2})
+
+
+def test_occasion_names_must_be_columns_the_table_has_an_occasion_for():
+    with pytest.raises(ValueError, match="no occasion for"):
+        long2resp(_rater_frame(), occasion={"session": "1"})
+    with pytest.raises(TypeError, match="mapping"):
+        long2resp(_rater_frame(), occasion="r1")
+    with pytest.raises(ValueError, match="single value"):
+        long2resp(_rater_frame(), occasion={"rater": ["r1", "r2"]})
+
+
+def test_the_chosen_occasion_reaches_the_mcp_disclosures():
+    # The MCP server drops stdout, so attrs is the only channel (R-19).
+    wide = long2resp(_rater_frame(), id_density_threshold=None)
+    messages = " ".join(wide.attrs["irw_messages"])
+
+    assert "rater" in messages
+    assert "Keeping only responses from rater r1" in messages
