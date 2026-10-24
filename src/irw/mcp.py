@@ -495,6 +495,28 @@ def _warning_messages(caught: List[warnings.WarningMessage]) -> List[str]:
     return state.warnings
 
 
+def _frame_messages(value: Any) -> List[str]:
+    """Disclosures a DataFrame carries in ``attrs["irw_messages"]``.
+
+    `long2resp` tells its caller which occasion it chose and whether it
+    aggregated duplicates -- the two facts that make a wide frame narrower than
+    the table it came from -- and it says them with `print`. `_call` runs
+    package code inside `redirect_stdout(io.StringIO())` so package output
+    cannot corrupt MCP stdio, and that buffer is dropped, so
+    `fetch_table(wide=true)` on a two-wave table returned one wave's data with
+    nothing at all to say so. Forwarding `attrs` rather than the captured
+    stdout keeps the choice deliberate: a frame opts in by setting it, and a
+    `print` meant for a human at a REPL is still swallowed.
+    """
+    attrs = getattr(value, "attrs", None)
+    if not isinstance(attrs, dict):
+        return []
+    messages = attrs.get("irw_messages")
+    if not isinstance(messages, (list, tuple)):
+        return []
+    return [str(m) for m in messages if str(m).strip()]
+
+
 def _map_exception(error: Exception) -> IRWMCPError:
     """Turn whatever the package raised into a structured, safe error.
 
@@ -1451,7 +1473,7 @@ class IRWTools:
                         raise _map_exception(error) from None
         if captured_stdout.getvalue().strip():
             logger.debug("Suppressed package output from %s", callback_name)
-        return value, _warning_messages(caught)
+        return value, _warning_messages(caught) + _frame_messages(value)
 
     def _stamp(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Attach observed manifest provenance without claiming pinned reads.

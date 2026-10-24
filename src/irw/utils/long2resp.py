@@ -165,8 +165,12 @@ def long2resp(
     df : pandas.DataFrame
         Long-format DataFrame with columns: id, item, the column named by
         ``resp_col`` (and optionally wave).
-    wave : int, optional
-        Filter by wave. Defaults to most frequent wave if None.
+    wave : optional
+        The occasion to keep, matched against ``wave`` as a string so that
+        labelled waves ("pre"/"post") work as well as numbered ones. Defaults
+        to the most frequent wave if None. A wave that is not present in the
+        table raises: reshaping without filtering would aggregate every
+        occasion together.
     id_density_threshold : float, optional
         Minimum response density (0.0-1.0). None to disable. Default 0.1.
     agg_method : str, optional
@@ -237,19 +241,46 @@ def long2resp(
     df = df[essential_cols].copy()
     df["resp"] = resp_values
     
-    # Handle wave filtering
+    # ---- Occasion selection ----
+    #
+    # A wave that cannot be matched is an error, because the alternative is to
+    # fabricate data. Skipping the filter does not return "all the waves": the
+    # aggregation step below then collapses every occasion for an id-item pair
+    # into one cell, and with the default agg_method of "mean" on a numeric
+    # response that cell is the average of a pre and a post answer -- a number
+    # that exists in no respondent's data, returned with no error and a message
+    # reading "No filtering applied." R's irw_long2resp() had the same path
+    # plus an as.numeric() coercion that made labelled waves hit it by default;
+    # on live lozano_2018_participation 22% of the returned cells were means of
+    # a pre and a post response on a 1-5 scale.
+    #
+    # Matching is on the string form so that a caller passing 1 matches an
+    # integer, a float and a "1" column alike, which is also what R does now.
     if "wave" in df.columns:
+        observed = df["wave"].dropna()
+        if observed.empty:
+            raise ValueError(
+                "Column 'wave' is present but missing on every row, so no occasion "
+                "can be chosen. Drop the column before reshaping if the table is "
+                "not longitudinal."
+            )
         if wave is None:
-            # Find the most frequent wave
-            wave_counts = df["wave"].value_counts()
-            wave = wave_counts.index[0]  # Most frequent wave
+            wave = observed.astype(str).value_counts().index[0]
             messages.append(f"Defaulting to the most frequent wave: {wave}")
-        
-        if wave in df["wave"].values:
-            df = df[df["wave"] == wave].copy()
-            messages.append(f"Filtering applied: Keeping only responses from wave {wave}")
-        else:
-            messages.append(f"Wave {wave} not found in data. No filtering applied.")
+
+        keep = df["wave"].notna() & (df["wave"].astype(str) == str(wave))
+        if not keep.any():
+            shown = list(dict.fromkeys(observed.astype(str)))
+            listed = ", ".join(shown[:10])
+            if len(shown) > 10:
+                listed += f", ... ({len(shown)} in all)"
+            raise ValueError(
+                f"wave = {wave} is not present in this table. Observed waves: "
+                f"{listed}. Reshaping without filtering would aggregate every "
+                "occasion together, so this is an error rather than a warning."
+            )
+        df = df[keep].copy()
+        messages.append(f"Filtering applied: Keeping only responses from wave {wave}")
     
     # Ensure item names have "item_" prefix, remembering what each one was.
     #
@@ -400,10 +431,20 @@ def long2resp(
         col if col == "id" else original_item_name[col] for col in wide_df.columns
     ]
     
-    # Print messages at the end
+    # Print messages at the end -- and keep them on the frame.
+    #
+    # `print` alone made these invisible to every programmatic caller, and the
+    # MCP server is the one that matters: `IRWTools._call` runs package code
+    # inside `redirect_stdout(io.StringIO())` so that package output cannot
+    # corrupt MCP stdio, and that buffer is dropped. So `fetch_table(wide=true)`
+    # returned one of a table's several occasions with nothing to say a choice
+    # had been made -- the agent-facing surface lost the only cue that the
+    # reshape is lossy. `attrs` survives the capture, and `_call` forwards it
+    # as a warning.
     if messages:
         print("\n".join(messages))
-    
+    wide_df.attrs["irw_messages"] = list(messages)
+
     if check_resp:
         return wide_df, resp_checks
     return wide_df
