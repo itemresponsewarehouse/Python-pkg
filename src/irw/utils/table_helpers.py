@@ -42,6 +42,30 @@ def _get_table_metadata(table_name: str, source: str = "main") -> Dict[str, Any]
     return {k: v for k, v in row.to_dict().items() if k != 'table_lower'}
 
 
+def _has_item_text(table_name: str) -> Optional[bool]:
+    """Does IRW publish item text for this table? None when it cannot be told.
+
+    This used to read `has_item_text` from the merged irw_meta metadata row.
+    There is no such column: `has_item_text` is COMPUTED, by
+    `list_tables._compute_item_text_flag`, from the item-text shards' own table
+    index. `dict.get('has_item_text', False)` therefore returned False for
+    every table in the corpus, including all ~2,700 that have item text, and
+    `info()` printed "Item-level text: Not available" for every one of them --
+    in the released 0.7.7, where the same session's `list_tables()` got it
+    right two lines away.
+
+    Asking the index is what `list_tables()` does, so the two surfaces now
+    answer from one source. The distinction between False and None matters for
+    the same reason it does in `_get_table_itemtext`: a listing that failed is
+    not a table without item text, and printing absence for a network timeout
+    is how the previous wrong answer stayed invisible.
+    """
+    try:
+        return table_name.lower() in _list_itemtext_tables()
+    except Exception:
+        return None
+
+
 #: The biblio fields info() reports, keyed by their raw irw_meta column names.
 _BIBLIO_FIELDS = {
     'description': 'Description', 'reference': 'Reference_x', 'doi': 'DOI__for_paper_',
@@ -111,7 +135,7 @@ def _get_table_info_dict(table_name: str, source: str = "main") -> Dict[str, Any
             'license': metadata_dict.get('Derived_License'),  # Raw column name
             'bibtex': metadata_dict.get('BibTex'),  # Raw column name
         },
-        'item_text': metadata_dict.get('has_item_text', False),
+        'item_text': _has_item_text(table_name),
         'dataset': metadata_dict.get('dataset'),  # Raw column name (no rename needed)
     }
 
@@ -352,8 +376,12 @@ def _format_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
     # Additional info
     lines.append("\nAdditional Information:")
     lines.append("-" * 60)
-    if info_dict.get('item_text'):
+    item_text = info_dict.get('item_text')
+    if item_text:
         lines.append("  Item-level text: Available (use itemtext() to retrieve)")
+    elif item_text is None:
+        # The index could not be read. Not the same as having no item text.
+        lines.append("  Item-level text: Could not be checked")
     else:
         lines.append("  Item-level text: Not available")
     dataset = info_dict.get('dataset')
