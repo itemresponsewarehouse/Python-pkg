@@ -22,7 +22,7 @@ Usage:
 from __future__ import annotations
 import warnings
 import datetime
-from typing import Optional, Union, Dict, List, Literal, Tuple
+from typing import Any, Mapping, Optional, Union, Dict, List, Literal, Tuple
 import pandas as pd
 from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_datasets, _init_rank_datasets
 from .utils.redivis.item_text import (
@@ -695,6 +695,7 @@ def download(table_name: str, path: Optional[str] = None, overwrite: bool = Fals
 def long2resp(
     df: pd.DataFrame,
     wave: Optional[int] = None,
+    occasion: Optional[Mapping[str, Any]] = None,
     id_density_threshold: Optional[float] = 0.1,
     agg_method: Optional[Literal["mean", "mode", "median", "first"]] = None,
     check_resp: bool = False,
@@ -710,6 +711,14 @@ def long2resp(
         ``resp_col`` (and optionally wave). Typically obtained from irw.fetch().
     wave : int, optional
         Filter by wave. Defaults to most frequent wave if None.
+    occasion : mapping, optional
+        The occasion to keep for any other occasion column the standard
+        defines (``rater``, ``session``, ``trial_number``, ...), e.g.
+        ``occasion={"rater": "2"}``. Such a column is never chosen for you:
+        when it keys a repeated id-item pair, either pass ``agg_method`` to
+        aggregate across it deliberately or this raises. The choices made are
+        on ``attrs["irw_occasion"]``, the columns pooled on
+        ``attrs["irw_occasion_pooled"]``.
     id_density_threshold : float, optional
         Minimum response density (0.0-1.0). None to disable. Default 0.1.
     agg_method : str, optional
@@ -743,6 +752,7 @@ def long2resp(
     return _long2resp(
         df,
         wave=wave,
+        occasion=occasion,
         id_density_threshold=id_density_threshold,
         agg_method=agg_method,
         check_resp=check_resp,
