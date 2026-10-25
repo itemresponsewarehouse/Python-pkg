@@ -113,6 +113,29 @@ def _code_sort_key(code: str) -> Tuple[int, Any]:
         return (1, code)
 
 
+def _code_sort_columns(codes: pd.Series) -> pd.DataFrame:
+    """`_code_sort_key` spread over three sortable columns.
+
+    The key is a tuple, and a column of tuples is not sortable: pandas 3.1
+    infers it as an Arrow ``list<double>`` and `sort_values` reaches
+    `dictionary_encode`, which has no kernel for a list type
+    (ArrowNotImplementedError). pandas 2.x fell back to object dtype and
+    compared the tuples elementwise, so this worked by accident of inference
+    rather than by design. Three scalar columns sort the same way and depend on
+    no inference at all: kind first (numeric codes before the rest), then the
+    numeric value, then the text.
+    """
+    keys = [_code_sort_key(c) for c in codes]
+    return pd.DataFrame(
+        {
+            "_kind": [k[0] for k in keys],
+            "_num": [k[1] if k[0] == 0 else np.nan for k in keys],
+            "_text": ["" if k[0] == 0 else str(k[1]) for k in keys],
+        },
+        index=codes.index,
+    )
+
+
 def covariate_labels(table: Union[str, Sequence[str]]) -> pd.DataFrame:
     """
     Source value labels for an IRW table's coded covariates.
@@ -173,9 +196,12 @@ def covariate_labels(table: Union[str, Sequence[str]]) -> pd.DataFrame:
             + ". Either its covariates are not coded, or their source labels "
             "could not be recovered (see get_processing_notes / the build script)."
         )
-    out["_key"] = out["code"].map(_code_sort_key)
-    out = out.sort_values(["table", "covariate", "_key"], kind="stable")
-    return out.drop(columns="_key").reset_index(drop=True)
+    keys = _code_sort_columns(out["code"])
+    out[["_kind", "_num", "_text"]] = keys
+    out = out.sort_values(
+        ["table", "covariate", "_kind", "_num", "_text"], kind="stable"
+    )
+    return out.drop(columns=["_kind", "_num", "_text"]).reset_index(drop=True)
 
 
 def _resolve_label_rows(

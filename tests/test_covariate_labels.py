@@ -14,6 +14,7 @@ import irw
 from irw.utils.redivis import table_metadata
 from irw.utils.redivis.cache import metadata_cache
 from irw.utils.redivis.table_metadata import CovariateLabelsUnavailable
+from irw.operations.covariates import _code_sort_columns
 
 WITHHELD = "[institution name withheld]"
 _REAL_LOADER = table_metadata.get_covariate_labels_table
@@ -231,6 +232,23 @@ def test_labels_survive_align():
     g = out["cov_gender"]
     assert isinstance(g.dtype, pd.CategoricalDtype)
     assert pd.isna(g.iloc[0]) and g.iloc[1] == "mujer" and pd.isna(g.iloc[2])
+
+
+def test_mixed_numeric_and_text_codes_sort_without_a_tuple_column():
+    # The sort key used to live in one column of tuples, which pandas 2.x held
+    # as object dtype and compared elementwise. pandas 3.1 infers it as an
+    # Arrow list<double> and sort_values raises ArrowNotImplementedError, so
+    # every covariate_labels call failed on a current pandas. The key is three
+    # scalar columns now; this pins both the dtypes and the order they give.
+    codes = pd.Series(["10", "2", "b", "a", "1"])
+    keys = _code_sort_columns(codes)
+
+    assert list(keys.columns) == ["_kind", "_num", "_text"]
+    for col in keys.columns:
+        assert keys[col].map(lambda v: isinstance(v, (list, tuple))).sum() == 0
+
+    order = keys.sort_values(["_kind", "_num", "_text"], kind="stable").index
+    assert codes.loc[order].tolist() == ["1", "2", "10", "a", "b"]
 
 
 def test_exports():
