@@ -12,7 +12,7 @@ here they are *returned* -- `long2resp(check_resp=True)` gives a
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple, Union
 import pandas as pd
 import numpy as np
 
@@ -149,9 +149,70 @@ def check_resp(
     return _check_resp(df, min_count=min_count, min_prop=min_prop, resp_col=resp_col)
 
 
+#: The occasion columns the IRW standard defines -- every way a response can
+#: repeat. Until 2026-10-24 this reshape handled exactly one of them: `wave`
+#: had a selector, and `rater`, `trial_*`, `session` and the rest were dropped
+#: from the frame and then averaged together by the default
+#: `agg_method="mean"`, with no argument a caller could pass (review R-25,
+#: ben-domingue/irw#3223).
+#:
+#: Deliberately the same list `irw_validate.occasion_columns()` uses, so the
+#: validator's "this repeated id+item is explained by `rater`" and this
+#: function's "which occasion am I keeping?" cannot drift apart. `rt` is
+#: excluded because it is a measurement rather than an index, and `date`
+#: because this function already refuses a table that has one.
+OCCASION_COLUMNS = (
+    "rater", "wave", "timepoint", "trialnum", "trial", "order", "session",
+    "occasion", "period", "block", "subtest",
+)
+
+
+def _occasion_columns(df: pd.DataFrame) -> List[str]:
+    cols = [c for c in OCCASION_COLUMNS if c in df.columns]
+    cols += [c for c in df.columns
+             if isinstance(c, str) and c.startswith("trial_") and c not in cols]
+    return cols
+
+
+def _occasion_request(
+    wave: Optional[Any],
+    occasion: Optional[Mapping[str, Any]],
+    cols: List[str],
+) -> Dict[str, str]:
+    """`wave` and `occasion` as one {column: value} mapping, checked."""
+    req: Dict[str, str] = {}
+    if occasion is not None:
+        if not isinstance(occasion, Mapping):
+            raise TypeError(
+                "`occasion` must be a mapping of column to value, e.g. "
+                "occasion={'rater': '2'}."
+            )
+        unknown = [c for c in occasion if c not in cols]
+        if unknown:
+            where = (f"Occasion columns here: {', '.join(cols)}." if cols
+                     else "This table has no occasion column at all.")
+            raise ValueError(
+                f"`occasion` names column(s) this table has no occasion for: "
+                f"{', '.join(map(str, unknown))}. {where}"
+            )
+        for col, value in occasion.items():
+            if isinstance(value, (list, tuple, set)):
+                raise ValueError(
+                    f"occasion['{col}'] must be a single value: one occasion is "
+                    "kept per column, because keeping two would aggregate them."
+                )
+            req[col] = str(value)
+    if wave is not None:
+        if "wave" in req and req["wave"] != str(wave):
+            raise ValueError("`wave` and occasion['wave'] disagree. Pass one of them.")
+        req["wave"] = str(wave)
+    return req
+
+
 def long2resp(
     df: pd.DataFrame,
     wave: Optional[int] = None,
+    occasion: Optional[Mapping[str, Any]] = None,
     id_density_threshold: Optional[float] = 0.1,
     agg_method: Optional[Literal["mean", "mode", "median", "first"]] = None,
     check_resp: bool = False,
@@ -171,6 +232,21 @@ def long2resp(
         to the most frequent wave if None. A wave that is not present in the
         table raises: reshaping without filtering would aggregate every
         occasion together.
+    occasion : mapping, optional
+        The occasion to keep for any other occasion column the standard
+        defines -- ``rater``, ``session``, ``trial_number``, ``order``,
+        ``period``, ``block``, ``subtest``, ``timepoint``, ``occasion`` -- e.g.
+        ``occasion={"rater": "2"}``. Matched as a string, exactly as ``wave``
+        is. An occasion column present in the table, not named here, and
+        keying a repeated id-item pair is never chosen for you: either pass
+        ``agg_method``, which says aggregating across it is what you want, or
+        this raises and names the column. Both halves matter -- the aggregation
+        step would otherwise average occasions into a value that exists in no
+        respondent's data, and picking one occasion unasked is the same defect
+        wearing different clothes (on a 651-rater panel it returns one rater).
+        The occasions kept are recorded on the result as
+        ``attrs["irw_occasion"]``, and any aggregated across as
+        ``attrs["irw_occasion_pooled"]``.
     id_density_threshold : float, optional
         Minimum response density (0.0-1.0). None to disable. Default 0.1.
     agg_method : str, optional
@@ -233,9 +309,8 @@ def long2resp(
     
     # Keep id, item and wave (if it exists), plus the response column, which is
     # called `resp` from here on whichever column it came from.
-    essential_cols = ["id", "item"]
-    if "wave" in df.columns:
-        essential_cols.append("wave")
+    occasion_cols = _occasion_columns(df)
+    essential_cols = ["id", "item"] + occasion_cols
     
     resp_values = df[resp_col]
     df = df[essential_cols].copy()
@@ -256,32 +331,102 @@ def long2resp(
     #
     # Matching is on the string form so that a caller passing 1 matches an
     # integer, a float and a "1" column alike, which is also what R does now.
-    if "wave" in df.columns:
-        observed = df["wave"].dropna()
+    request = _occasion_request(wave, occasion, occasion_cols)
+    chosen: Dict[str, str] = {}
+
+    def _repeats_remain(frame: pd.DataFrame) -> bool:
+        return bool(frame.duplicated(subset=["id", "item"]).any())
+
+    # Four rules, in this order, and the last is the one worth reading:
+    #
+    #   1. `wave` is always resolved, explicitly or by default, as it always was.
+    #   2. A column named in `occasion` is resolved, because the caller asked.
+    #   3. Any OTHER occasion column is considered only while an id+item pair
+    #      still repeats -- only while something would otherwise be aggregated.
+    #      `subtest` and `block` are in the standard's list because they CAN
+    #      key a repeat; on a table where they do not, filtering to one of
+    #      their values would throw away items rather than choose an occasion.
+    #   4. Such a column is NEVER chosen for the caller. Either `agg_method`
+    #      was passed, in which case aggregating across it is the request, so
+    #      it is pooled and reported; or it was not, and this raises.
+    #
+    # Rule 4 corrects the first version of this fix, which kept the column's
+    # most frequent value. R's half of it hit `swmd_mokken` -- a 651-rater
+    # panel, pooled on purpose by one of the package's own vignettes -- and
+    # returned the single most common rater, turning a 30 x 7 matrix into one
+    # row. Choosing an occasion unasked is the same class of defect as pooling
+    # them unasked, and on a rater panel it destroys more of the data. `wave`
+    # keeps its default: it has always had one, and a wave is a table-wide
+    # occasion in a way a rater is not.
+    pooled: List[str] = []
+    for col in occasion_cols:
+        explicit = col in request
+        if not explicit and col != "wave":
+            if not _repeats_remain(df):
+                continue
+            observed = df[col].dropna()
+            if not observed.empty:
+                values = list(dict.fromkeys(observed.astype(str)))
+                if not agg_method_defaulted:
+                    # The caller named an aggregation, so aggregating across
+                    # this column is the request. Name the column being pooled:
+                    # that is the fact a reader of the frame cannot recover
+                    # from it.
+                    pooled.append(col)
+                    messages.append(
+                        f"Aggregating across {col} ({len(values)} values) with "
+                        f"agg_method={agg_method!r}, as given."
+                    )
+                    continue
+                raise ValueError(
+                    f"Column '{col}' keys repeated id+item responses "
+                    f"({len(values)} values), and this reshape will not choose "
+                    f"one for you. Either keep one occasion -- "
+                    f"occasion={{{col!r}: {values[0]!r}}} -- or aggregate "
+                    "across them deliberately by passing agg_method, for "
+                    "example agg_method='mode'."
+                )
+        observed = df[col].dropna()
         if observed.empty:
             raise ValueError(
-                "Column 'wave' is present but missing on every row, so no occasion "
-                "can be chosen. Drop the column before reshaping if the table is "
-                "not longitudinal."
+                f"Column '{col}' is present but missing on every row, so no "
+                "occasion can be chosen from it. Drop the column before "
+                "reshaping if it does not index repeated responses."
             )
-        if wave is None:
-            wave = observed.astype(str).value_counts().index[0]
-            messages.append(f"Defaulting to the most frequent wave: {wave}")
-
-        keep = df["wave"].notna() & (df["wave"].astype(str) == str(wave))
+        want = request[col] if explicit else None
+        if want is None:
+            counts = observed.astype(str).value_counts()
+            want = counts.index[0]
+            if len(counts) > 1:
+                how = (f"wave={want!r}" if col == "wave"
+                       else f"occasion={{{col!r}: {want!r}}}")
+                messages.append(
+                    f"Defaulting to the most frequent {col}: {want} "
+                    f"(of {len(counts)} values). Pass {how} to choose."
+                )
+        keep = df[col].notna() & (df[col].astype(str) == want)
         if not keep.any():
             shown = list(dict.fromkeys(observed.astype(str)))
             listed = ", ".join(shown[:10])
             if len(shown) > 10:
                 listed += f", ... ({len(shown)} in all)"
             raise ValueError(
-                f"wave = {wave} is not present in this table. Observed waves: "
-                f"{listed}. Reshaping without filtering would aggregate every "
-                "occasion together, so this is an error rather than a warning."
+                f"{col} = {want} is not present in this table. Observed "
+                f"values: {listed}. Reshaping without filtering would "
+                "aggregate every occasion together, so this is an error "
+                "rather than a warning."
             )
         df = df[keep].copy()
-        messages.append(f"Filtering applied: Keeping only responses from wave {wave}")
-    
+        chosen[col] = want
+        messages.append(
+            f"Filtering applied: Keeping only responses from {col} {want}"
+        )
+    if _repeats_remain(df) and not occasion_cols:
+        messages.append(
+            "NOTE: this table repeats id+item with no occasion column to key "
+            "it on, so the responses are aggregated (see the next note)."
+        )
+
     # Ensure item names have "item_" prefix, remembering what each one was.
     #
     # The prefix is added so numeric item ids do not become numeric column
@@ -444,6 +589,14 @@ def long2resp(
     if messages:
         print("\n".join(messages))
     wide_df.attrs["irw_messages"] = list(messages)
+    # Which occasion each column was fixed at, readable off the frame. The MCP
+    # server drops stdout entirely (see above), and an agent that cannot see
+    # the choice cannot report it.
+    wide_df.attrs["irw_occasion"] = dict(chosen)
+    # Which occasion columns were aggregated across rather than chosen from.
+    # A caller reading `irw_occasion` alone would see nothing for them.
+    if pooled:
+        wide_df.attrs["irw_occasion_pooled"] = list(pooled)
 
     if check_resp:
         return wide_df, resp_checks
