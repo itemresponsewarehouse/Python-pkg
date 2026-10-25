@@ -65,6 +65,7 @@ from .utils.redivis.table_metadata import (
 )
 from .utils.table_helpers import (
     _get_table_info_dict,
+    IRWTableNotFound,
     _get_table_itemtext,
     _format_table_info
 )
@@ -214,11 +215,18 @@ def info(table_name: Optional[str] = None, source: str = "main", return_dict: bo
     else:
         # Table info
         result = _get_table_info_dict(table_name, source)
-        
+
+        # An unknown table is an error, not an empty result. `{}` is falsy and
+        # indistinguishable from a table that exists with nothing recorded, so a
+        # typo came back looking like a fact about the corpus. R errors here, and
+        # this is the last of the four divergences the review listed under R-23
+        # that we can close on our side (ben-domingue/irw#3221).
         if not result:
-            message = f"No metadata available for table: {table_name} (source='{source}')"
-            print(message)
-            return None if not return_dict else {}
+            raise IRWTableNotFound(
+                f"No table named {table_name!r} in source={source!r}. "
+                "Check the spelling with irw.list_tables(), or irw.filter() to "
+                "search the catalogue; names are case-sensitive as published."
+            )
         
         formatted_message = _format_table_info(table_name, result)
         print(formatted_message)

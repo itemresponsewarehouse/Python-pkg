@@ -356,7 +356,15 @@ class PackageBackend:
         return None
 
     def describe_table(self, table_name: str, source: str = SOURCE) -> Any:
-        return irw.info(table_name, source=source, return_dict=True)
+        # `info()` raises for an unknown table now (ben-domingue/irw#3221).
+        # Translated back to an empty result here so the tool layer keeps
+        # producing its own `not_found` error, which names the table and is
+        # what an agent can act on; an uncaught LookupError would reach the
+        # client as an internal failure instead.
+        try:
+            return irw.info(table_name, source=source, return_dict=True)
+        except irw.IRWTableNotFound:
+            return {}
 
     def fetch_table(
         self,

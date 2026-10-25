@@ -84,11 +84,13 @@ from .api import (
 from .operations.list_tables import IRWMetadataUnavailable
 from .utils.redivis.pins import IRWVersionUnavailable
 from .utils.redivis.table_metadata import CovariateLabelsUnavailable
+from .utils.table_helpers import IRWTableNotFound
 
 __all__ = [
     "IRWMetadataUnavailable",
     "IRWVersionUnavailable",
     "CovariateLabelsUnavailable",
+    "IRWTableNotFound",
     "list_tables",
     "metadata",
     "filter",

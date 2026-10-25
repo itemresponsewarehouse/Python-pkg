@@ -165,11 +165,23 @@ def _merge_metadata(base: pd.DataFrame, datasets: List[Any], source: str = "main
 
 
 def _compute_item_text_flag(df: pd.DataFrame) -> pd.DataFrame:
-    try:
-        itemtext_available = _list_itemtext_tables()
-        df['has_item_text'] = df['name'].str.lower().isin(itemtext_available)
-    except Exception:
-        df['has_item_text'] = False
+    """Flag the tables that have item text, from the item-text shards' index.
+
+    A failed listing is NOT answered with False. It used to be, for every table
+    at once, which made a transient error look like a corpus with no item text:
+    `list_tables()` reported 0 of 6,720 and `filter(has_item_text=True)` came
+    back empty, silently. That is the same defect R-18 fixed in `info()` --
+    absence reported for a failed read -- surviving in the one place nobody
+    looked, and it is the more dangerous instance, because only a minority of
+    tables have item text so "none of them" is always plausible.
+
+    A boolean column has no room for "unknown", so the error propagates. The
+    listing is already retried underneath, `info()` and `describe_filter()`
+    report a failure as None rather than as False, and a call that fails loudly
+    is the only outcome here that cannot be mistaken for data
+    (ben-domingue/irw#3229).
+    """
+    df['has_item_text'] = df['name'].str.lower().isin(_list_itemtext_tables())
     return df
 
 
