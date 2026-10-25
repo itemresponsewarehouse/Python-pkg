@@ -12,6 +12,7 @@ here they are *returned* -- `long2resp(check_resp=True)` gives a
 """
 
 from __future__ import annotations
+import re
 from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple, Union
 import pandas as pd
 import numpy as np
@@ -165,6 +166,38 @@ OCCASION_COLUMNS = (
     "rater", "wave", "timepoint", "trialnum", "trial", "order", "session",
     "occasion", "period", "block", "subtest",
 )
+
+
+#: Column order for the wide frame, and the ONE definition of it.
+#:
+#: The two clients disagreed, and R's half was worse than a disagreement.
+#: Python pivots on the item column, so pandas sorted the columns
+#: lexicographically: item1, item10, item2. R uses `stats::reshape`, which
+#: orders columns by FIRST APPEARANCE IN THE INPUT ROWS -- so the same three
+#: items shuffled give `item10 item2 item1` from one row order and
+#: `item1 item10 item2` from another. Redivis does not guarantee row order, so
+#: the same table fetched twice in R could hand back its columns in a different
+#: order, with no error, and anyone feeding the matrix into IRT code by column
+#: position was exposed (review R-23, ben-domingue/irw#3221).
+#:
+#: So both clients sort, and both sort naturally: a run of digits compares as a
+#: number, everything else as text. Item names are overwhelmingly a stem plus a
+#: number, and lexicographic order puts item10 before item2, which is wrong in
+#: the only way a psychometrician will notice.
+#:
+#: The key is built as a PADDED STRING rather than a tuple, because it has to be
+#: reproducible character-for-character in `.irw_natural_key()` in Rpkg: digit
+#: runs are left-padded to 20 characters, everything else is lowercased, and the
+#: raw name breaks ties so the order is total. A digit run longer than 20
+#: characters is left alone -- it is not an item number.
+_NATURAL_SPLIT = re.compile(r"(\d+)")
+
+
+def _natural_key(name: Any) -> Tuple[str, str]:
+    text = str(name)
+    parts = _NATURAL_SPLIT.split(text)
+    key = "".join(p.rjust(20, "0") if p.isdigit() else p.lower() for p in parts)
+    return (key, text)
 
 
 def _occasion_columns(df: pd.DataFrame) -> List[str]:
@@ -575,6 +608,11 @@ def long2resp(
     wide_df.columns = [
         col if col == "id" else original_item_name[col] for col in wide_df.columns
     ]
+
+    # ...then put them in natural order, which is what makes the column order
+    # the same in both clients. See _natural_key.
+    items = [c for c in wide_df.columns if c != "id"]
+    wide_df = wide_df[["id"] + sorted(items, key=_natural_key)]
     
     # Print messages at the end -- and keep them on the frame.
     #
