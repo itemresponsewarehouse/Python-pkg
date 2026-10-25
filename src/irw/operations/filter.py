@@ -60,7 +60,13 @@ FILTER_COLUMNS = {'var': 'variables', 'collection': 'collections'}
 # "the caller passed density" can be told apart from "the caller left the
 # default", which a value comparison cannot do. R makes the same distinction
 # with missing(density).
-_DEFAULT_DENSITY = [0.5, 1]
+#
+# A LOWER BOUND ONLY. `density` is responses per person-item cell, not a
+# proportion, so it has no upper bound: 768 of 6,720 main tables are above 1
+# (measured 2026-10-25) because they measure a person-item pair more than once.
+# The old default of [0.5, 1] dropped every one of them and reported it as
+# sparsity (ben-domingue/irw#3222).
+_DEFAULT_DENSITY = [0.5, None]
 
 
 class InvalidFilterValue(ValueError):
@@ -438,10 +444,17 @@ def filter_tables(
         keeps only tables with none. source='main' only.
 
     density : float, int, list of length 1 or 2, or None, optional
-        Filter by matrix density (proportion of cells with valid responses).
-        A density of 1 means every person responded to every item (100% of cells have valid responses).
-        Lower density indicates that some individuals did not respond to all items.
-        Default is [0.5, 1] to exclude sparse matrices.
+        Filter on ``density``, which is RESPONSES PER PERSON-ITEM CELL --
+        ``n_responses / (n_participants * n_items)`` -- and is therefore not
+        bounded by 1. It is not the proportion of cells that are filled, which
+        is a different quantity IRW does not publish. A value above 1 means the
+        table measures a person-item pair more than once: 768 of 6,720 main
+        tables are above 1 (measured 2026-10-25), 700 of them carrying an
+        occasion column (wave, rater, trial_*, session, ...), and the largest is
+        3,624.6 for a go/no-go task.
+        Default is [0.5, None] -- a lower bound only, to exclude sparse
+        matrices. It used to cap at 1, which silently dropped every
+        repeated-measures table in the corpus.
         - List of length 2: range [min, max], use None for infinity (e.g., density=[0.5, None] for >= 0.5)
         - Set to None to disable density filtering
     
@@ -643,26 +656,22 @@ def filter_tables(
     df = _apply_numeric_filter(df, 'prop_items_extreme', prop_items_extreme)
     
     # Apply density filter (with default handling)
-    # Default is [0.5, 1] to exclude sparse matrices
+    # Default is [0.5, None]: at least half the cells filled, no upper bound.
     if density is not None:
         df_before_density = df.copy()
         df = _apply_numeric_filter(df, 'density', density)
-        
-        # Show message if default density removed datasets
-        # Check if density equals default [0.5, 1]
-        is_default_density = (
-            isinstance(density, list) and 
-            len(density) == 2 and 
-            density[0] == 0.5 and 
-            density[1] == 1
-        )
-        
+
+        # Warn only for the default the caller did not choose, which is the
+        # sentinel object itself. A caller who passes [0.5, None] by hand has
+        # chosen it and does not need telling what it did.
+        is_default_density = density is _DEFAULT_DENSITY
+
         num_removed = len(df_before_density) - len(df)
         if is_default_density and num_removed > 0:
             import warnings
             warnings.warn(
-                f"Note: Default density filter (0.5-1) removed {num_removed} dataset(s). "
-                f"Set density=None to disable.",
+                f"Note: Default density filter (>= 0.5 responses per person-item "
+                f"cell) removed {num_removed} dataset(s). Set density=None to disable.",
                 UserWarning,
                 stacklevel=2
             )

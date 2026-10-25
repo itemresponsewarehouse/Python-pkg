@@ -303,8 +303,8 @@ def test_search_rejects_a_filter_the_package_does_not_have(tools):
 
 
 def test_search_opts_out_of_the_default_density_filter(tools):
-    """irw.filter() defaults density to [0.5, 1] and drops sparse tables with
-    only a warning. Nobody asked for that by asking about a construct."""
+    """irw.filter() defaults density to [0.5, None] and drops sparse tables
+    with only a warning. Nobody asked for that by asking about a construct."""
     tools.search_tables(filters={"construct_type": "Affective"})
     assert tools.backend.filter_calls[-1]["density"] is None
 

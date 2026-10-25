@@ -1637,8 +1637,8 @@ class IRWTools:
         state = _ConversionState()
         allowed: Optional[set[str]] = None
         if selected:
-            # irw.filter() defaults density to [0.5, 1] and warns when that
-            # drops tables. A caller who asked for nothing about density did
+            # irw.filter() defaults density to [0.5, None] and warns when
+            # that drops tables. A caller who asked for nothing about density did
             # not ask for sparse tables to disappear, so opt out unless they
             # named it -- and let the package's own warning through when they
             # did. Only main has a density filter.
@@ -1792,8 +1792,8 @@ class IRWTools:
         if selected and source == SOURCE:
             caveats.append(
                 "No density filter was applied unless you asked for one; "
-                "irw.filter() defaults to density=[0.5, 1], which would have "
-                "dropped sparse tables silently."
+                "irw.filter() defaults to density=[0.5, None], which would "
+                "have dropped sparse tables silently."
             )
         for name in selected:
             description = self._filter_description(name)

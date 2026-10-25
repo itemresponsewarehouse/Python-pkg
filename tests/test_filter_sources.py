@@ -115,6 +115,28 @@ def test_an_explicit_density_equal_to_the_default_is_still_supplied(no_listing):
         filter_mod.filter_tables([], density=[0.5, 1], source="comp")
 
 
+def test_the_default_density_filter_has_no_upper_bound(listing):
+    """`density` is responses per person-item cell, so a repeated-measures
+    table is legitimately above 1 -- 768 of 6,720 main tables are
+    (ben-domingue/irw#3222). The old default of [0.5, 1] dropped all of them
+    and reported it as sparsity."""
+    frames, _ = listing
+    frames["main"] = pd.DataFrame({
+        "name": ["sparse", "full", "repeated", "panel"],
+        "density": [0.2, 0.9, 1.0, 12.5],
+    })
+
+    with pytest.warns(UserWarning, match="responses per person-item cell"):
+        kept = filter_mod.filter_tables([])
+    assert kept.tolist() == ["full", "panel", "repeated"]
+
+    assert filter_mod.filter_tables([], density=None).tolist() == [
+        "full", "panel", "repeated", "sparse",
+    ]
+    # An upper bound the caller asks for is still honoured.
+    assert filter_mod.filter_tables([], density=[0.5, 1]).tolist() == ["full", "repeated"]
+
+
 def test_unknown_source_errors(no_listing):
     with pytest.raises(ValueError, match="Unknown source"):
         filter_mod.filter_tables([], source="core")
