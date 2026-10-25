@@ -47,3 +47,47 @@ def test_main_layout_is_unchanged(monkeypatch):
     monkeypatch.setattr(table_helpers, "_table_info", lambda source="main": combined)
     d = table_helpers._get_table_info_dict("t")
     assert "source" not in d and d["stats"]["n_responses"] == 10
+
+
+# ---- info()'s item-text field ----
+#
+# It used to read `has_item_text` from the merged irw_meta metadata row, where
+# there is no such column: `has_item_text` is computed from the item-text
+# shards' table index by list_tables(). `info()` therefore printed
+# "Item-level text: Not available" for every table in the corpus, including the
+# ~2,700 that have it, in the released 0.7.7. These pin the three outcomes
+# apart -- has it, does not have it, could not be told -- because the defect
+# was precisely that the first and the third were reported as the second.
+
+
+@pytest.fixture
+def fake_main(monkeypatch):
+    meta = pd.DataFrame({"table": ["fake_table"], "n_responses": [10], "n_items": [2]})
+    combined = meta.assign(Description="d", Reference_x="r", DOI__for_paper_="1",
+                           URL__for_data_="u", Derived_License="CC0 1.0", BibTex="@a{b,}",
+                           dataset="item_response_warehouse")
+    monkeypatch.setattr(table_helpers, "_table_info", lambda source="main": combined)
+    return combined
+
+
+def test_item_text_comes_from_the_itemtext_index(fake_main, monkeypatch, capsys):
+    monkeypatch.setattr(table_helpers, "_list_itemtext_tables", lambda: {"fake_table"})
+    d = irw.info("fake_table", return_dict=True)
+    assert d["item_text"] is True
+    assert "Item-level text: Available" in capsys.readouterr().out
+
+
+def test_absent_item_text_is_reported_as_absent(fake_main, monkeypatch, capsys):
+    monkeypatch.setattr(table_helpers, "_list_itemtext_tables", lambda: {"other_table"})
+    d = irw.info("fake_table", return_dict=True)
+    assert d["item_text"] is False
+    assert "Item-level text: Not available" in capsys.readouterr().out
+
+
+def test_an_unreadable_index_is_not_reported_as_absence(fake_main, monkeypatch, capsys):
+    def boom():
+        raise RuntimeError("Redivis timed out")
+    monkeypatch.setattr(table_helpers, "_list_itemtext_tables", boom)
+    d = irw.info("fake_table", return_dict=True)
+    assert d["item_text"] is None
+    assert "Item-level text: Could not be checked" in capsys.readouterr().out

@@ -64,3 +64,54 @@ def test_a_warning_the_package_did_not_silence_still_reaches_the_client(package_
     second = tools.search_tables(limit=1)["warnings"]
     assert KEPT in first, first
     assert KEPT in second, second
+
+
+# ---- long2resp's disclosures must reach the client ----
+#
+# `_call` runs package code inside redirect_stdout(io.StringIO()) so package
+# output cannot corrupt MCP stdio, and that buffer is dropped. long2resp says
+# which occasion it chose with `print`, so `fetch_table(wide=true)` on a
+# two-wave table used to return one wave's data with nothing to say a choice
+# had been made -- the agent-facing path lost the only cue that the reshape is
+# lossy. The frame now carries the messages in `attrs` and `_call` forwards
+# them.
+
+
+class ReshapingBackend(FakeBackend):
+    """A backend whose wide fetch behaves like long2resp: it chooses a wave."""
+
+    def fetch_table(self, table_name, *, wide, dedup, max_rows=None, columns=None):
+        frame = super().fetch_table(
+            table_name, wide=wide, dedup=dedup, max_rows=max_rows, columns=columns
+        )
+        if frame is not None and wide:
+            print("Defaulting to the most frequent wave: 1")
+            frame.attrs["irw_messages"] = ["Defaulting to the most frequent wave: 1"]
+        return frame
+
+
+def test_the_wave_choice_reaches_the_caller():
+    tools = IRWTools(ReshapingBackend(), FakeSource())
+    payload = tools.fetch_table("alpha_depression", wide=True)
+    assert any("most frequent wave" in w for w in payload["warnings"])
+
+
+def test_a_frame_without_messages_adds_no_warning():
+    tools = IRWTools(ReshapingBackend(), FakeSource())
+    payload = tools.fetch_table("alpha_depression", wide=False)
+    assert not any("most frequent wave" in w for w in payload["warnings"])
+
+
+def test_a_bare_print_is_still_swallowed():
+    """Forwarding `attrs` rather than the captured stdout keeps this opt-in:
+    a print meant for a human at a REPL must not become an MCP warning."""
+
+    class ChattyBackend(FakeBackend):
+        def fetch_table(self, table_name, *, wide, dedup, max_rows=None, columns=None):
+            print("loading the table, please wait")
+            return super().fetch_table(table_name, wide=wide, dedup=dedup,
+                                       max_rows=max_rows, columns=columns)
+
+    tools = IRWTools(ChattyBackend(), FakeSource())
+    payload = tools.fetch_table("alpha_depression")
+    assert not any("please wait" in w for w in payload["warnings"])

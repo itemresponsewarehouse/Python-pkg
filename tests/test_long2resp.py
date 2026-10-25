@@ -188,6 +188,48 @@ def test_an_explicit_wave_selects_that_wave():
     assert set(wide["id"]) == {"p3"}
 
 
+def test_a_labelled_wave_is_filtered_never_pooled():
+    """The defect this guards: skipping the filter does not return every wave,
+    it averages them. Under the default agg_method of "mean" a pre and a post
+    answer on a 1-5 scale came back as their mean, which is in nobody's data."""
+    df = _long([("p1", "q1", 1), ("p1", "q1", 5), ("p2", "q1", 2), ("p2", "q1", 4)])
+    df["wave"] = ["pre", "post", "pre", "post"]
+    wide = long2resp(df, wave="post", id_density_threshold=None)
+
+    assert sorted(wide["q1"]) == [4, 5]
+
+
+def test_a_wave_that_is_absent_raises():
+    df = _long([("p1", "q1", 1), ("p2", "q1", 0)])
+    df["wave"] = ["pre", "post"]
+    with pytest.raises(ValueError, match="not present in this table"):
+        long2resp(df, wave="followup", id_density_threshold=None)
+
+
+def test_an_all_missing_wave_column_raises():
+    df = _long([("p1", "q1", 1), ("p2", "q1", 0)])
+    df["wave"] = None
+    with pytest.raises(ValueError, match="missing on every row"):
+        long2resp(df, id_density_threshold=None)
+
+
+def test_a_numeric_wave_argument_matches_a_string_column():
+    df = _long([("p1", "q1", 1), ("p2", "q1", 0)])
+    df["wave"] = ["1", "2"]
+    wide = long2resp(df, wave=1, id_density_threshold=None)
+
+    assert set(wide["id"]) == {"p1"}
+
+
+def test_the_occasion_choice_is_recorded_on_the_frame():
+    """`print` alone is invisible to the MCP, which drops package stdout."""
+    df = _long([("p1", "q1", 1), ("p2", "q1", 0)])
+    df["wave"] = [1, 2]
+    wide = long2resp(df, id_density_threshold=None)
+
+    assert any("most frequent wave" in m for m in wide.attrs["irw_messages"])
+
+
 def test_wave_is_not_a_column_of_the_response_matrix():
     df = _long([("p1", "q1", 1), ("p2", "q1", 0)])
     df["wave"] = 1
