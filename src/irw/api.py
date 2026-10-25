@@ -714,8 +714,11 @@ def long2resp(
     occasion : mapping, optional
         The occasion to keep for any other occasion column the standard
         defines (``rater``, ``session``, ``trial_number``, ...), e.g.
-        ``occasion={"rater": "2"}``. Nothing is pooled across occasions; the
-        choices made are on ``attrs["irw_occasion"]``.
+        ``occasion={"rater": "2"}``. Such a column is never chosen for you:
+        when it keys a repeated id-item pair, either pass ``agg_method`` to
+        aggregate across it deliberately or this raises. The choices made are
+        on ``attrs["irw_occasion"]``, the columns pooled on
+        ``attrs["irw_occasion_pooled"]``.
     id_density_threshold : float, optional
         Minimum response density (0.0-1.0). None to disable. Default 0.1.
     agg_method : str, optional

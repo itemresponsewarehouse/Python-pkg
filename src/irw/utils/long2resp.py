@@ -237,11 +237,16 @@ def long2resp(
         defines -- ``rater``, ``session``, ``trial_number``, ``order``,
         ``period``, ``block``, ``subtest``, ``timepoint``, ``occasion`` -- e.g.
         ``occasion={"rater": "2"}``. Matched as a string, exactly as ``wave``
-        is. An occasion column present in the table and not named here defaults
-        to its most frequent value, which is reported; nothing is ever pooled
-        across occasions, because the aggregation step would average them into
-        a value that exists in no respondent's data. The occasions kept are
-        recorded on the result as ``attrs["irw_occasion"]``.
+        is. An occasion column present in the table, not named here, and
+        keying a repeated id-item pair is never chosen for you: either pass
+        ``agg_method``, which says aggregating across it is what you want, or
+        this raises and names the column. Both halves matter -- the aggregation
+        step would otherwise average occasions into a value that exists in no
+        respondent's data, and picking one occasion unasked is the same defect
+        wearing different clothes (on a 651-rater panel it returns one rater).
+        The occasions kept are recorded on the result as
+        ``attrs["irw_occasion"]``, and any aggregated across as
+        ``attrs["irw_occasion_pooled"]``.
     id_density_threshold : float, optional
         Minimum response density (0.0-1.0). None to disable. Default 0.1.
     agg_method : str, optional
@@ -332,19 +337,55 @@ def long2resp(
     def _repeats_remain(frame: pd.DataFrame) -> bool:
         return bool(frame.duplicated(subset=["id", "item"]).any())
 
-    # Three rules, in this order, and the third is the one worth reading:
+    # Four rules, in this order, and the last is the one worth reading:
     #
     #   1. `wave` is always resolved, explicitly or by default, as it always was.
     #   2. A column named in `occasion` is resolved, because the caller asked.
-    #   3. Any OTHER occasion column is resolved only while an id+item pair
+    #   3. Any OTHER occasion column is considered only while an id+item pair
     #      still repeats -- only while something would otherwise be aggregated.
     #      `subtest` and `block` are in the standard's list because they CAN
     #      key a repeat; on a table where they do not, filtering to one of
     #      their values would throw away items rather than choose an occasion.
+    #   4. Such a column is NEVER chosen for the caller. Either `agg_method`
+    #      was passed, in which case aggregating across it is the request, so
+    #      it is pooled and reported; or it was not, and this raises.
+    #
+    # Rule 4 corrects the first version of this fix, which kept the column's
+    # most frequent value. R's half of it hit `swmd_mokken` -- a 651-rater
+    # panel, pooled on purpose by one of the package's own vignettes -- and
+    # returned the single most common rater, turning a 30 x 7 matrix into one
+    # row. Choosing an occasion unasked is the same class of defect as pooling
+    # them unasked, and on a rater panel it destroys more of the data. `wave`
+    # keeps its default: it has always had one, and a wave is a table-wide
+    # occasion in a way a rater is not.
+    pooled: List[str] = []
     for col in occasion_cols:
         explicit = col in request
-        if not explicit and col != "wave" and not _repeats_remain(df):
-            continue
+        if not explicit and col != "wave":
+            if not _repeats_remain(df):
+                continue
+            observed = df[col].dropna()
+            if not observed.empty:
+                values = list(dict.fromkeys(observed.astype(str)))
+                if not agg_method_defaulted:
+                    # The caller named an aggregation, so aggregating across
+                    # this column is the request. Name the column being pooled:
+                    # that is the fact a reader of the frame cannot recover
+                    # from it.
+                    pooled.append(col)
+                    messages.append(
+                        f"Aggregating across {col} ({len(values)} values) with "
+                        f"agg_method={agg_method!r}, as given."
+                    )
+                    continue
+                raise ValueError(
+                    f"Column '{col}' keys repeated id+item responses "
+                    f"({len(values)} values), and this reshape will not choose "
+                    f"one for you. Either keep one occasion -- "
+                    f"occasion={{{col!r}: {values[0]!r}}} -- or aggregate "
+                    "across them deliberately by passing agg_method, for "
+                    "example agg_method='mode'."
+                )
         observed = df[col].dropna()
         if observed.empty:
             raise ValueError(
@@ -552,6 +593,10 @@ def long2resp(
     # server drops stdout entirely (see above), and an agent that cannot see
     # the choice cannot report it.
     wide_df.attrs["irw_occasion"] = dict(chosen)
+    # Which occasion columns were aggregated across rather than chosen from.
+    # A caller reading `irw_occasion` alone would see nothing for them.
+    if pooled:
+        wide_df.attrs["irw_occasion_pooled"] = list(pooled)
 
     if check_resp:
         return wide_df, resp_checks
