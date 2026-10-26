@@ -57,6 +57,17 @@ The IRW tables are hosted on [Redivis](https://redivis.com), a data management p
 
 **Note:** You only need to authenticate once per session. For detailed instructions, refer to the [Redivis Python Client documentation](https://apidocs.redivis.com/client-libraries/redivis-python).
 
+**An account is needed here even though IRW is public, and that differs from the
+R client.** The warehouse itself is openly readable — the [R
+package](https://github.com/itemresponsewarehouse/Rpkg) reads tables with no
+login at all — but the Redivis *Python* SDK sends an `Authorization: Bearer`
+header on every request, including reads, so there is no anonymous path for this
+client or for the MCP server built on it. It is a property of the SDK rather
+than of IRW's permissions, so it is not something this package can work around;
+it is reported upstream. If you want to read IRW without an account, use the R
+client, or download a table from its page on the
+[website](https://itemresponsewarehouse.org/) (under 100 MB needs no login).
+
 ## Usage Examples
 
 See the `examples/` directory:
