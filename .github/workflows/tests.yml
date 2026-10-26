@@ -33,6 +33,21 @@ jobs:
       - run: pip install -e . pytest "PyYAML>=6,<7"
       - run: python -m pytest tests/ -q
 
+  version:
+    # The number `main` declares must be one pip can tell apart from whatever a
+    # user already has. Between releases that means a `.devN` suffix; a tree
+    # declaring a published number installs as a no-op that reports success
+    # (#125). Network-tolerant on purpose -- the script skips if PyPI is
+    # unreachable, so an outage cannot block a merge, and a failure is always
+    # real.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python .github/scripts/check_unpublished_version.py
+
   lint:
     # Lint only, no formatter -- see the [tool.ruff] comment in pyproject.toml
     # for why (#33). One version is enough: ruff reads target-version from

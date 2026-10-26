@@ -370,15 +370,30 @@ The package is on PyPI as [`irw`](https://pypi.org/project/irw/). Users install
 development install.
 
 1. **Bump both version literals in one PR** — `pyproject.toml` `[project]
-   version` and `VERSION` in `src/irw/config.py`.
-   `tests/test_version_string.py` fails if they disagree, so this is one commit,
-   not two.
+   version` and `VERSION` in `src/irw/config.py`. Between releases these carry
+   a `.devN` suffix, so a release PR is where the suffix comes off:
+   `0.8.0.dev0` → `0.8.0`. `tests/test_version_string.py` fails if the two
+   disagree, so this is one commit, not two.
 2. Merge it, and let `tests.yml` go green on `main`.
 3. `git tag vX.Y.Z && git push origin vX.Y.Z`.
+4. **Bump `main` to the next development version** — `0.8.1.dev0` — in a
+   follow-up PR, before anything else merges. The `version` job in `tests.yml`
+   fails until you do, which is the point: `main` must never declare a number
+   that is already on PyPI.
 
 The tag fires `.github/workflows/release.yml`, which builds, runs
 `twine check`, publishes to PyPI, and creates the GitHub release with the
 artifacts attached. There is no other step.
+
+**`main` must never declare a published number.** This is the other half of
+the same failure and it is the one that hides: both literals agree, the tag
+machinery is happy, and `pip install git+https://...` resolves a version it
+already has, skips even under `--upgrade`, and reports success. Anyone told to
+install from the repo to get a fix gets the release. `main` sat like that from
+2026-10-18 to 2026-10-26 (#125). The `.devN` suffix makes it unrepresentable
+rather than caught, and `.github/scripts/check_unpublished_version.py` -- the
+`version` job on every PR -- asserts it against PyPI's simple index, skipping
+if PyPI is unreachable so an outage cannot block a merge.
 
 **Never move a tag onto an unbumped commit.** A fix that lands on `main` without
 a version bump does not reach anyone: pip resolves the version, sees it already
