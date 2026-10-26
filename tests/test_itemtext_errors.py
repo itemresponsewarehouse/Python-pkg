@@ -11,6 +11,8 @@ nobody investigated it.
 No network: every dataset, table and error here is synthetic.
 """
 
+import importlib
+
 import pandas as pd
 import pytest
 
@@ -152,3 +154,34 @@ def test_a_terminal_error_is_not_retried(monkeypatch, has_item_text):
     with pytest.raises(RuntimeError):
         table_helpers._get_table_itemtext("a_table")
     assert table.calls == 1
+
+
+# ---- list_tables()' has_item_text column -----------------------------------
+#
+# The same defect, in the one place it survived R-18: `_compute_item_text_flag`
+# answered a failed listing with False for EVERY table at once, so a transient
+# error made `list_tables()` report a corpus with no item text and
+# `filter(has_item_text=True)` come back empty, silently. A boolean column has
+# no room for "unknown", so it propagates (ben-domingue/irw#3229).
+
+def test_a_failed_itemtext_listing_does_not_flag_the_corpus_as_textless(monkeypatch):
+    # `irw.operations.list_tables` is shadowed by the function of the same name
+    # the package re-exports, so reach the module explicitly.
+    lt = importlib.import_module("irw.operations.list_tables")
+
+    def boom():
+        raise RuntimeError("HTTP 504 Gateway Timeout")
+
+    monkeypatch.setattr(lt, "_list_itemtext_tables", boom)
+    df = pd.DataFrame({"name": ["a", "b"]})
+    with pytest.raises(RuntimeError, match="504"):
+        lt._compute_item_text_flag(df)
+    assert "has_item_text" not in df.columns
+
+
+def test_a_successful_listing_still_flags_by_membership(monkeypatch):
+    lt = importlib.import_module("irw.operations.list_tables")
+
+    monkeypatch.setattr(lt, "_list_itemtext_tables", lambda: {"a"})
+    out = lt._compute_item_text_flag(pd.DataFrame({"name": ["A", "b"]}))
+    assert out["has_item_text"].tolist() == [True, False]

@@ -37,9 +37,22 @@ def test_info_on_a_conj_table_reads_its_own_source(fake_conj, capsys):
     assert "save_bibtex(..., source='conj')" in out
 
 
-def test_info_on_an_unknown_table_says_which_source(fake_conj, capsys):
-    assert irw.info("nope", source="conj", return_dict=True) == {}
-    assert "source='conj'" in capsys.readouterr().out
+def test_info_on_an_unknown_table_raises_and_says_which_source(fake_conj):
+    # It used to print a line and return {} -- falsy, and the same answer a
+    # table with no metadata gives, so a typo read as a fact about the corpus.
+    # R has always errored here (ben-domingue/irw#3221).
+    with pytest.raises(irw.IRWTableNotFound, match=r"source='conj'"):
+        irw.info("nope", source="conj", return_dict=True)
+    with pytest.raises(irw.IRWTableNotFound, match="nope"):
+        irw.info("nope", source="conj")
+
+
+def test_the_mcp_turns_that_into_its_own_not_found(fake_conj):
+    """The tool layer's `not_found` names the table and is what an agent can
+    act on; an uncaught LookupError would surface as an internal failure."""
+    from irw import mcp
+    backend = mcp.PackageBackend()
+    assert backend.describe_table("nope", source="conj") == {}
 
 
 def test_main_layout_is_unchanged(monkeypatch):

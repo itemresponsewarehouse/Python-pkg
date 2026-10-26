@@ -73,6 +73,18 @@ _BIBLIO_FIELDS = {
 }
 
 
+class IRWTableNotFound(LookupError):
+    """No table of that name in that source.
+
+    `info()` used to print a line and return `{}` for this, which is the same
+    thing it returns for a table that exists and has no metadata -- and `{}` is
+    falsy, so a caller testing the result could not tell a typo from an empty
+    record. The MCP server is the caller that matters: it is a Python client,
+    and an agent that misspells a table name must be told so rather than handed
+    silence (review R-23, ben-domingue/irw#3221). R has always errored here.
+    """
+
+
 def _get_table_info_dict(table_name: str, source: str = "main") -> Dict[str, Any]:
     """Get structured info dictionary for a table.
 
