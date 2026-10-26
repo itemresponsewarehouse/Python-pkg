@@ -692,3 +692,67 @@ def test_the_natural_key_is_the_one_rpkg_reproduces():
     # padded, and still sorts deterministically.
     long_run = "x" + "9" * 25
     assert _natural_key(long_run)[0] == long_run
+
+
+# Column names (review R-23, ben-domingue/irw#3221). This client already
+# returned the item ids rather than the internal `item_` prefix; Rpkg returned
+# the prefix until #3221 and now matches. These are the cases that distinguish
+# a name map from string surgery, pinned here because the contract is now
+# shared: the same table must give both clients the same column names, or a
+# join written against one client silently breaks on the other. Each case is
+# asserted in Rpkg's tests/testthat/test-long2resp.R as well.
+
+
+def _wide(items):
+    df = pd.DataFrame({
+        "id": ["p1", "p1", "p2", "p2"],
+        "item": [items[0], items[1], items[0], items[1]],
+        "resp": [1, 0, 0, 1],
+    })
+    return long2resp(df, id_density_threshold=None)
+
+
+def test_the_item_id_is_the_column_name():
+    assert list(_wide(["q1", "q2"]).columns) == ["id", "q1", "q2"]
+
+
+def test_a_numeric_item_id_survives_as_the_column_name_it_is():
+    df = pd.DataFrame({
+        "id": ["p1", "p1", "p2", "p2"],
+        "item": [1, 2, 1, 2],
+        "resp": [1, 0, 0, 1],
+    })
+    assert list(long2resp(df, id_density_threshold=None).columns) == ["id", "1", "2"]
+
+
+def test_an_item_already_called_item10_is_not_prefixed_twice():
+    assert list(_wide(["item10", "item2"]).columns) == ["id", "item2", "item10"]
+
+
+def test_item_a_and_a_stay_two_items():
+    # The prefix is applied unconditionally for exactly this: skipping items
+    # already named `item_*` folded these two into one column and reported it
+    # as duplicate (id, item) rows in the caller's own data.
+    out = _wide(["a", "item_a"])
+    assert list(out.columns) == ["id", "a", "item_a"]
+    assert list(out["a"]) == [1, 0]
+    assert list(out["item_a"]) == [0, 1]
+
+
+def test_an_internal_underscore_is_not_eaten_on_the_way_back():
+    # `col.replace("item_", "")` returned `myx` here (#31).
+    out = _wide(["myitem_x", "q2"])
+    assert sorted(c for c in out.columns if c != "id") == ["myitem_x", "q2"]
+
+
+def test_resp2long_round_trips_the_item_ids_exactly():
+    from irw.utils.long2resp import resp2long
+
+    df = pd.DataFrame({
+        "id": ["p1", "p1", "p2", "p2"],
+        "item": [1, 2, 1, 2],
+        "resp": [1, 0, 0, 1],
+    })
+    back = resp2long(long2resp(df, id_density_threshold=None))
+    assert sorted(str(i) for i in back["item"].unique()) == ["1", "2"]
+    assert len(back) == 4
