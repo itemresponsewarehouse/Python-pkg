@@ -57,5 +57,26 @@ def test_config_version_matches_pyproject():
     )
 
 
-def test_version_is_a_plain_release_number():
-    assert re.fullmatch(r"\d+\.\d+\.\d+", VERSION), VERSION
+
+
+def test_version_is_a_release_or_development_number():
+    """`main` carries a `.devN` suffix between releases; a release PR does not.
+
+    The failure this guards (#125) is not a mismatch between the two literals --
+    `check_release_version.py` and the tests above cover that -- but both
+    literals agreeing with a number already on PyPI. `pip install git+...` then
+    resolves a version it already has, skips even under `--upgrade`, and reports
+    success, so someone told to install from the repo to get a fix gets the
+    release. Between 2026-10-18 and 2026-10-26 that was the real state of
+    `main`: declared 0.7.7, published 0.7.7, several unreleased commits between.
+
+    Whether the number is *published* needs the network, so
+    `.github/scripts/check_unpublished_version.py` does that in CI. What can be
+    asserted offline is that the version is one of the two shapes that invariant
+    allows, which is what catches a hand-edit to something like `0.8.0-dev` that
+    PEP 440 would normalise somewhere unexpected.
+    """
+    assert re.fullmatch(r"\d+\.\d+\.\d+(\.dev\d+)?", VERSION), (
+        f"VERSION is {VERSION!r}; expected X.Y.Z for a release or "
+        f"X.Y.Z.devN between releases"
+    )

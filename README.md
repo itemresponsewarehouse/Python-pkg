@@ -33,9 +33,11 @@ To run against unreleased code on `main`:
 python -m pip install "git+https://github.com/itemresponsewarehouse/Python-pkg.git"
 ```
 
-Note that this install does not upgrade cleanly: pip resolves the version from
-the clone, sees it already installed and skips, even under `--upgrade`. Use it
-when you want a specific commit, not as a way to stay current.
+`main` always declares a development version (`X.Y.Z.devN`), which is higher
+than the released `X.Y.Z-1` and is never a number PyPI has, so this does
+upgrade an existing install. It is still pip resolving by version number
+rather than by commit: two different commits on `main` carry the same
+`.devN`, so moving between them wants `--force-reinstall`.
 
 ### Requirements
 

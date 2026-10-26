@@ -134,7 +134,13 @@ PACKAGE_NAME: str = "irw"
 # the briefing's `pip install git+...` line resolves the version, sees it
 # already installed and SKIPS -- even with --upgrade -- so an unchanged version
 # string means users silently keep the old code.
-VERSION: str = "0.7.7"
+#
+# Between releases this carries a `.devN` suffix, so the number `main` declares
+# can never equal a number on PyPI -- which is the state that made the skip
+# above happen for real (#125). A release PR replaces the suffix with the
+# number being published; `.github/scripts/check_unpublished_version.py`
+# enforces the invariant on every PR.
+VERSION: str = "0.8.0.dev0"
 DESCRIPTION: str = "A Python package for the Item Response Warehouse (IRW)"
 
 __all__ = [

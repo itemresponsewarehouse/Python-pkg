@@ -61,11 +61,22 @@ def main() -> None:
             f"resolves."
         )
 
-    if not re.fullmatch(r"\d+\.\d+\.\d+", pyproject):
-        sys.exit(f"{pyproject} is not a plain X.Y.Z release number")
+    tag = sys.argv[1] if len(sys.argv) > 1 else ""
 
-    if len(sys.argv) > 1 and sys.argv[1]:
-        tag = sys.argv[1]
+    # A tag publishes, so a tag must name a plain X.Y.Z. Without one -- the
+    # `workflow_dispatch` rehearsal, which builds and checks but does not
+    # upload -- a development version is the expected state of `main` between
+    # releases (#125), so allow the `.devN` suffix there rather than making the
+    # rehearsal impossible on the branch it is meant to rehearse.
+    pattern = r"\d+\.\d+\.\d+" if tag else r"\d+\.\d+\.\d+(\.dev\d+)?"
+    if not re.fullmatch(pattern, pyproject):
+        sys.exit(
+            f"{pyproject} is not a plain X.Y.Z release number"
+            + (" -- a tag publishes, so it cannot name a development version."
+               if tag else "")
+        )
+
+    if tag:
         if not tag.startswith("v"):
             sys.exit(f"tag {tag!r} does not start with 'v'")
         if tag[1:] != pyproject:
