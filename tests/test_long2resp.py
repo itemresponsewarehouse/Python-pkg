@@ -641,3 +641,54 @@ def test_the_chosen_occasion_reaches_the_mcp_disclosures():
     # than the table either way, and that is the fact an agent must report.
     pooled = long2resp(_rater_frame(), agg_method="mode", id_density_threshold=None)
     assert "Aggregating across rater" in " ".join(pooled.attrs["irw_messages"])
+
+
+# ---- column order (review R-23, ben-domingue/irw#3221) ----------------------
+#
+# Python sorted lexicographically (item1, item10, item2) and R ordered columns
+# by first appearance in the input rows, which is not even stable: Redivis does
+# not guarantee row order, so the same table fetched twice could hand back its
+# columns differently. Both clients sort naturally now, from one key definition
+# written the same way in both.
+
+def test_item_columns_come_back_in_natural_order():
+    df = pd.DataFrame({
+        "id": ["p1"] * 4,
+        "item": ["item10", "item2", "item1", "item20"],
+        "resp": [1, 2, 3, 4],
+    })
+    wide = long2resp(df, id_density_threshold=None)
+    assert [c for c in wide.columns if c != "id"] == ["item1", "item2", "item10", "item20"]
+    assert wide.columns[0] == "id"
+
+
+def test_the_order_does_not_depend_on_the_row_order():
+    rows = [("item10", 1), ("item2", 2), ("item1", 3)]
+    orders = []
+    for perm in ([0, 1, 2], [2, 1, 0], [1, 0, 2]):
+        df = pd.DataFrame({
+            "id": ["p1"] * 3,
+            "item": [rows[i][0] for i in perm],
+            "resp": [rows[i][1] for i in perm],
+        })
+        orders.append(list(long2resp(df, id_density_threshold=None).columns))
+    assert orders[0] == orders[1] == orders[2]
+
+
+def test_the_natural_key_is_the_one_rpkg_reproduces():
+    """Pinned because Rpkg's `.irw_natural_key()` must build the same string:
+    digit runs left-padded to 20, everything else lowercased, raw name as the
+    tie-break."""
+    from irw.utils.long2resp import _natural_key
+
+    assert _natural_key("item2") == ("item" + "0" * 19 + "2", "item2")
+    assert _natural_key("Item2")[0] == _natural_key("item2")[0]
+    assert _natural_key("Item2")[1] != _natural_key("item2")[1]
+    names = ["item10", "Item3", "item1", "q2", "q10", "a"]
+    assert sorted(names, key=_natural_key) == [
+        "a", "item1", "Item3", "item10", "q2", "q10",
+    ]
+    # A digit run too long to be an item number is left alone rather than
+    # padded, and still sorts deterministically.
+    long_run = "x" + "9" * 25
+    assert _natural_key(long_run)[0] == long_run
