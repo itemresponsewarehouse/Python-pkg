@@ -81,11 +81,11 @@ def test_list_tables_flags_a_name_present_in_two_conj_shards(monkeypatch):
     with pytest.warns(UserWarning, match="more than one conj shard: shared_2025"):
         out = lt._build_base_table_list([newest, oldest], "conj")
     assert list(out.name) == ["alpha_2024", "shared_2025", "zeta_2026"]
-    # Main keeps resolving silently to the newest copy.
+    # Core keeps resolving silently to the newest copy.
     import warnings as _w
     with _w.catch_warnings():
         _w.simplefilter("error")
-        lt._build_base_table_list([newest, oldest], "main")
+        lt._build_base_table_list([newest, oldest], "core")
 
 
 @patch("irw.api._init_conj_datasets")
@@ -99,7 +99,7 @@ def test_get_datasets_dispatches_conj(mock_init_conj):
 @patch("irw.utils.redivis.table_metadata._init_conj_datasets")
 @patch("irw.utils.redivis.table_metadata._init_comp_dataset")
 def test_source_datasets_never_falls_through_to_comp(mock_comp, mock_conj):
-    """Before conj existed, any source not main/nom/sim got the competitions dataset."""
+    """Before conj existed, any source not core/nom/sim got the competitions dataset."""
     mock_conj.return_value = ["conj-ds"]
     assert table_metadata._source_datasets("conj") == ["conj-ds"]
     mock_comp.assert_not_called()
@@ -112,11 +112,11 @@ def test_conj_metadata_is_conj_metadata():
 def test_metadata_is_public_and_takes_a_source(monkeypatch):
     import irw.api as api
     seen = []
-    monkeypatch.setattr(api, "_get_metadata_table", lambda source="main": seen.append(source) or pd.DataFrame({"table": ["t"]}))
+    monkeypatch.setattr(api, "_get_metadata_table", lambda source="core": seen.append(source) or pd.DataFrame({"table": ["t"]}))
     assert "metadata" in irw.__all__
     assert list(irw.metadata(source="conj").table) == ["t"]
     assert irw.metadata().shape == (1, 1)
-    assert seen == ["conj", "main"]
+    assert seen == ["conj", "core"]
 
 
 def _fake_conj(monkeypatch):
@@ -131,8 +131,8 @@ def _fake_conj(monkeypatch):
         "choice_object": ["person", "person", "product_service", "person"]})
     bib = pd.DataFrame({"table": list(meta.table),
                         "Derived_License": ["CC0 1.0", "CC0 1.0", "CC BY 4.0", "CC0 1.0"]})
-    monkeypatch.setattr(tm, "get_metadata_table", lambda source="main": meta)
-    monkeypatch.setattr(tm, "get_biblio_table", lambda source="main": bib)
+    monkeypatch.setattr(tm, "get_metadata_table", lambda source="core": meta)
+    monkeypatch.setattr(tm, "get_biblio_table", lambda source="core": bib)
 
 
 def test_conj_filters(monkeypatch):
@@ -182,7 +182,7 @@ def test_conj_topic_tag_filters_explain_an_old_release(monkeypatch):
     import irw.utils.redivis.table_metadata as tm
     _fake_conj(monkeypatch)
     old = tm.get_metadata_table("conj").drop(columns=["domain", "choice_object"])
-    monkeypatch.setattr(tm, "get_metadata_table", lambda source="main": old)
+    monkeypatch.setattr(tm, "get_metadata_table", lambda source="core": old)
     with pytest.raises(IRWMetadataUnavailable, match="no 'domain' column"):
         filter_tables([], source="conj", domain="health_covid")
     assert list(filter_tables([], source="conj", country="US")) == ["a_us_choice"]
@@ -208,16 +208,16 @@ def test_conj_and_other_filters_do_not_cross():
     with pytest.raises(ValueError, match="not available for source='conj'"):
         _check_filters_for_source("conj", {"n_items": [5, 10]})
     with pytest.raises(ValueError, match="only available when source='conj'"):
-        _check_filters_for_source("main", {"country": "US"})
+        _check_filters_for_source("core", {"country": "US"})
     with pytest.raises(ValueError, match="only available when source='conj'"):
         _check_filters_for_source("comp", {"outcome": "choice"})
     with pytest.raises(ValueError, match="only available when source='conj'"):
-        _check_filters_for_source("main", {"domain": "health_covid"})
+        _check_filters_for_source("core", {"domain": "health_covid"})
     _check_filters_for_source("conj", {"country": "US", "license": "CC0 1.0"})
     assert get_filters("conj") == ["license", "n_respondents", "n_attributes", "outcome", "country",
                                    "domain", "choice_object"]
-    assert "country" not in get_filters("main") and "outcome" not in get_filters("nom")
-    assert "domain" not in get_filters("main") and "choice_object" not in get_filters("comp")
+    assert "country" not in get_filters("core") and "outcome" not in get_filters("nom")
+    assert "domain" not in get_filters("core") and "choice_object" not in get_filters("comp")
 
 
 

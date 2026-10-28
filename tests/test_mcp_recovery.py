@@ -98,7 +98,7 @@ def test_spawned_stdio_all_tools_errors_concurrency_and_shutdown():
             for name, arguments in calls:
                 result = await client.call_tool(name, arguments)
                 assert not result.is_error, (name, result)
-                assert result.structured_content["result"]["source"] == "main"
+                assert result.structured_content["result"]["source"] == "core"
             failed = await client.call_tool("fetch_table", {"table_name": "alpha_depression", "offset": 10000})
             assert failed.is_error
             assert "request_too_large" in str(failed.content)

@@ -73,7 +73,7 @@ def test_off_switch(off, monkeypatch):
 
 def test_only_the_main_source_is_looked_up(monkeypatch):
     def boom():
-        raise AssertionError("looked up biblio for a non-main source")
+        raise AssertionError("looked up biblio for a non-core source")
     monkeypatch.setattr(sn, "_load_lookup", boom)
     assert _notes(lambda: sn._source_note(["x"], source="nom")) == []
 

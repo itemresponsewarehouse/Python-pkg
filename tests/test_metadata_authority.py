@@ -80,8 +80,8 @@ def _clean(monkeypatch):
     monkeypatch.setattr(
         tm,
         "_get_existing_tables",
-        lambda source="main": pytest.fail(
-            f"_get_existing_tables({source!r}) was called for a main frame"
+        lambda source="core": pytest.fail(
+            f"_get_existing_tables({source!r}) was called for a core frame"
         ),
     )
     yield
@@ -125,25 +125,25 @@ def meta(monkeypatch):
 
 
 def test_metadata_rows_survive_when_no_warehouse_lists_them(meta):
-    out = tm.get_metadata_table("main")
+    out = tm.get_metadata_table("core")
     assert len(out) == 2
     assert WITHDRAWN in set(out["table"])
 
 
 def test_biblio_and_tags_are_no_longer_intersected(meta):
-    assert WITHDRAWN in set(tm.get_biblio_table("main")["table"])
-    assert WITHDRAWN in set(tm.get_tags_table("main")["table"])
+    assert WITHDRAWN in set(tm.get_biblio_table("core")["table"])
+    assert WITHDRAWN in set(tm.get_tags_table("core")["table"])
 
 
 def test_collection_members_are_no_longer_intersected(meta):
     assert WITHDRAWN in set(tm.get_collection_members_table()["table"])
 
 
-def test_a_non_main_source_keeps_the_intersection(monkeypatch, meta):
+def test_a_non_core_source_keeps_the_intersection(monkeypatch, meta):
     """The ruling was scoped to the core warehouses."""
     seen = []
 
-    def existing(source="main"):
+    def existing(source="core"):
         seen.append(source)
         return {"live_table"}
 
@@ -155,7 +155,7 @@ def test_a_non_main_source_keeps_the_intersection(monkeypatch, meta):
 
 
 def test_known_table_names_reads_the_metadata_not_the_warehouses(meta):
-    names = tm._known_table_names("main")
+    names = tm._known_table_names("core")
     assert names == {"live_table", WITHDRAWN}
     assert meta.reads.count("metadata") == 1
 

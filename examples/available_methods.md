@@ -2,9 +2,9 @@
 
 ## Database Operations
 
-- **`list_tables(source="main", include_metadata=False)`** - List available tables
-  - `source`: `"main"`, `"sim"`, `"comp"` or `"nom"` (nominal responses)
-- **`filter(...)`** - Filter tables by metadata criteria (main IRW only)
+- **`list_tables(source="core", include_metadata=False)`** - List available tables
+  - `source`: `"core"`, `"sim"`, `"comp"`, `"nom"` (nominal responses), `"conj"` or `"rank"`. `"main"` is accepted as an alias for `"core"`.
+- **`filter(...)`** - Filter tables by metadata criteria
 - **`info()`** - Print database information summary
 - **`info(table_name, return_dict=False)`** - Get metadata information for a table
 - **`get_filters()`** - Get list of available filter parameter names
@@ -26,13 +26,13 @@ See `## Collections` below for worked examples of the collection methods.
 
 ## Table Operations
 
-- **`fetch(table_name, source="main", dedup=False, wide=False)`** - Fetch one or more IRW tables
-  - `source`: `"main"`, `"sim"`, `"comp"` or `"nom"` (nominal responses)
+- **`fetch(table_name, source="core", dedup=False, wide=False)`** - Fetch one or more IRW tables
+  - `source`: `"core"`, `"sim"`, `"comp"`, `"nom"` (nominal responses), `"conj"` or `"rank"`
   - Single table → returns `pandas.DataFrame`
   - Multiple tables → returns `dict[str, pandas.DataFrame]`
   - `wide=True`: Automatically convert to wide-format response matrix
 
-- **`table_sets(table_name, source="main", per_item=False)`** - Item set, response set and row count of a table, without downloading it
+- **`table_sets(table_name, source="core", per_item=False)`** - Item set, response set and row count of a table, without downloading it
   - Runs server-side aggregate queries, so it does not count against the Redivis export quota
   - Returns `dict` with `table`, `n_rows`, `items`, `resp`, and `per_item` (a `pandas.DataFrame` when `per_item=True`)
   - `"NA"` and empty responses are excluded from `resp`, matching `fetch()`

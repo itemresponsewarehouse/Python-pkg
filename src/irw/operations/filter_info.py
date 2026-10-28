@@ -32,11 +32,11 @@ FILTER_DESCRIPTIONS = {
     'n_items': 'Number of unique items. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
     'responses_per_participant': 'Average number of responses per participant. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
     'responses_per_item': 'Average number of responses per item. Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit).',
-    'difficulty_spread': "Share of the table's observed response range that its item means cover: the range of item p-values on a dichotomous table, normalised by the response range so a 1-5 Likert table is comparable. Near 0 means every item sits at the same difficulty, near 1 means they span the scale. Use a single number or a list [min, max] (None for no limit). source='main' only.",
-    'mean_item_rest_r': "Mean item-rest correlation, SIGNED. IRW does not harmonise response direction, so a scale with reverse-keyed items averages toward zero here; use mean_abs_item_rest_r to ask whether the items hang together at all. Use a single number or a list [min, max] (None for no limit). source='main' only.",
-    'mean_abs_item_rest_r': "Mean ABSOLUTE item-rest correlation, direction-invariant. A wide gap between this and mean_item_rest_r indicates reverse-keyed items. Use a single number or a list [min, max] (None for no limit). source='main' only.",
-    'prop_items_extreme': "Share of items whose mean sits within 5% of either end of the response range, i.e. floor or ceiling items. 0 keeps only tables with none. Use a single number or a list [min, max] (None for no limit). source='main' only.",
-    'density': 'Responses per person-item cell: n_responses / (n_participants * n_items). NOT the proportion of cells filled, and NOT bounded by 1 -- a value above 1 means the table measures a person-item pair more than once, which 768 of 6,720 main tables do (700 of them carry an occasion column such as wave or rater; the largest is 3,624.6, a go/no-go task). Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit). Default is [0.5, None], a lower bound only, to exclude sparse matrices.',
+    'difficulty_spread': "Share of the table's observed response range that its item means cover: the range of item p-values on a dichotomous table, normalised by the response range so a 1-5 Likert table is comparable. Near 0 means every item sits at the same difficulty, near 1 means they span the scale. Use a single number or a list [min, max] (None for no limit). source='core' only.",
+    'mean_item_rest_r': "Mean item-rest correlation, SIGNED. IRW does not harmonise response direction, so a scale with reverse-keyed items averages toward zero here; use mean_abs_item_rest_r to ask whether the items hang together at all. Use a single number or a list [min, max] (None for no limit). source='core' only.",
+    'mean_abs_item_rest_r': "Mean ABSOLUTE item-rest correlation, direction-invariant. A wide gap between this and mean_item_rest_r indicates reverse-keyed items. Use a single number or a list [min, max] (None for no limit). source='core' only.",
+    'prop_items_extreme': "Share of items whose mean sits within 5% of either end of the response range, i.e. floor or ceiling items. 0 keeps only tables with none. Use a single number or a list [min, max] (None for no limit). source='core' only.",
+    'density': 'Responses per person-item cell: n_responses / (n_participants * n_items). NOT the proportion of cells filled, and NOT bounded by 1 -- a value above 1 means the table measures a person-item pair more than once, which 768 of 6,720 core tables do (700 of them carry an occasion column such as wave or rater; the largest is 3,624.6, a go/no-go task). Use a single number for exact match, or a list [min, max] for a range (use None for no upper limit). Default is [0.5, None], a lower bound only, to exclude sparse matrices.',
     'var': 'Filter by presence of specific variables in the dataset. Use exact variable names (e.g., "rt", "wave") or prefix matching (e.g., "cov_" matches any variable starting with "cov_"). Provide a single string or a list of strings. All specified variables must be present (AND logic).',
     'age_range': 'Participant age group (e.g., "Adult (18+)"). Use a single string or a list of strings for OR logic (e.g., ["Adult (18+)", "Child"]).',
     'child_age': 'Child age subgroup (for child-focused studies). Use a single string or a list of strings for OR logic.',
@@ -60,16 +60,16 @@ FILTER_DESCRIPTIONS = {
 }
 
 
-def get_filters(source: str = "main") -> List[str]:
+def get_filters(source: str = "core") -> List[str]:
     """
     Get list of available filter parameter names.
 
     Parameters
     ----------
-    source : str, default "main"
-        Table source: "main", "nom", "sim" or "comp". A filter that source
+    source : str, default "core"
+        Table source: "core", "nom", "sim" or "comp". A filter that source
         refuses outright is left out -- tag filters for sim and comp,
-        `collection` for everything but main, and all but n_responses,
+        `collection` for everything but core, and all but n_responses,
         n_actors and license for comp. A source whose metadata lacks a
         column (nom has no `density`) still lists that filter; filter()
         raises when it is used.
@@ -105,7 +105,7 @@ def get_filters(source: str = "main") -> List[str]:
     return names
 
 
-def describe_filter(datasets: List, filter_name: str, source: str = "main") -> Optional[Dict[str, Any]]:
+def describe_filter(datasets: List, filter_name: str, source: str = "core") -> Optional[Dict[str, Any]]:
     """
     Describe a specific filter and show its available values.
     
@@ -127,8 +127,8 @@ def describe_filter(datasets: List, filter_name: str, source: str = "main") -> O
         Redivis dataset objects (typically from IRW._datasets).
     filter_name : str
         Name of the filter to describe (e.g., 'n_responses', 'construct_type', 'var').
-    source : str, default "main"
-        Table source whose values to report: "main", "nom", "sim", "comp" or
+    source : str, default "core"
+        Table source whose values to report: "core", "nom", "sim", "comp" or
         "conj" (whose `domain` and `choice_object` are tables per topic tag).
         `describe_filter('license', source=...)` is R's
         `irw_license_options(source = ...)`, and a tag filter is
@@ -143,7 +143,7 @@ def describe_filter(datasets: List, filter_name: str, source: str = "main") -> O
     ------
     ValueError
         If `source` is unknown, or refuses this filter (a tag filter for an
-        untagged source, `collection` outside main, n_actors outside comp) --
+        untagged source, `collection` outside core, n_actors outside comp) --
         the same refusals filter() makes.
         
     Examples

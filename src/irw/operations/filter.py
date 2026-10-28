@@ -14,7 +14,7 @@ NUMERIC_FILTERS = frozenset({
     'n_responses', 'n_categories', 'n_participants', 'n_items',
     'responses_per_participant', 'responses_per_item', 'density', 'n_actors',
     'n_respondents', 'n_attributes',
-    # Tier-0 psychometric columns (ben-domingue/irw#1710), main only. Unlike
+    # Tier-0 psychometric columns (ben-domingue/irw#1710), core only. Unlike
     # the structural columns these can be NaN -- a table whose responses are
     # all one value has no difficulty spread, a single-item table has no rest
     # score. pandas comparisons against NaN are False, so those tables drop out
@@ -62,7 +62,7 @@ FILTER_COLUMNS = {'var': 'variables', 'collection': 'collections'}
 # with missing(density).
 #
 # A LOWER BOUND ONLY. `density` is responses per person-item cell, not a
-# proportion, so it has no upper bound: 768 of 6,720 main tables are above 1
+# proportion, so it has no upper bound: 768 of 6,720 core tables are above 1
 # (measured 2026-10-25) because they measure a person-item pair more than once.
 # The old default of [0.5, 1] dropped every one of them and reported it as
 # sparsity (ben-domingue/irw#3222).
@@ -368,7 +368,7 @@ def filter_tables(
     country: Optional[Union[str, List[str]]] = None,
     domain: Optional[Union[str, List[str]]] = None,
     choice_object: Optional[Union[str, List[str]]] = None,
-    source: str = "main",
+    source: str = "core",
 ) -> pd.Series:
     """
     Filter IRW tables based on metadata criteria.
@@ -379,7 +379,7 @@ def filter_tables(
     Which filters exist depends on ``source``, following the R package's
     ``irw_filter(source = ...)``:
 
-    - "main" and "nom" take every filter except ``n_actors``, but only "main"
+    - "core" and "nom" take every filter except ``n_actors``, but only "core"
       has collections, so ``collection`` raises for "nom".
     - "sim" has no tags, so every tag filter raises, as does ``collection``.
     - "comp" takes only ``n_responses``, ``n_actors`` and ``license`` (this is
@@ -425,30 +425,30 @@ def filter_tables(
         means cover: the range of item p-values on a dichotomous table, and
         normalised by the response range so a 1-5 Likert table is comparable.
         Near 0 means every item sits at the same difficulty, near 1 means they
-        span the scale. source='main' only.
+        span the scale. source='core' only.
 
     mean_item_rest_r : float, int, or list of length 1 or 2, optional
         Filter by the mean item-rest correlation, SIGNED. IRW does not harmonise
         response direction, so a scale with reverse-keyed items averages toward
         zero here; use mean_abs_item_rest_r to ask whether the items hang
-        together at all. source='main' only.
+        together at all. source='core' only.
 
     mean_abs_item_rest_r : float, int, or list of length 1 or 2, optional
         Filter by the mean ABSOLUTE item-rest correlation, which is
         direction-invariant. A wide gap between this and mean_item_rest_r
-        indicates reverse-keyed items. source='main' only.
+        indicates reverse-keyed items. source='core' only.
 
     prop_items_extreme : float, int, or list of length 1 or 2, optional
         Filter by the share of items whose mean sits within 5% of either end of
         the response range, i.e. floor or ceiling items. prop_items_extreme=0
-        keeps only tables with none. source='main' only.
+        keeps only tables with none. source='core' only.
 
     density : float, int, list of length 1 or 2, or None, optional
         Filter on ``density``, which is RESPONSES PER PERSON-ITEM CELL --
         ``n_responses / (n_participants * n_items)`` -- and is therefore not
         bounded by 1. It is not the proportion of cells that are filled, which
         is a different quantity IRW does not publish. A value above 1 means the
-        table measures a person-item pair more than once: 768 of 6,720 main
+        table measures a person-item pair more than once: 768 of 6,720 core
         tables are above 1 (measured 2026-10-25), 700 of them carrying an
         occasion column (wave, rater, trial_*, session, ...), and the largest is
         3,624.6 for a go/no-go task.
@@ -509,7 +509,7 @@ def filter_tables(
         the union, not the intersection -- for that, intersect two
         irw.collection() results. Raises ValueError on an unknown name.
         See irw.collections() for what exists and how complete each one is.
-        Main source only.
+        Core source only.
 
     n_actors : float, int, or list of length 1 or 2, optional
         Filter competition tables by number of actors. Only for source="comp".
@@ -547,8 +547,8 @@ def filter_tables(
         situation or case), product_service, place, organisation or message (a
         text or media artefact judged as such). Any value named matches.
 
-    source : str, default "main"
-        Table source: "main", "nom", "sim", "comp" or "conj". "conj" takes only
+    source : str, default "core"
+        Table source: "core", "nom", "sim", "comp" or "conj". "conj" takes only
         n_respondents, n_attributes, outcome, country, domain, choice_object
         and license. The two tag columns are defined in the irw repo's
         data/conjoint/README.md ("Topic tags").
@@ -624,9 +624,9 @@ def filter_tables(
     if df.empty or 'name' not in df.columns:
         return pd.Series([], dtype=str, name='name')
 
-    if source != 'main':
-        # Main keeps _require_column's reading of a missing column -- an
-        # outage -- because main's metadata always carries every column. The
+    if source != 'core':
+        # Core keeps _require_column's reading of a missing column -- an
+        # outage -- because core's metadata always carries every column. The
         # other sources' tables legitimately lack some, and "could not be
         # loaded" would be the wrong diagnosis.
         missing = [

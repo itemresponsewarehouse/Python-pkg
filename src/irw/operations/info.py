@@ -11,7 +11,7 @@ from ..utils.redivis import _init_main_datasets
 
 def info() -> None:
     """
-    Print information about the IRW database (main datasets).
+    Print information about the IRW database (core datasets).
 
     Displays database-level statistics including total tables, data size,
     and timestamps from the Redivis datasets.

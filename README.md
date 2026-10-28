@@ -141,14 +141,16 @@ irw.filter(mean_abs_item_rest_r=[0.4, None], prop_items_extreme=0)
 # harmonise response direction, so the gap between the two is the tell.
 irw.filter(mean_item_rest_r=[None, 0.1], mean_abs_item_rest_r=[0.3, None])
 
-# The other sources: "nom" (nominal responses, tagged), "sim", "comp"
+# The data families. "core" is the default and the response-data warehouses;
+# "main" is accepted as an alias: it was Python's own spelling until #138.
+# The others: "nom" (nominal responses, tagged), "sim", "comp", "conj", "rank"
 irw.filter(source="nom", construct_type="Cognitive/educational")
 irw.describe_filter("license", source="comp")
 irw.filter(source="comp", n_actors=[2, 10])  # R's irw_filter_comp()
 
 # Get BibTeX citation
 irw.save_bibtex("agn_kay_2025")  # Returns BibTeX entry
-irw.save_bibtex("amboseli_baboons_g1", source="comp")  # any source: main, nom, sim, comp, conj, rank
+irw.save_bibtex("amboseli_baboons_g1", source="comp")  # any source: core, nom, sim, comp, conj, rank
 # Per-table metadata for a source (R's irw_metadata())
 irw.metadata(source="conj")  # design counts, facts and topic tags per conjoint experiment
 irw.filter(source="conj", domain="immigration_asylum")  # the immigration conjoints; see describe_filter("domain", source="conj")

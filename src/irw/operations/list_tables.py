@@ -83,14 +83,14 @@ TAGS_SET = {
 # Helper functions
 # =====================
 
-def _build_base_table_list(datasets: List[Any], source: str = "main") -> pd.DataFrame:
+def _build_base_table_list(datasets: List[Any], source: str = "core") -> pd.DataFrame:
     """Build base table list from datasets, using cached table lists when possible.
 
     A warehouse that cannot be listed is skipped rather than aborting the
     catalogue, matching `_init_datasets_from_refs(skip_unavailable=True)`.
 
     `datasets` arrive newest-first, so a name present in more than one shard
-    keeps its newest copy. Main resolves such a name silently (the pipeline's
+    keeps its newest copy. Core resolves such a name silently (the pipeline's
     drift report watches for it); for the other shard lists -- conj today -- a
     duplicate is an upload mistake that must not be merged away without a word,
     so it is warned about before the newest copy is kept.
@@ -108,7 +108,7 @@ def _build_base_table_list(datasets: List[Any], source: str = "main") -> pd.Data
     if not rows:
         return pd.DataFrame(columns=["name"])
     frame = pd.DataFrame(rows)
-    if source != "main":
+    if source != "core":
         dup = sorted(frame.loc[frame.duplicated(subset=["name"]), "name"].dropna().unique())
         if dup:
             warnings.warn(
@@ -121,7 +121,7 @@ def _build_base_table_list(datasets: List[Any], source: str = "main") -> pd.Data
     return out.sort_values("name", kind="stable").reset_index(drop=True)
 
 
-def _merge_metadata(base: pd.DataFrame, datasets: List[Any], source: str = "main") -> pd.DataFrame:
+def _merge_metadata(base: pd.DataFrame, datasets: List[Any], source: str = "core") -> pd.DataFrame:
     cache_key = f"list_tables:{source}:{_datasets_cache_key(datasets)}"
     version = _cache_version(_datasets_version_tag(datasets))
     cached = metadata_cache.get(cache_key, version)
@@ -201,7 +201,7 @@ def _order_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df[ordered_cols]
 
 
-def list_tables(datasets: List[Any], source: str = "main") -> pd.DataFrame:
+def list_tables(datasets: List[Any], source: str = "core") -> pd.DataFrame:
     """
     List available tables with integrated IRW stats, tags, biblio, and item-text availability.
 
@@ -209,10 +209,10 @@ def list_tables(datasets: List[Any], source: str = "main") -> pd.DataFrame:
     ----------
     datasets : List[Any]
         Redivis dataset objects to enumerate tables from.
-    source : str, default "main"
+    source : str, default "core"
         The source `datasets` belong to, which picks its metadata tables:
-        "main", "nom", "sim" or "comp". Only main and nom carry tags, and only
-        main carries collections; the other sources' frames lack those columns.
+        "core", "nom", "sim" or "comp". Only core and nom carry tags, and only
+        core carries collections; the other sources' frames lack those columns.
 
     Returns
     -------

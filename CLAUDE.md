@@ -36,29 +36,43 @@ api.py  (public surface — all user-facing functions)
 ```
 
 `config.py` holds every Redivis reference the package has: `MAIN_REFS` (the
-response-data warehouses), `SIM_REF` (simulations), `COMP_REF` (competitions),
+response-data warehouses -- the constant keeps its name; the *source* is
+`"core"`), `SIM_REF` (simulations), `COMP_REF` (competitions),
 `META_REF` plus `META_TABLES` (metadata, tags, bibliography, collections), and
 `ITEMTEXT_REFS` (item text). `MAIN_REFS` and `ITEMTEXT_REFS` are lists because
 Redivis caps a dataset at 1000 tables. The same public API works across the
 data sources.
 
 `NOM_REF` (`irw_nominal`) is the nominal-response source, added in #9 to match
-both R configs. It is tagged like `main` but has no collections, so
+both R configs. It is tagged like `core` but has no collections, so
 `collections()` errors for it rather than returning an empty frame — the same
-rule as `Rpkg/R/redivis-config.R`. Note the naming difference across the two
-clients: R calls the main source `"core"`, Python calls it `"main"`.
+rule as `Rpkg/R/redivis-config.R`.
+
+**`source` spelling.** The response-data family is `"core"`, as in R's
+`.irw_sources` and the site's `source =` column. Python called it `"main"`
+until #138, so `"main"` is kept working: `config.SOURCE_ALIASES` maps it and
+`config.normalize_source()` resolves it. The alias is resolved **once, at the
+public boundary** — every public function in `api.py` opens with
+`source = normalize_source(source)`, and `mcp.py` does it in
+`IRWTools._validate_source`. Nothing below that may name `"main"`: `source`
+reaches a dozen `== "core"` comparisons, one of them `_meta_cache_key()`,
+where a second spelling would key identical metadata twice and let the copies
+drift apart inside a session. `tests/test_source_alias.py` enforces both
+halves — an AST sweep for a stray `"main"`, and a check that every public
+function taking `source` normalises it. Unknown-source messages list `SOURCES`
+only: the alias is there so old code keeps working, not as a name to teach.
 
 `filter()`, `describe_filter()` and `get_filters()` take `source=` (#28), and
 the metadata lookups under them read that source's tables from
 `SOURCE_META_TABLES`. `TAG_SOURCES` and `COLLECTION_SOURCES` in `config.py` are
 R's `.irw_tag_sources` and `.irw_collection_sources`; test membership in them,
-never `source == "main"`. A filter a source cannot answer raises -- tag filters
-for sim/comp, `collection` outside main, anything but `n_responses`,
+never `source == "core"`. A filter a source cannot answer raises -- tag filters
+for sim/comp, `collection` outside core, anything but `n_responses`,
 `n_actors` and `license` for comp -- because an empty result reads as "no
-matches". Main's metadata cache keys stay bare (`"tags"`); other sources'
+matches". Core's metadata cache keys stay bare (`"tags"`); other sources'
 carry the source (`"tags:nom"`).
 
-**Adding a main warehouse:** append a `(user, dataset_ref)` tuple to `MAIN_REFS` in `config.py` only. See `docs/DEVELOPERS.md` for details and test commands.
+**Adding a core warehouse:** append a `(user, dataset_ref)` tuple to `MAIN_REFS` in `config.py` only. See `docs/DEVELOPERS.md` for details and test commands.
 
 ### Key design decisions
 
