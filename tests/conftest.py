@@ -1,6 +1,18 @@
 """Shared pytest setup."""
 
+import os
+
 import pytest
+
+# The suite is offline -- `redivis` is mocked wherever a test reaches it -- but
+# the credential gate added for #3221 reads the real environment in
+# `_init_dataset()`, before any mock is in play. On a runner with no cached
+# login, which is every CI job, that stops a test that opens a fake dataset.
+# So declare a token for the session: nothing here sends it anywhere, and a
+# developer's real token is left alone if one is already set.
+# tests/test_credentials.py removes it per test, which is where the gate's own
+# behaviour is exercised.
+os.environ.setdefault("REDIVIS_API_TOKEN", "offline-suite-not-a-real-token")
 
 from irw.utils.redivis import disk_cache, shard_discovery, shard_resolution
 
