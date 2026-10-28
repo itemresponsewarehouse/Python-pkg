@@ -35,7 +35,7 @@ NOM_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_nominal:614n")
 
 # Conjoint experiments: one row per respondent x task x profile, no item/resp
 # (see conj_long()). irw_meta publishes its conj_metadata (design counts and
-# design facts per experiment -- its own shape, as every family outside main
+# design facts per experiment -- its own shape, as every family outside core
 # has) and conj_biblio; filter() takes its own conj filters
 # (operations/filter.py).
 #
@@ -100,15 +100,36 @@ META_TABLES: ClassVar[dict[str, str]] = {
     "covariate_labels": "covariate_labels",
 }
 
-# The table sources, in Python's spelling (R calls "main" "core").
-SOURCES: Tuple[str, ...] = ("main", "nom", "sim", "comp", "conj", "rank")
+# The table sources. "core" is the spelling both clients and the site use
+# (Rpkg's .irw_sources, overview.qmd's `source =` column); Python said "main"
+# until #138, so "main" lives on in SOURCE_ALIASES as a working alias.
+SOURCES: Tuple[str, ...] = ("core", "nom", "sim", "comp", "conj", "rank")
+
+# Accepted spellings that are not canonical, mapped to the canonical one.
+# normalize_source() resolves these ONCE, at the public API boundary; nothing
+# below api.py (or mcp.py's _validate_source) ever sees a non-canonical value.
+# That is deliberate rather than tidy: `source` reaches a dozen `== "core"`
+# comparisons, one of them _meta_cache_key(), where an unnormalised "main"
+# would key identical metadata under a second namespace and let the two copies
+# drift apart inside one session.
+SOURCE_ALIASES: ClassVar[dict[str, str]] = {"main": "core"}
+
+
+def normalize_source(source: str) -> str:
+    """The canonical spelling of `source`, resolving SOURCE_ALIASES.
+
+    An unknown source is returned unchanged, for the caller's own validation to
+    reject. Those messages list SOURCES only: the alias exists so that code
+    written against the old spelling keeps working, not as a name to teach.
+    """
+    return SOURCE_ALIASES.get(source, source)
 
 # Each source's metadata, tags and bibliography tables in irw_meta, by bare name
 # for the reason given above META_TABLES. A source with no "tags" entry has no
 # tags table, which mirrors Rpkg's .irw_tag_sources: sim and comp are untagged
 # by design (Rpkg/inst/developer/tags.md), so asking for their tags errors.
 SOURCE_META_TABLES: ClassVar[dict[str, dict[str, str]]] = {
-    "main": {"metadata": "metadata", "tags": "tags", "biblio": "biblio"},
+    "core": {"metadata": "metadata", "tags": "tags", "biblio": "biblio"},
     "nom": {"metadata": "nominal_metadata", "tags": "nominal_tags", "biblio": "nominal_biblio"},
     "sim": {"metadata": "simsyn_metadata", "biblio": "simsyn_biblio"},
     "comp": {"metadata": "comps_metadata", "biblio": "comps_biblio"},
@@ -117,14 +138,14 @@ SOURCE_META_TABLES: ClassVar[dict[str, dict[str, str]]] = {
 }
 
 # Rpkg's .irw_tag_sources and .irw_collection_sources. Code tests membership
-# here rather than `source == "main"`, and a source outside either list must
+# here rather than `source == "core"`, and a source outside either list must
 # ERROR when asked for tags or collections, not return an empty frame: an empty
 # frame filters every table away and reads as "no matches" instead of "wrong
 # question".
 TAG_SOURCES: Tuple[str, ...] = tuple(
     source for source, tables in SOURCE_META_TABLES.items() if "tags" in tables
 )
-COLLECTION_SOURCES: Tuple[str, ...] = ("main",)
+COLLECTION_SOURCES: Tuple[str, ...] = ("core",)
 
 # Package metadata
 PACKAGE_NAME: str = "irw"
@@ -154,6 +175,8 @@ __all__ = [
     "ITEMTEXT_REFS",
     "META_TABLES",
     "SOURCES",
+    "SOURCE_ALIASES",
+    "normalize_source",
     "SOURCE_META_TABLES",
     "TAG_SOURCES",
     "COLLECTION_SOURCES",

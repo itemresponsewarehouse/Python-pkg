@@ -1,13 +1,13 @@
 """filter(), describe_filter() and the metadata lookups take a source (issue #28).
 
-Tag lookups were hardwired to main: `get_tags_table()` read irw_meta's `tags`
+Tag lookups were hardwired to core: `get_tags_table()` read irw_meta's `tags`
 whatever the caller wanted, and `filter()` had no `source` at all. Every rule
 here comes from Rpkg's irw_filter(), irw_tag_options() and
 irw_license_options(), and `.irw_tag_sources` / `.irw_collection_sources` in
 Rpkg/R/redivis-config.R:
 
-- main and nom are tagged; sim and comp are not, and asking them for tags errors.
-- only main has collections; asking any other source errors.
+- core and nom are tagged; sim and comp are not, and asking them for tags errors.
+- only core has collections; asking any other source errors.
 - comp takes n_responses, n_actors and license and nothing else (R's
   irw_filter_comp()), and n_actors exists nowhere but comp.
 
@@ -39,8 +39,8 @@ def clean_cache():
 
 def test_source_rules_match_the_r_package():
     """R: .irw_tag_sources <- c("core", "nom"); .irw_collection_sources <- c("core")."""
-    assert TAG_SOURCES == ("main", "nom")
-    assert COLLECTION_SOURCES == ("main",)
+    assert TAG_SOURCES == ("core", "nom")
+    assert COLLECTION_SOURCES == ("core",)
 
 
 def test_source_meta_tables_are_bare_names_and_match_r():
@@ -59,7 +59,7 @@ def test_source_meta_tables_are_bare_names_and_match_r():
 
 def test_get_filters_default_is_unchanged_by_n_actors():
     """The MCP server lists irw.get_filters(); a comp-only name there would be
-    a filter it advertises and every main search refuses."""
+    a filter it advertises and every core search refuses."""
     names = filter_info.get_filters()
     assert "n_actors" not in names
     assert "collection" in names and "construct_type" in names
@@ -73,7 +73,7 @@ def test_get_filters_per_source():
     assert not set(filter_mod.TAG_FILTERS) & set(sim)
     assert "collection" not in sim and "license" in sim
     with pytest.raises(ValueError, match="Unknown source"):
-        filter_info.get_filters("core")
+        filter_info.get_filters("nope")
 
 
 # --- filter_tables: refusals, before any data is loaded -------------------
@@ -93,12 +93,12 @@ def test_tag_filters_error_for_untagged_sources(no_listing, source):
 
 
 @pytest.mark.parametrize("source", ["nom", "sim"])
-def test_collection_errors_outside_main(no_listing, source):
+def test_collection_errors_outside_core(no_listing, source):
     with pytest.raises(ValueError, match="`collection` is only available"):
         filter_mod.filter_tables([], collection="rct", source=source)
 
 
-@pytest.mark.parametrize("source", ["main", "nom", "sim"])
+@pytest.mark.parametrize("source", ["core", "nom", "sim"])
 def test_n_actors_is_comp_only(no_listing, source):
     with pytest.raises(ValueError, match="n_actors"):
         filter_mod.filter_tables([], n_actors=[2, 10], source=source)
@@ -117,11 +117,11 @@ def test_an_explicit_density_equal_to_the_default_is_still_supplied(no_listing):
 
 def test_the_default_density_filter_has_no_upper_bound(listing):
     """`density` is responses per person-item cell, so a repeated-measures
-    table is legitimately above 1 -- 768 of 6,720 main tables are
+    table is legitimately above 1 -- 768 of 6,720 core tables are
     (ben-domingue/irw#3222). The old default of [0.5, 1] dropped all of them
     and reported it as sparsity."""
     frames, _ = listing
-    frames["main"] = pd.DataFrame({
+    frames["core"] = pd.DataFrame({
         "name": ["sparse", "full", "repeated", "panel"],
         "density": [0.2, 0.9, 1.0, 12.5],
     })
@@ -138,8 +138,14 @@ def test_the_default_density_filter_has_no_upper_bound(listing):
 
 
 def test_unknown_source_errors(no_listing):
+    """Both spellings of the core family are accepted; a third name is not.
+
+    This test read `source="core"` until #138, when "core" became the
+    canonical spelling -- so the case it was written to catch had to be a name
+    neither client has ever used.
+    """
     with pytest.raises(ValueError, match="Unknown source"):
-        filter_mod.filter_tables([], source="core")
+        filter_mod.filter_tables([], source="nope")
 
 
 # --- filter_tables: what each source matches ------------------------------
@@ -150,7 +156,7 @@ def listing(monkeypatch):
     frames = {}
     calls = []
 
-    def fake(datasets, source="main"):
+    def fake(datasets, source="core"):
         calls.append(source)
         return frames[source].copy()
 
@@ -199,11 +205,11 @@ def test_comp_filters_on_actors_and_ignores_the_density_default(listing):
     ).tolist() == ["c3"]
 
 
-def test_main_still_treats_a_missing_column_as_an_outage(listing):
-    """Main's metadata always has density, so its absence is a failed load --
+def test_core_still_treats_a_missing_column_as_an_outage(listing):
+    """Core's metadata always has density, so its absence is a failed load --
     the _require_column guard -- and not a source limitation to skip."""
     frames, _ = listing
-    frames["main"] = pd.DataFrame({"name": ["t1"], "n_items": [5]})
+    frames["core"] = pd.DataFrame({"name": ["t1"], "n_items": [5]})
     with pytest.raises(filter_mod.IRWMetadataUnavailable, match="density"):
         filter_mod.filter_tables([])
 
@@ -214,7 +220,7 @@ def test_api_filter_threads_source(monkeypatch):
     seen = {}
     monkeypatch.setattr(irw.api, "_get_datasets", lambda source: [source])
 
-    def fake_filter_tables(datasets, source="main", **kwargs):
+    def fake_filter_tables(datasets, source="core", **kwargs):
         seen.update(datasets=datasets, source=source, kwargs=kwargs)
         return pd.Series([], dtype=str)
 
@@ -230,7 +236,7 @@ def test_api_describe_filter_threads_source(monkeypatch):
     seen = {}
     monkeypatch.setattr(irw.api, "_get_datasets", lambda source: [source])
 
-    def fake_describe(datasets, filter_name, source="main"):
+    def fake_describe(datasets, filter_name, source="core"):
         seen.update(datasets=datasets, name=filter_name, source=source)
 
     monkeypatch.setattr(irw.api, "_describe_filter", fake_describe)
@@ -242,30 +248,30 @@ def test_api_describe_filter_threads_source(monkeypatch):
 
 @pytest.fixture
 def per_source_loaders(monkeypatch):
-    """Loaders that answer differently per source, so a hardwired main lookup
-    shows up as main's values."""
+    """Loaders that answer differently per source, so a hardwired core lookup
+    shows up as core's values."""
     base = pd.DataFrame({"name": ["t1", "t2"]})
     tags = {
-        "main": pd.DataFrame({"table": ["t1", "t2"], "construct_type": ["Personality", "Personality"]}),
+        "core": pd.DataFrame({"table": ["t1", "t2"], "construct_type": ["Personality", "Personality"]}),
         "nom": pd.DataFrame({"table": ["T1", "t2"], "construct_type": ["Cognitive/educational", None]}),
     }
     biblio = {
-        "main": pd.DataFrame({"table": ["t1", "t2"], "Derived_License": ["CC0 1.0", "CC0 1.0"]}),
+        "core": pd.DataFrame({"table": ["t1", "t2"], "Derived_License": ["CC0 1.0", "CC0 1.0"]}),
         "comp": pd.DataFrame({"table": ["t1", "t2"], "Derived_License": ["CC BY 4.0", "CC BY 4.0"]}),
     }
     metadata = {
         "comp": pd.DataFrame({"table": ["t1", "t2"], "n_responses": [10, 30], "n_actors": [2, 4]}),
     }
     monkeypatch.setattr(filter_info, "_build_base_table_list", lambda ds: base.copy())
-    monkeypatch.setattr(filter_info, "get_tags_table", lambda source="main": tags[source].copy())
-    monkeypatch.setattr(filter_info, "get_biblio_table", lambda source="main": biblio[source].copy())
-    monkeypatch.setattr(filter_info, "get_metadata_table", lambda source="main": metadata[source].copy())
+    monkeypatch.setattr(filter_info, "get_tags_table", lambda source="core": tags[source].copy())
+    monkeypatch.setattr(filter_info, "get_biblio_table", lambda source="core": biblio[source].copy())
+    monkeypatch.setattr(filter_info, "get_metadata_table", lambda source="core": metadata[source].copy())
 
 
 def test_describe_filter_reads_the_sources_tags(per_source_loaders):
-    main = filter_info.describe_filter([], "construct_type")["values"]
+    core = filter_info.describe_filter([], "construct_type")["values"]
     nom = filter_info.describe_filter([], "construct_type", source="nom")["values"]
-    assert dict(main) == {"Personality": 2}
+    assert dict(core) == {"Personality": 2}
     # T1 is matched to t1 despite the case difference.
     assert dict(nom) == {"Cognitive/educational": 1}
 
@@ -284,7 +290,7 @@ def test_describe_n_actors_for_comp(per_source_loaders):
     [
         ("construct_type", "sim", "Tag filters"),
         ("collection", "nom", "`collection` is only available"),
-        ("n_actors", "main", "n_actors"),
+        ("n_actors", "core", "n_actors"),
         ("n_items", "comp", "not available for source='comp'"),
     ],
 )
@@ -354,7 +360,7 @@ def fake_meta(monkeypatch):
         "simsyn_biblio": pd.DataFrame({"table": ["sim_a"], "Derived_License": ["CC0 1.0"]}),
     })
     metadata_cache.set("meta_dataset", meta)
-    monkeypatch.setattr(table_metadata, "_init_main_datasets", lambda: [_Dataset("main", ["main_a"])])
+    monkeypatch.setattr(table_metadata, "_init_main_datasets", lambda: [_Dataset("core", ["main_a"])])
     monkeypatch.setattr(table_metadata, "_init_nom_dataset", lambda: _Dataset("nom", ["Nom_A", "nom_b"]))
     monkeypatch.setattr(table_metadata, "_init_sim_dataset", lambda: _Dataset("sim", ["sim_a"]))
     return meta
@@ -375,10 +381,10 @@ def test_get_tags_table_errors_for_untagged_sources(fake_meta, source):
 
 
 def test_caches_are_keyed_per_source(fake_meta):
-    """A main frame must never be served for nom, or the reverse."""
-    main = table_metadata.get_metadata_table()
+    """A core frame must never be served for nom, or the reverse."""
+    core = table_metadata.get_metadata_table()
     nom = table_metadata.get_metadata_table("nom")
-    assert list(main["table"]) == ["main_a"]
+    assert list(core["table"]) == ["main_a"]
     assert list(nom["table"]) == ["Nom_A", "nom_b"]
     table_metadata.get_metadata_table()
     table_metadata.get_metadata_table("nom")
@@ -400,13 +406,13 @@ def test_table_info_for_sim_reads_no_tags(fake_meta):
     assert "nominal_tags" not in fake_meta.reads and "tags" not in fake_meta.reads
 
 
-def test_main_table_info_no_longer_drops_tags_on_a_case_difference(fake_meta, monkeypatch):
+def test_core_table_info_no_longer_drops_tags_on_a_case_difference(fake_meta, monkeypatch):
     """Against live irw_meta an exact join on `table` dropped the tags of 308
-    main tables, so filter(construct_type=...) could never return them."""
+    core tables, so filter(construct_type=...) could never return them."""
     fake_meta.frames["metadata"] = pd.DataFrame({"table": ["HEARD_Roch_2022"], "n_items": [6]})
     fake_meta.frames["tags"] = pd.DataFrame({"table": ["heard_roch_2022"], "construct_type": ["Affective/mental health"]})
     fake_meta.frames["biblio"] = pd.DataFrame({"table": ["heard_roch_2022"], "Derived_License": ["CC BY 4.0"]})
-    monkeypatch.setattr(table_metadata, "_init_main_datasets", lambda: [_Dataset("main", ["HEARD_Roch_2022"])])
+    monkeypatch.setattr(table_metadata, "_init_main_datasets", lambda: [_Dataset("core", ["HEARD_Roch_2022"])])
     monkeypatch.setattr(table_metadata, "get_collection_members_table", lambda: pd.DataFrame(columns=["table", "collection"]))
     info = table_metadata._table_info()
     assert info.loc[0, "construct_type"] == "Affective/mental health"

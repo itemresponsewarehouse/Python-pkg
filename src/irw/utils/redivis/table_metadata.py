@@ -1,8 +1,8 @@
 """Table-level metadata utilities for every IRW table source.
 
-Each source (main, nom, sim, comp) has its own metadata and bibliography tables
-in irw_meta, and main and nom also have a tags table -- see SOURCE_META_TABLES
-in config.py. Cache keys for main are the bare kind ("metadata", "tags", ...);
+Each source (core, nom, sim, comp) has its own metadata and bibliography tables
+in irw_meta, and core and nom also have a tags table -- see SOURCE_META_TABLES
+in config.py. Cache keys for core are the bare kind ("metadata", "tags", ...);
 every other source's key carries the source, so the four never share a frame.
 """
 
@@ -37,7 +37,12 @@ from .pins import _pins_fingerprint
 
 
 def _check_source(source: str) -> Dict[str, str]:
-    """The metadata table names for `source`, or ValueError for an unknown one."""
+    """The metadata table names for `source`, or ValueError for an unknown one.
+
+    `source` is expected canonical: api.py and mcp.py resolve the alias
+    spellings before anything here sees one (#138), so the message lists
+    SOURCES and nothing else.
+    """
     if source not in SOURCES:
         raise ValueError(
             f"Unknown source '{source}'. Must be one of: "
@@ -78,14 +83,14 @@ def _check_collection_source(source: str) -> None:
 
 
 def _meta_cache_key(kind: str, source: str) -> str:
-    """Cache key for one metadata frame. Main keeps its historical bare keys."""
-    return kind if source == "main" else f"{kind}:{source}"
+    """Cache key for one metadata frame. Core keeps its historical bare keys."""
+    return kind if source == "core" else f"{kind}:{source}"
 
 
 def _source_datasets(source: str) -> List[Any]:
     """The Redivis dataset handles whose tables make up `source`."""
     _check_source(source)
-    if source == "main":
+    if source == "core":
         return _init_main_datasets()
     if source == "nom":
         return [_init_nom_dataset()]
@@ -124,10 +129,10 @@ def _get_meta_dataset() -> Any:
     return dataset
 
 
-def _known_table_names(source: str = "main") -> set[str]:
+def _known_table_names(source: str = "core") -> set[str]:
     """Lowercased names this client considers to exist, for one source.
 
-    For main that is what the published metadata and bibliography list: since
+    For core that is what the published metadata and bibliography list: since
     ben-domingue/irw#3127 the metadata is the authority, and asking the
     warehouses instead costs a `get()` plus a `list_tables()` per shard. Both
     frames are consulted because they are published from the same pipeline run
@@ -137,11 +142,11 @@ def _known_table_names(source: str = "main") -> set[str]:
     Other sources still enumerate their dataset, which is where the ruling was
     scoped.
     """
-    if source != "main":
+    if source != "core":
         return _get_existing_tables(source)
 
     names: set[str] = set()
-    for frame in (get_metadata_table("main"), get_biblio_table("main")):
+    for frame in (get_metadata_table("core"), get_biblio_table("core")):
         if "table" in getattr(frame, "columns", ()):
             names.update(
                 str(value).strip().lower()
@@ -151,16 +156,16 @@ def _known_table_names(source: str = "main") -> set[str]:
     return names
 
 
-def _get_existing_tables(source: str = "main") -> set[str]:
+def _get_existing_tables(source: str = "core") -> set[str]:
     """Get set of existing table names, lowercased, for one source.
 
     Keyed on the source's current version tags: this set is what filters
-    every non-main metadata frame down to tables that still exist, so if it
-    cannot notice a release then neither can they (issue #51). main no longer
+    every non-core metadata frame down to tables that still exist, so if it
+    cannot notice a release then neither can they (issue #51). core no longer
     goes through here -- see `_known_table_names`.
     """
     ds_list = _source_datasets(source)
-    if source == "main":
+    if source == "core":
         cache_key = "existing_tables:" + _main_datasets_cache_key()
     else:
         cache_key = f"existing_tables:{source}:" + _datasets_cache_key(ds_list)
@@ -178,14 +183,14 @@ def _get_existing_tables(source: str = "main") -> set[str]:
     return existing_tables
 
 
-def get_metadata_table(source: str = "main") -> pd.DataFrame:
+def get_metadata_table(source: str = "core") -> pd.DataFrame:
     """
     Get the IRW metadata table (precomputed stats for each table).
 
     Parameters
     ----------
-    source : str, default "main"
-        Table source: "main", "nom", "sim", "comp", "conj" or "rank". Each has its
+    source : str, default "core"
+        Table source: "core", "nom", "sim", "comp", "conj" or "rank". Each has its
         own columns; conj's are design counts and design facts per experiment,
         rank's the counts and design record per rankings table.
 
@@ -214,14 +219,14 @@ def get_metadata_table(source: str = "main") -> pd.DataFrame:
     return metadata_df
 
 
-def get_tags_table(source: str = "main") -> pd.DataFrame:
+def get_tags_table(source: str = "core") -> pd.DataFrame:
     """
     Get the IRW tags table (measurement information for each table).
 
     Parameters
     ----------
-    source : str, default "main"
-        Table source. Only "main" and "nom" are tagged; "sim" and "comp" have
+    source : str, default "core"
+        Table source. Only "core" and "nom" are tagged; "sim" and "comp" have
         no tags by design and raise ValueError rather than return an empty
         frame.
 
@@ -248,10 +253,10 @@ def get_tags_table(source: str = "main") -> pd.DataFrame:
     # Clean the data
     tags_df = tags_df.replace("NA", pd.NA)
     
-    # main's rows stand as published: the metadata is the authority for which
+    # core's rows stand as published: the metadata is the authority for which
     # core tables exist (ben-domingue/irw#3127). Other sources keep the
     # intersection, which is where the ruling was scoped.
-    if source != "main":
+    if source != "core":
         existing_tables = _get_existing_tables(source)
         tags_df["table_lower"] = tags_df["table"].str.lower()
         tags_df = tags_df[tags_df["table_lower"].isin(existing_tables)].copy()
@@ -268,7 +273,7 @@ def _merge_on_table(left: pd.DataFrame, right: pd.DataFrame) -> pd.DataFrame:
 
     The metadata, tags and biblio tables do not agree on the case of a name:
     against live irw_meta, an exact join on `table` dropped the tags of 308
-    main tables and the bibliography of 30. `left` keeps its own `table`
+    core tables and the bibliography of 30. `left` keeps its own `table`
     column; `right`'s is dropped so no `table_x`/`table_y` pair appears.
     """
     if "table" not in right.columns:
@@ -402,14 +407,14 @@ def get_covariate_labels_table() -> pd.DataFrame:
     return df
 
 
-def get_biblio_table(source: str = "main") -> pd.DataFrame:
+def get_biblio_table(source: str = "core") -> pd.DataFrame:
     """
     Get the IRW bibliography table (bibliography info for each table).
 
     Parameters
     ----------
-    source : str, default "main"
-        Table source: "main", "nom", "sim", "comp", "conj" or "rank".
+    source : str, default "core"
+        Table source: "core", "nom", "sim", "comp", "conj" or "rank".
 
     Returns
     -------
@@ -430,8 +435,8 @@ def get_biblio_table(source: str = "main") -> pd.DataFrame:
     table = dataset.table(table_name)
     biblio_df = table.to_pandas_dataframe()
     
-    # As for tags: main stands as published, other sources stay filtered.
-    if source != "main":
+    # As for tags: core stands as published, other sources stay filtered.
+    if source != "core":
         existing_tables = _get_existing_tables(source)
         biblio_df["table_lower"] = biblio_df["table"].str.lower()
         biblio_df = biblio_df[biblio_df["table_lower"].isin(existing_tables)].copy()
@@ -442,7 +447,7 @@ def get_biblio_table(source: str = "main") -> pd.DataFrame:
     
     return biblio_df
     
-def _table_info(source: str = "main") -> pd.DataFrame:
+def _table_info(source: str = "core") -> pd.DataFrame:
     """
     Internal function to get comprehensive information about all tables in a source.
     
@@ -454,14 +459,14 @@ def _table_info(source: str = "main") -> pd.DataFrame:
 
     Parameters
     ----------
-    source : str, default "main"
-        Table source: "main", "nom", "sim" or "comp".
+    source : str, default "core"
+        Table source: "core", "nom", "sim" or "comp".
     
     Returns
     -------
     pandas.DataFrame
         Combined table information with columns from stats, tags, and biblio.
-        Only a collection source (main) carries the `collections` column.
+        Only a collection source (core) carries the `collections` column.
     """
     _check_source(source)
     cache_key = _meta_cache_key("combined_metadata", source)

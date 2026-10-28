@@ -20,7 +20,7 @@ from ..config import META_REF
 from ..utils.redivis.pins import _dataset_key, _pins, pinned_irw_version
 
 
-def _get_table_metadata(table_name: str, source: str = "main") -> Dict[str, Any]:
+def _get_table_metadata(table_name: str, source: str = "core") -> Dict[str, Any]:
     """Get metadata dictionary for a table by name, within one source."""
     # Get combined metadata table
     metadata_df = _table_info(source)
@@ -85,10 +85,10 @@ class IRWTableNotFound(LookupError):
     """
 
 
-def _get_table_info_dict(table_name: str, source: str = "main") -> Dict[str, Any]:
+def _get_table_info_dict(table_name: str, source: str = "core") -> Dict[str, Any]:
     """Get structured info dictionary for a table.
 
-    Main keeps its fixed layout (stats, tags, biblio, item text). Every other
+    Core keeps its fixed layout (stats, tags, biblio, item text). Every other
     source has its own metadata columns (comp: n_responses/n_actors; conj:
     design counts and facts; ...), so its `stats` are that source's metadata
     row as it stands, and `tags` appear only for a tagged source (nom).
@@ -98,7 +98,7 @@ def _get_table_info_dict(table_name: str, source: str = "main") -> Dict[str, Any
     if not metadata_dict:
         return {}
 
-    if source != "main":
+    if source != "core":
         from ..utils.redivis.table_metadata import get_metadata_table
         stat_cols = [c for c in get_metadata_table(source).columns if c != 'table']
         out = {
@@ -256,7 +256,7 @@ def _format_value(v: Any) -> str:
 
 
 def _format_aux_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
-    """info() text for a non-main table: its source's own metadata columns."""
+    """info() text for a non-core table: its source's own metadata columns."""
     source = info_dict['source']
     label = {"comp": "competition", "sim": "simulation", "nom": "nominal",
              "conj": "conjoint", "rank": "rankings"}.get(source, source)
@@ -283,7 +283,7 @@ def _format_aux_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
 
 def _format_table_info(table_name: str, info_dict: Dict[str, Any]) -> str:
     """Format table info as a string."""
-    if info_dict.get('source', 'main') != 'main':
+    if info_dict.get('source', 'core') != 'core':
         return _format_aux_table_info(table_name, info_dict)
     lines = []
     lines.append(f"\n{'='*60}")

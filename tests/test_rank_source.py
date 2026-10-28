@@ -120,7 +120,7 @@ def test_rank_filters_take_license_and_name_the_rest(monkeypatch):
     import irw.operations.filter as fmod
     listing = pd.DataFrame({"name": ["a_rank", "b_rank"], "n_respondents": [200, 5000],
                             "method": ["irv", "stv"], "license": ["CC0 1.0", "CC BY 4.0"]})
-    monkeypatch.setattr(fmod, "list_tables", lambda datasets, source="main", **kw: listing)
+    monkeypatch.setattr(fmod, "list_tables", lambda datasets, source="core", **kw: listing)
     assert list(filter_tables([], source="rank")) == ["a_rank", "b_rank"]
     assert list(filter_tables([], source="rank", license="CC BY 4.0")) == ["b_rank"]
     with pytest.raises(ValueError, match="no column for them: n_items"):

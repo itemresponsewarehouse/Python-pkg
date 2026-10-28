@@ -15,7 +15,7 @@ A credit line must never break or slow a download meaningfully, so:
 * the query is not retried, and any failure -- no network, no ``Source_via``
   column in an older release, anything -- means no note, silently. A failure
   is cached too, so it costs one session a week, not every session;
-* only the ``main`` source is looked up (every such table is there today).
+* only the ``core`` source is looked up (every such table is there today).
 
 Silence it with ``irw.disable_source_note()`` or ``IRW_SOURCE_NOTE=0``.
 """
@@ -145,7 +145,7 @@ def _query_lookup() -> Dict[str, Dict[str, Optional[str]]]:
         from .table_metadata import _get_meta_dataset
         from ...config import SOURCE_META_TABLES
 
-        table = _get_meta_dataset().table(SOURCE_META_TABLES["main"]["biblio"])
+        table = _get_meta_dataset().table(SOURCE_META_TABLES["core"]["biblio"])
         sql = (f"SELECT `table`, Source_via, URL__for_data_ "
                f"FROM `{table.qualified_reference}` "
                f"WHERE Source_via IS NOT NULL AND TRIM(Source_via) != '' "
@@ -179,10 +179,10 @@ def _message(table: str, via: str, url: Optional[str]) -> str:
     return "\n".join(lines)
 
 
-def _source_note(tables: Iterable[str], source: str = "main") -> None:
+def _source_note(tables: Iterable[str], source: str = "core") -> None:
     """Emit the credit note for any fetched table that came via an intermediary."""
     try:
-        if source != "main" or not _enabled():
+        if source != "core" or not _enabled():
             return
         if _state["lookup"] is None:
             _state["lookup"] = _load_lookup()

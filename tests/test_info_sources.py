@@ -1,6 +1,6 @@
 """info(table, source=) for every source, as R's irw_info(table, source = ).
 
-Before, info() on a table raised for anything but main. A non-main table's
+Before, info() on a table raised for anything but core. A non-core table's
 metadata has its source's own columns, so they are shown as they stand.
 """
 import pandas as pd
@@ -20,8 +20,8 @@ def fake_conj(monkeypatch):
                            Derived_License="CC0 1.0", BibTex="@article{k,}")
     seen = []
     monkeypatch.setattr(table_helpers, "_table_info",
-                        lambda source="main": seen.append(source) or combined)
-    monkeypatch.setattr(tm, "get_metadata_table", lambda source="main": meta)
+                        lambda source="core": seen.append(source) or combined)
+    monkeypatch.setattr(tm, "get_metadata_table", lambda source="core": meta)
     return seen
 
 
@@ -55,9 +55,9 @@ def test_the_mcp_turns_that_into_its_own_not_found(fake_conj):
     assert backend.describe_table("nope", source="conj") == {}
 
 
-def test_main_layout_is_unchanged(monkeypatch):
+def test_core_layout_is_unchanged(monkeypatch):
     combined = pd.DataFrame({"table": ["t"], "n_responses": [10], "construct_type": ["x"]})
-    monkeypatch.setattr(table_helpers, "_table_info", lambda source="main": combined)
+    monkeypatch.setattr(table_helpers, "_table_info", lambda source="core": combined)
     d = table_helpers._get_table_info_dict("t")
     assert "source" not in d and d["stats"]["n_responses"] == 10
 
@@ -74,30 +74,30 @@ def test_main_layout_is_unchanged(monkeypatch):
 
 
 @pytest.fixture
-def fake_main(monkeypatch):
+def fake_core(monkeypatch):
     meta = pd.DataFrame({"table": ["fake_table"], "n_responses": [10], "n_items": [2]})
     combined = meta.assign(Description="d", Reference_x="r", DOI__for_paper_="1",
                            URL__for_data_="u", Derived_License="CC0 1.0", BibTex="@a{b,}",
                            dataset="item_response_warehouse")
-    monkeypatch.setattr(table_helpers, "_table_info", lambda source="main": combined)
+    monkeypatch.setattr(table_helpers, "_table_info", lambda source="core": combined)
     return combined
 
 
-def test_item_text_comes_from_the_itemtext_index(fake_main, monkeypatch, capsys):
+def test_item_text_comes_from_the_itemtext_index(fake_core, monkeypatch, capsys):
     monkeypatch.setattr(table_helpers, "_list_itemtext_tables", lambda: {"fake_table"})
     d = irw.info("fake_table", return_dict=True)
     assert d["item_text"] is True
     assert "Item-level text: Available" in capsys.readouterr().out
 
 
-def test_absent_item_text_is_reported_as_absent(fake_main, monkeypatch, capsys):
+def test_absent_item_text_is_reported_as_absent(fake_core, monkeypatch, capsys):
     monkeypatch.setattr(table_helpers, "_list_itemtext_tables", lambda: {"other_table"})
     d = irw.info("fake_table", return_dict=True)
     assert d["item_text"] is False
     assert "Item-level text: Not available" in capsys.readouterr().out
 
 
-def test_an_unreadable_index_is_not_reported_as_absence(fake_main, monkeypatch, capsys):
+def test_an_unreadable_index_is_not_reported_as_absence(fake_core, monkeypatch, capsys):
     def boom():
         raise RuntimeError("Redivis timed out")
     monkeypatch.setattr(table_helpers, "_list_itemtext_tables", boom)

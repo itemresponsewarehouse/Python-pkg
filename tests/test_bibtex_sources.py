@@ -13,28 +13,28 @@ from irw.config import SOURCES
 
 
 def _fake(monkeypatch, seen):
-    def biblio(source="main"):
+    def biblio(source="core"):
         seen.append(("biblio", source))
         return pd.DataFrame({"table": [f"t_{source}"],
                              "BibTex": [f"@article{{K_{source}, title={{T}}}}"],
                              "DOI__for_paper_": [None]})
 
-    def known(source="main"):
+    def known(source="core"):
         seen.append(("known", source))
         return {f"t_{source}"}
 
-    def existing(source="main"):
+    def existing(source="core"):
         seen.append(("existing", source))
         return {f"t_{source}"}
 
-    def metadata(source="main"):
+    def metadata(source="core"):
         seen.append(("metadata", source))
         return pd.DataFrame({"table": [f"t_{source}"]})
 
     monkeypatch.setattr(tm, "get_biblio_table", biblio)
     monkeypatch.setattr(tm, "_known_table_names", known)
     # Both of the names `_known_table_names` would otherwise reach are faked
-    # too: this file is offline, and before they were, the main case exported
+    # too: this file is offline, and before they were, the core case exported
     # the real 6,450-row metadata table mid-test.
     monkeypatch.setattr(tm, "_get_existing_tables", existing)
     monkeypatch.setattr(tm, "get_metadata_table", metadata)
@@ -49,16 +49,16 @@ def test_each_source_reads_its_own_biblio(monkeypatch, source):
     assert seen == [("biblio", source), ("known", source)]
 
 
-def test_default_source_is_main(monkeypatch):
+def test_default_source_is_core(monkeypatch):
     seen = []
     _fake(monkeypatch, seen)
-    assert len(irw.save_bibtex("t_main")) == 1
-    assert seen[0] == ("biblio", "main")
+    assert len(irw.save_bibtex("t_core")) == 1
+    assert seen[0] == ("biblio", "core")
 
 
 def test_a_table_is_not_found_under_another_source(monkeypatch):
     _fake(monkeypatch, [])
-    assert irw.save_bibtex("t_comp", source="main") == []
+    assert irw.save_bibtex("t_comp", source="core") == []
 
 
 def test_every_source_has_a_biblio_table():

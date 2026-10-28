@@ -61,7 +61,7 @@ def _run_query(sql: str, table_name: str) -> pd.DataFrame:
         ) from e
 
 
-def _coerce_resp_set(values: List[str], source: str = "main") -> List[Any]:
+def _coerce_resp_set(values: List[str], source: str = "core") -> List[Any]:
     """Coerce a distinct-response value set to numbers when every value parses.
 
     Numeric when all values are numeric, strings otherwise -- and always
@@ -82,7 +82,7 @@ def table_sets(
     datasets: List[Any],
     name: str,
     *,
-    source: str = "main",
+    source: str = "core",
     per_item: bool = False,
 ) -> Dict[str, Any]:
     """
@@ -95,7 +95,7 @@ def table_sets(
     name : str
         Bare table name. Resolved exactly as fetch() resolves it, so the
         current reference id and shard are looked up rather than assumed.
-    source : str, default "main"
+    source : str, default "core"
         Resolved source name; only ``"nom"`` changes behaviour here.
     per_item : bool, default False
         Also run the per-item summary query.

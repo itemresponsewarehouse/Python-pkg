@@ -99,7 +99,7 @@ def shard_map(build: bool = True) -> Optional[Dict[str, str]]:
     from .datasets import _cache_version, _dataset_version_tag
     from .cache import metadata_cache
 
-    key = _meta_cache_key("metadata", "main")
+    key = _meta_cache_key("metadata", "core")
 
     # The free path makes no request of its own -- not even the one that reads
     # the metadata version. It costs two, and paying them on a fetch whose
@@ -271,7 +271,7 @@ def shard_first_after_miss(ds_list: List[Any], name: str) -> List[Any]:
     return shard_first(ds_list, name, build=True)
 
 
-def listed_in_metadata(name: str, source: str = "main") -> bool:
+def listed_in_metadata(name: str, source: str = "core") -> bool:
     """Whether the published metadata lists this core table.
 
     Reads the map above, so it costs nothing once a session has it. Never
@@ -279,7 +279,7 @@ def listed_in_metadata(name: str, source: str = "main") -> bool:
     that fails must leave the plain not-found standing rather than replace one
     error with another.
     """
-    if source != "main" or not isinstance(name, str) or not name:
+    if source != "core" or not isinstance(name, str) or not name:
         return False
     try:
         mapping = shard_map(build=True)

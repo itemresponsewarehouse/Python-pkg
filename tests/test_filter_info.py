@@ -34,7 +34,7 @@ def patched(monkeypatch):
     })
 
     monkeypatch.setattr(filter_info, "_build_base_table_list", lambda ds: base.copy())
-    monkeypatch.setattr(filter_info, "get_tags_table", lambda source="main": tags.copy())
+    monkeypatch.setattr(filter_info, "get_tags_table", lambda source="core": tags.copy())
     return None
 
 
@@ -145,9 +145,9 @@ def every_loader_patched(monkeypatch):
         {"table": ["t2", "t1", "t2"], "collection": ["depression", "rct", "rct"]}
     )
     monkeypatch.setattr(filter_info, "_build_base_table_list", lambda ds: base.copy())
-    monkeypatch.setattr(filter_info, "get_metadata_table", lambda source="main": metadata.copy())
-    monkeypatch.setattr(filter_info, "get_tags_table", lambda source="main": tags.copy())
-    monkeypatch.setattr(filter_info, "get_biblio_table", lambda source="main": biblio.copy())
+    monkeypatch.setattr(filter_info, "get_metadata_table", lambda source="core": metadata.copy())
+    monkeypatch.setattr(filter_info, "get_tags_table", lambda source="core": tags.copy())
+    monkeypatch.setattr(filter_info, "get_biblio_table", lambda source="core": biblio.copy())
     monkeypatch.setattr(filter_info, "get_collections_table", lambda: registry.copy())
     monkeypatch.setattr(filter_info, "get_collection_members_table", lambda: members.copy())
     monkeypatch.setattr(filter_info, "_list_itemtext_tables", lambda: {"t1"})

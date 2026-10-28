@@ -1,8 +1,8 @@
-"""MCP tools reach every data source, not just main.
+"""MCP tools reach every data source, not just core.
 
 describe_table, fetch_table and get_citation find a table's source from its
 name (names are unique across sources); search_tables takes `source`. A
-backend without source_of (written before sources) still serves main.
+backend without source_of (written before sources) still serves core.
 """
 import numpy as np
 import pandas as pd
@@ -26,26 +26,26 @@ class SourcedBackend(FakeBackend):
 
     def source_of(self, table_name):
         return "conj" if table_name == "kreps_2020_covid_vaccine" else (
-            "main" if table_name in set(self.tables["name"]) else None)
+            "core" if table_name in set(self.tables["name"]) else None)
 
-    def list_tables(self, source="main"):
+    def list_tables(self, source="core"):
         self.calls.append(("list_tables", source))
         return self.conj.copy() if source == "conj" else super().list_tables()
 
-    def describe_table(self, table_name, source="main"):
+    def describe_table(self, table_name, source="core"):
         self.calls.append(("describe_table", source))
         if source == "conj":
             return {"source": "conj", "stats": {"n_respondents": np.int64(1971)}}
         return super().describe_table(table_name)
 
-    def fetch_table(self, table_name, *, wide, dedup, max_rows=None, columns=None, source="main"):
+    def fetch_table(self, table_name, *, wide, dedup, max_rows=None, columns=None, source="core"):
         self.calls.append(("fetch_table", source))
         if source == "conj":
             frame = pd.DataFrame({"id": [1, 1], "task": [1, 1], "profile": [1, 2], "choice": [1, 0]})
             return frame.iloc[:max_rows] if max_rows else frame
         return super().fetch_table(table_name, wide=wide, dedup=dedup, max_rows=max_rows, columns=columns)
 
-    def citation(self, table_name, source="main"):
+    def citation(self, table_name, source="core"):
         self.calls.append(("citation", source))
         return ["@article{kreps_2020_covid_vaccine, title={T}}"] if source == "conj" else []
 
@@ -54,12 +54,12 @@ class SourcedBackend(FakeBackend):
     CONJ_FILTERS = ["license", "n_respondents", "n_attributes", "outcome", "country",
                     "domain", "choice_object"]
 
-    def filter_names(self, source="main"):
+    def filter_names(self, source="core"):
         self.calls.append(("filter_names", source))
         return list(self.CONJ_FILTERS) if source == "conj" else super().filter_names()
 
     def filter_tables(self, **filters):
-        source = filters.pop("source", "main")
+        source = filters.pop("source", "core")
         self.calls.append(("filter_tables", source, dict(filters)))
         if source != "conj":
             return super().filter_tables(**filters)
@@ -67,7 +67,7 @@ class SourcedBackend(FakeBackend):
             return pd.Series([], name="name", dtype=str)
         return pd.Series(["kreps_2020_covid_vaccine"], name="name", dtype=str)
 
-    def describe_filter(self, filter_name, source="main"):
+    def describe_filter(self, filter_name, source="core"):
         self.calls.append(("describe_filter", source, filter_name))
         if source == "conj":
             return {"description": "What the study is about.",
@@ -104,16 +104,16 @@ def test_fetch_table_pages_a_conj_table(tools, backend):
     assert ("fetch_table", "conj") in backend.calls
 
 
-def test_wide_or_dedup_off_main_is_refused_clearly(tools):
+def test_wide_or_dedup_off_core_is_refused_clearly(tools):
     for kw in ({"wide": True}, {"dedup": True}):
         with pytest.raises(IRWMCPError, match="only available for core IRW tables"):
             tools.fetch_table("kreps_2020_covid_vaccine", **kw)
 
 
-def test_main_tables_still_resolve_to_main(tools, backend):
+def test_core_tables_still_resolve_to_core(tools, backend):
     r = tools.describe_table("alpha_depression")
-    assert r["source"] == "main"
-    assert ("describe_table", "main") in backend.calls
+    assert r["source"] == "core"
+    assert ("describe_table", "core") in backend.calls
 
 
 def test_search_tables_takes_a_source(tools, backend):
@@ -124,11 +124,11 @@ def test_search_tables_takes_a_source(tools, backend):
     assert ("list_tables", "conj") in backend.calls
 
 
-def test_search_filters_off_main_go_to_the_package_with_the_source(tools, backend):
+def test_search_filters_off_core_go_to_the_package_with_the_source(tools, backend):
     r = tools.search_tables("", filters={"domain": "health_covid", "choice_object": "policy"}, source="conj")
     assert [t["name"] for t in r["tables"]] == ["kreps_2020_covid_vaccine"]
     assert r["filters_applied"] == {"domain": "health_covid", "choice_object": "policy"}
-    # the package's own filter, called with the source and with no density default (main-only)
+    # the package's own filter, called with the source and with no density default (core-only)
     assert ("filter_tables", "conj", {"domain": "health_covid", "choice_object": "policy"}) in backend.calls
     assert not any(c[0] == "filter_tables" and "density" in c[2] for c in backend.calls)
     assert any("domain" in c and "choice_object" in c for c in r["caveats"])
@@ -139,8 +139,8 @@ def test_search_filters_off_main_go_to_the_package_with_the_source(tools, backen
 
 
 def test_filter_names_are_per_source(tools):
-    # a conj filter on main, or a main filter on conj, is refused by name
-    with pytest.raises(IRWMCPError, match="for source='main'"):
+    # a conj filter on core, or a core filter on conj, is refused by name
+    with pytest.raises(IRWMCPError, match="for source='core'"):
         tools.search_tables("", filters={"domain": "health_covid"})
     with pytest.raises(IRWMCPError, match="for source='conj'"):
         tools.search_tables("", filters={"construct_type": "Cognitive"}, source="conj")
@@ -152,7 +152,7 @@ def test_describe_filter_takes_a_source(tools, backend):
     assert ("describe_filter", "conj", "domain") in backend.calls
     assert r["available_values"] == ["health_covid", "candidate_choice"]
     assert r["value_counts"] == {"health_covid": 3, "candidate_choice": 1}
-    with pytest.raises(IRWMCPError, match="for source='main'"):
+    with pytest.raises(IRWMCPError, match="for source='core'"):
         tools.describe_filter("domain")
     with pytest.raises(IRWMCPError, match="source must be one of"):
         tools.describe_filter("domain", source="nope")
@@ -163,6 +163,6 @@ def test_unknown_source_is_refused(tools):
         tools.search_tables("x", source="nope")
 
 
-def test_a_backend_without_source_of_serves_main_unchanged():
+def test_a_backend_without_source_of_serves_core_unchanged():
     tools = IRWTools(FakeBackend(), FakeSource())
-    assert tools.describe_table("alpha_depression")["source"] == "main"
+    assert tools.describe_table("alpha_depression")["source"] == "core"

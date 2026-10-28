@@ -3,7 +3,7 @@
 Four columns that describe how a table behaves rather than how big it is:
 difficulty_spread, mean_item_rest_r, mean_abs_item_rest_r, prop_items_extreme.
 They are classical and model-free, published per table by the IRW pipeline's
-stage 19, and they exist on main's metadata only.
+stage 19, and they exist on core's metadata only.
 
 Two properties are worth pinning rather than assuming:
 
@@ -40,7 +40,7 @@ def clean_cache():
 
 @pytest.fixture
 def listing(monkeypatch):
-    """main's catalogue, with one table per interesting tier-0 shape."""
+    """core's catalogue, with one table per interesting tier-0 shape."""
     frame = pd.DataFrame({
         "name": ["coherent", "reverse_keyed", "floor", "constant"],
         "n_responses": [1000, 1000, 1000, 1000],
@@ -53,7 +53,7 @@ def listing(monkeypatch):
         "has_item_text": [False, False, False, False],
     })
     monkeypatch.setattr(filter_mod, "list_tables",
-                        lambda datasets, source="main": frame.copy())
+                        lambda datasets, source="core": frame.copy())
     return frame
 
 
@@ -80,7 +80,7 @@ def test_a_table_with_no_tier0_value_is_dropped_not_returned(listing):
 def test_tier0_filters_are_refused_for_sources_without_them(monkeypatch):
     frame = pd.DataFrame({"name": ["nom_a"], "n_items": [5]})
     monkeypatch.setattr(filter_mod, "list_tables",
-                        lambda datasets, source="main": frame.copy())
+                        lambda datasets, source="core": frame.copy())
     with pytest.raises(ValueError, match="mean_abs_item_rest_r"):
         filter_mod.filter_tables([], source="nom", mean_abs_item_rest_r=[0.4, None])
     with pytest.raises(ValueError, match="difficulty_spread"):
@@ -89,13 +89,13 @@ def test_tier0_filters_are_refused_for_sources_without_them(monkeypatch):
         filter_mod.filter_tables([], source="conj", prop_items_extreme=0)
 
 
-def test_main_metadata_without_the_columns_errors_rather_than_widening(monkeypatch):
+def test_core_metadata_without_the_columns_errors_rather_than_widening(monkeypatch):
     """An irw_meta version older than 2026-10-21. Every filter here is a no-op
     when its column is absent, which would return the whole catalogue as if it
     had been narrowed."""
     frame = pd.DataFrame({"name": ["a", "b"], "n_items": [5, 6], "density": [0.9, 0.9]})
     monkeypatch.setattr(filter_mod, "list_tables",
-                        lambda datasets, source="main": frame.copy())
+                        lambda datasets, source="core": frame.copy())
     with pytest.raises(filter_mod.IRWMetadataUnavailable, match="difficulty_spread"):
         filter_mod.filter_tables([], difficulty_spread=[0, 1])
 

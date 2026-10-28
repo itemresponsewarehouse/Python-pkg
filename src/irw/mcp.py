@@ -37,8 +37,8 @@ from .utils.redivis.tables import _classify_error, _sanitize_error
 logger = logging.getLogger(__name__)
 _PACKAGE_CALL_LOCK = threading.RLock()
 
-SOURCE = "main"
-from .config import SOURCES  # noqa: E402  (main first: a table is looked up there first)
+SOURCE = "core"
+from .config import SOURCES, normalize_source  # noqa: E402  (core first: a table is looked up there first)
 # The card returned per search hit. The full metadata record runs ~220 tokens,
 # so a default page of 20 spent ~5.5k of the assistant's context and a maximum
 # page ~28k -- most of it the `variables` string and the bibliography, which
@@ -210,9 +210,9 @@ class IRWMCPError(RuntimeError):
 class IRWBackend(Protocol):
     """The package calls needed by the MCP adapter.
 
-    `source` is passed only for a table outside main ("nom", "sim", "comp",
+    `source` is passed only for a table outside core ("nom", "sim", "comp",
     "conj"), so a backend written before sources existed keeps working for
-    main. `source_of` is optional: without it every table is main.
+    core. `source_of` is optional: without it every table is core.
     """
 
     def list_tables(self) -> pd.DataFrame: ...
@@ -229,8 +229,8 @@ class IRWBackend(Protocol):
         columns: Optional[List[str]] = None,
     ) -> Any: ...
 
-    # `source` arrives as a keyword only off main (see _source_kwargs), so a
-    # main-only backend keeps working for main.
+    # `source` arrives as a keyword only off core (see _source_kwargs), so a
+    # core-only backend keeps working for core.
     def filter_tables(self, **filters: Any) -> Any: ...
 
     def filter_names(self, source: str = SOURCE) -> List[str]: ...
@@ -308,7 +308,7 @@ class PackageBackend:
     def list_tables(self, source: str = SOURCE) -> pd.DataFrame:
         if source == SOURCE:
             return irw.list_tables(source=SOURCE, include_metadata=True)
-        # A non-main source has no combined catalogue in the package: its own
+        # A non-core source has no combined catalogue in the package: its own
         # metadata row per table, plus the biblio fields search reads.
         from .utils.redivis.table_metadata import get_biblio_table
 
@@ -1506,6 +1506,7 @@ class IRWTools:
         Each source has its own list (conj filters on design facts and topic
         tags, comp on n_actors), so the cache is keyed by source.
         """
+        source = self._validate_source(source)
         if source not in self._filter_names:
             names, _ = self._call(
                 self.backend.filter_names, requires_auth=False,
@@ -1554,11 +1555,19 @@ class IRWTools:
 
     @staticmethod
     def _validate_source(source: Any) -> str:
-        if source not in SOURCES:
+        """The canonical spelling of `source`, or invalid_input.
+
+        Resolves Python's historical "main" to "core" here rather than at each
+        comparison (#138): the value is also a cache key in `filter_names` and
+        below in the package, so two spellings reaching the comparisons means
+        two caches for one family.
+        """
+        canonical = normalize_source(source) if isinstance(source, str) else source
+        if canonical not in SOURCES:
             raise IRWMCPError(
                 "invalid_input",
                 f"source must be one of {', '.join(SOURCES)}, not '{source}'.")
-        return str(source)
+        return str(canonical)
 
     def _validate_filters(self, filters: Any, source: str = SOURCE) -> Dict[str, Any]:
         """Check filter names against the package's list for the source."""
@@ -1613,9 +1622,9 @@ class IRWTools:
         if query and not re.search(r"\w", query, flags=re.UNICODE):
             raise IRWMCPError("invalid_input", "query must contain searchable letters or numbers.")
         source = self._validate_source(source)
-        # Filters off main go to irw.filter(source=...) like everything else;
+        # Filters off core go to irw.filter(source=...) like everything else;
         # each source has its own list (filter_names(source)), so a conj
-        # filter on main or a tag filter on conj is refused by name here.
+        # filter on core or a tag filter on conj is refused by name here.
         selected = self._validate_filters(filters, source)
         limit = _validate_limit(limit, SEARCH_DEFAULT_LIMIT, SEARCH_MAX_LIMIT)
         offset = _validate_offset(offset)
@@ -1627,7 +1636,7 @@ class IRWTools:
             # that drops tables. A caller who asked for nothing about density did
             # not ask for sparse tables to disappear, so opt out unless they
             # named it -- and let the package's own warning through when they
-            # did. Only main has a density filter.
+            # did. Only core has a density filter.
             call_filters = dict(selected)
             if source == SOURCE:
                 call_filters.setdefault("density", None)
@@ -1716,7 +1725,7 @@ class IRWTools:
         total = len(matches)
         page = [card for _, _, card in matches[offset : offset + limit]]
         if source != SOURCE:
-            # Only main and nom carry tags, and nom's are not in this listing:
+            # Only core and nom carry tags, and nom's are not in this listing:
             # an "untagged" count here would describe the listing, not the data.
             n_untagged = None
         return self._stamp(
@@ -1748,7 +1757,7 @@ class IRWTools:
         Each applied filter contributes the description the package already
         keeps for it, so a caveat added to FILTER_DESCRIPTIONS reaches the
         assistant without anyone editing this file. The tag-coverage and
-        density caveats are main's: the other sources carry no core tags (conj's
+        density caveats are core's: the other sources carry no core tags (conj's
         topic tags cover every table) and have no density filter.
         """
         caveats: List[str] = []
@@ -1814,10 +1823,10 @@ class IRWTools:
         return self._filter_descriptions.get(filter_name)
 
     def _source_for(self, table_name: str) -> str:
-        """Which source holds a table: main unless the backend says otherwise.
+        """Which source holds a table: core unless the backend says otherwise.
 
         Table names are unique across sources (red_up refuses a name used in
-        another), so the name is enough. A table found nowhere stays main, and
+        another), so the name is enough. A table found nowhere stays core, and
         the call reports not_found exactly as before.
         """
         lookup = getattr(self.backend, "source_of", None)
@@ -1832,7 +1841,7 @@ class IRWTools:
 
     @staticmethod
     def _source_kwargs(source: str) -> Dict[str, Any]:
-        """Pass `source` only off main, so a main-only backend keeps working."""
+        """Pass `source` only off core, so a core-only backend keeps working."""
         return {} if source == SOURCE else {"source": source}
 
     def describe_table(self, table_name: str) -> Dict[str, Any]:
@@ -2600,7 +2609,7 @@ def _search_tables_doc(tools: "IRWTools") -> str:
         "cov_birthdate and cov_startdate match too -- confirm a real `wave` "
         "or `date` column before treating a table as a panel.\n"
         "\n"
-        "`source` picks the warehouse: \"main\" (default; item responses), "
+        "`source` picks the warehouse: \"core\" (default; item responses), "
         "\"nom\" (nominal responses), \"sim\" (simulated), \"comp\" "
         "(competitions: winner/loser pairs) or \"conj\" (conjoint experiments: "
         "one row per respondent, task and profile, no item/resp). Each source "
@@ -2756,7 +2765,7 @@ def create_server(
         """Return metadata and statistics for one IRW table without fetching rows.
 
         Works for a table in any source; `source` in the result says which.
-        Off main, `metadata.stats` holds that source's own columns (conj:
+        Off core, `metadata.stats` holds that source's own columns (conj:
         design counts and facts; comp: n_responses, n_actors).
 
         ``covariate_labels`` maps each coded cov_* column to the source's own

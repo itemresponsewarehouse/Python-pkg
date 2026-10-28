@@ -17,6 +17,11 @@ Usage:
     irw.download("agn_kay_2025")
     irw.long2resp(df)  # df is a DataFrame from fetch()
     irw.resp2long(wide)  # and back again
+
+Every function with a `source=` argument names a data family: "core" (the
+default, the response-data warehouses), "nom", "sim", "comp", "conj" or
+"rank", as in R's irw_* functions and the site's `source =` column. "main" is
+accepted wherever "core" is -- it was this package's own spelling until #138.
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ import warnings
 import datetime
 from typing import Any, Mapping, Optional, Union, Dict, List, Literal, Tuple
 import pandas as pd
+from .config import SOURCES, normalize_source
 from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_datasets, _init_rank_datasets
 from .utils.redivis.item_text import (
     _list_itemtext_tables, _itemtext_disclaimer, _itemtext_licence_notice,
@@ -104,9 +110,15 @@ def has_credentials() -> bool:
     return _has_credentials()
 
 
-def _get_datasets(source: str = "main"):
-    """Get datasets for the given source."""
-    if source == "main":
+def _get_datasets(source: str = "core"):
+    """Get datasets for the given source.
+
+    Normalises its own argument, so it is safe to call with a user-supplied
+    spelling; every public function above also normalises, because they pass
+    `source` on to code that compares it.
+    """
+    source = normalize_source(source)
+    if source == "core":
         return _init_main_datasets()
     elif source == "sim":
         return [_init_sim_dataset()]
@@ -119,19 +131,22 @@ def _get_datasets(source: str = "main"):
     elif source == "rank":
         return _init_rank_datasets()
     else:
-        raise ValueError(f"Unknown source '{source}'. Must be one of: 'main', 'sim', 'comp', 'nom', 'conj', 'rank'")
+        raise ValueError(
+            f"Unknown source '{source}'. Must be one of: "
+            + ", ".join(f"'{s}'" for s in SOURCES)
+        )
 
 
-def list_tables(source: str = "main", include_metadata: bool = False) -> pd.DataFrame:
+def list_tables(source: str = "core", include_metadata: bool = False) -> pd.DataFrame:
     """
     List available IRW tables.
     
     Parameters
     ----------
-    source : str, default "main"
-        The data family. Options: "main" (core), "sim", "comp", "nom"
+    source : str, default "core"
+        The data family. Options: "core", "sim", "comp", "nom"
     include_metadata : bool, default False
-        If True and source="main", return enriched IRW metadata.
+        If True and source="core", return enriched IRW metadata.
         If False, return basic Redivis properties.
         
     Returns
@@ -139,18 +154,19 @@ def list_tables(source: str = "main", include_metadata: bool = False) -> pd.Data
     pandas.DataFrame
         Table listing with metadata.
     """
+    source = normalize_source(source)
     datasets = _get_datasets(source)
-    if source == "main" and include_metadata:
+    if source == "core" and include_metadata:
         return _list_tables(datasets)
     else:
         return list_tables_basic(datasets)
 
 
-def metadata(source: str = "main") -> pd.DataFrame:
+def metadata(source: str = "core") -> pd.DataFrame:
     """
     The IRW metadata table for one source: one row per table.
 
-    R's ``irw_metadata(source = )``. Each source has its own columns: main has
+    R's ``irw_metadata(source = )``. Each source has its own columns: core has
     response statistics, comp ``n_responses``/``n_actors``, and conj design
     counts and design facts per experiment (``n_respondents``, ``n_tasks``,
     ``n_profiles``, ``n_attributes``, ``outcomes``, ``n_optout_tasks``,
@@ -159,8 +175,8 @@ def metadata(source: str = "main") -> pd.DataFrame:
 
     Parameters
     ----------
-    source : str, default "main"
-        The data family: "main" (core), "nom", "sim", "comp", "conj" or "rank".
+    source : str, default "core"
+        The data family: "core", "nom", "sim", "comp", "conj" or "rank".
         For "rank" a row is one rankings table: the counts (``n_respondents``,
         ``n_rows``, ``n_tasks``, ``n_items``, ``max_resp``, ``n_duplicate_marks``)
         and the design record (``method``, ``seats``, ``n_positions``,
@@ -177,18 +193,19 @@ def metadata(source: str = "main") -> pd.DataFrame:
     >>> conj[conj["country"] == "US"]
     >>> conj["domain"].str.split(";").explode().value_counts()  # topic tags
     """
+    source = normalize_source(source)
     return _get_metadata_table(source)
 
 
-def filter(*, source: str = "main", **kwargs) -> pd.Series:
+def filter(*, source: str = "core", **kwargs) -> pd.Series:
     """
     Filter IRW tables based on metadata criteria.
     
     Parameters
     ----------
-    source : str, default "main"
-        The data family to filter. Options: "main", "nom", "sim", "comp", "conj".
-        Tag filters need "main" or "nom"; `collection` needs "main"; "comp"
+    source : str, default "core"
+        The data family to filter. Options: "core", "nom", "sim", "comp", "conj".
+        Tag filters need "core" or "nom"; `collection` needs "core"; "comp"
         takes only `n_responses`, `n_actors` and `license`; "conj" takes only
         `n_respondents`, `n_attributes`, `outcome`, `country`, `domain`,
         `choice_object` and `license`. A filter the
@@ -208,11 +225,12 @@ def filter(*, source: str = "main", **kwargs) -> pd.Series:
     >>> irw.filter(source="nom", construct_type="Cognitive/educational")
     >>> irw.filter(source="comp", n_actors=[2, 10])
     """
+    source = normalize_source(source)
     datasets = _get_datasets(source)
     return filter_tables(datasets, source=source, **kwargs)
 
 
-def info(table_name: Optional[str] = None, source: str = "main", return_dict: bool = False) -> Union[None, Dict]:
+def info(table_name: Optional[str] = None, source: str = "core", return_dict: bool = False) -> Union[None, Dict]:
     """
     Get information about the IRW database or a specific table.
     
@@ -220,8 +238,8 @@ def info(table_name: Optional[str] = None, source: str = "main", return_dict: bo
     ----------
     table_name : str, optional
         If provided, returns info for that table. If None, returns database info.
-    source : str, default "main"
-        The data family: "main" (core), "nom", "sim", "comp" or "conj". For a
+    source : str, default "core"
+        The data family: "core", "nom", "sim", "comp" or "conj". For a
         table, its family's own metadata columns and bibliography are shown (R's
         ``irw_info(table, source = )``).
     return_dict : bool, default False
@@ -233,11 +251,12 @@ def info(table_name: Optional[str] = None, source: str = "main", return_dict: bo
         Database info prints and returns None.
         Table info prints and returns None (unless return_dict=True, then returns dict).
     """
+    source = normalize_source(source)
     if table_name is None:
         # Database info
         datasets = _get_datasets(source)
         title = {
-            "main": "IRW Database Information",
+            "core": "IRW Database Information",
             "sim": "IRW Simulation Database Information",
             "comp": "IRW Competition Database Information",
             "nom": "IRW Nominal Response Database Information",
@@ -272,7 +291,7 @@ def info(table_name: Optional[str] = None, source: str = "main", return_dict: bo
 
 def fetch(
     table_name: Union[str, List[str]], 
-    source: str = "main", 
+    source: str = "core", 
     *, 
     dedup: bool = False,
     wide: bool = False,
@@ -286,8 +305,8 @@ def fetch(
     ----------
     table_name : str or list of str
         Single table name or list of table names.
-    source : str, default "main"
-        The data family. Options: "main" (core), "sim", "comp", "nom", "conj", "rank".
+    source : str, default "core"
+        The data family. Options: "core", "sim", "comp", "nom", "conj", "rank".
         For "rank" ``resp`` is a position as recorded; see ``rank_compress()``.
     dedup : bool, default False
         Apply deduplication to responses.
@@ -323,6 +342,7 @@ def fetch(
     that collection's note and citation once per session per collection.
     Silence it with `disable_source_note()` or ``IRW_SOURCE_NOTE=0``.
     """
+    source = normalize_source(source)
     from .operations.fetch import _validate_pushdown
 
     max_rows, columns = _validate_pushdown(max_rows, columns)
@@ -390,7 +410,7 @@ def fetch(
 
 def table_sets(
     table_name: str,
-    source: str = "main",
+    source: str = "core",
     *,
     per_item: bool = False,
 ) -> Dict[str, object]:
@@ -409,8 +429,8 @@ def table_sets(
     ----------
     table_name : str
         Name of a single IRW table.
-    source : str, default "main"
-        The data family. Options: "main" (core), "sim", "comp", "nom", "conj", "rank".
+    source : str, default "core"
+        The data family. Options: "core", "sim", "comp", "nom", "conj", "rank".
         For "rank" ``resp`` is a position as recorded; see ``rank_compress()``.
     per_item : bool, default False
         If True, also return a per-item summary. One extra query; the result
@@ -450,6 +470,7 @@ def table_sets(
     >>> sets["resp"]
     >>> irw.table_sets("condon_2024_sapa_personality", per_item=True)["per_item"]
     """
+    source = normalize_source(source)
     datasets = _get_datasets(source)
     return _table_sets(datasets, table_name, source=source, per_item=per_item)
 
@@ -513,7 +534,7 @@ def itemtext(table_name: str) -> Union[pd.DataFrame, str]:
 def save_bibtex(
     table_names: Union[str, List[str]], 
     output_file: Optional[str] = None,
-    source: str = "main",
+    source: str = "core",
 ) -> List[str]:
     """
     Get/save BibTeX entries for one or more IRW tables.
@@ -533,8 +554,8 @@ def save_bibtex(
         Single table name or list of table names for which BibTeX entries are generated.
     output_file : str, optional
         File path to save BibTeX entries. If None, returns entries instead.
-    source : str, default "main"
-        The data family the tables are in: "main" (core), "nom", "sim",
+    source : str, default "core"
+        The data family the tables are in: "core", "nom", "sim",
         "comp" or "conj". Each family has its own bibliography, so a table is
         only found under its own family (as in R's ``irw_save_bibtex(source = )``).
         
@@ -558,6 +579,7 @@ def save_bibtex(
     """
     import re
     import urllib.request
+    source = normalize_source(source)
     from urllib.error import URLError
     
     # Normalize input to list
@@ -702,7 +724,7 @@ def download(table_name: str, path: Optional[str] = None, overwrite: bool = Fals
     from .utils.redivis.pins import IRWVersionUnavailable
 
     all_datasets = []
-    for source in ["main", "sim", "comp", "nom"]:
+    for source in ["core", "sim", "comp", "nom"]:
         try:
             datasets = _get_datasets(source)
         except IRWVersionUnavailable:
@@ -801,14 +823,14 @@ def long2resp(
     )
 
 
-def get_filters(source: str = "main") -> List[str]:
+def get_filters(source: str = "core") -> List[str]:
     """
     Get list of available filter parameter names.
 
     Parameters
     ----------
-    source : str, default "main"
-        The data family. Options: "main" (core), "nom", "sim", "comp". Filters
+    source : str, default "core"
+        The data family. Options: "core", "nom", "sim", "comp". Filters
         the family refuses outright are left out.
     
     Returns
@@ -822,10 +844,11 @@ def get_filters(source: str = "main") -> List[str]:
     >>> filters = irw.get_filters()
     >>> print(filters)  # ['n_responses', 'n_participants', ...]
     """
+    source = normalize_source(source)
     return _get_filters_func(source)
 
 
-def describe_filter(filter_name: str, source: str = "main") -> Optional[Dict]:
+def describe_filter(filter_name: str, source: str = "core") -> Optional[Dict]:
     """
     Describe a filter and show available values.
     
@@ -833,8 +856,8 @@ def describe_filter(filter_name: str, source: str = "main") -> Optional[Dict]:
     ----------
     filter_name : str
         Name of the filter to describe.
-    source : str, default "main"
-        The data family whose values to report. Options: "main" (core),
+    source : str, default "core"
+        The data family whose values to report. Options: "core",
         "nom", "sim", "comp". Raises ValueError for a filter the family refuses,
         e.g. a tag filter for "sim" or "comp".
         
@@ -843,6 +866,7 @@ def describe_filter(filter_name: str, source: str = "main") -> Optional[Dict]:
     dict or None
         Dictionary with 'description' and 'values', or None if not found.
     """
+    source = normalize_source(source)
     return _describe_filter(_get_datasets(source), filter_name, source)
 
 

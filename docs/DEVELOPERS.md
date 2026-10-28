@@ -94,11 +94,12 @@ metadata returns the older copy. Shadowed copies are a defect either way --
 Off under `IRW_SHARD_RESOLUTION=0`. The R twin is `Rpkg/R/shard-resolution.R`;
 keep the two in step.
 
-## Adding a main IRW Redivis warehouse
+## Adding a core IRW Redivis warehouse
 
-Main IRW response tables can span multiple Redivis datasets ("warehouses").
+Core IRW response tables can span multiple Redivis datasets ("warehouses").
 Within *this package*, adding another one (e.g. a 7th warehouse) means updating
-`MAIN_REFS` in `src/irw/config.py` and nothing else:
+`MAIN_REFS` in `src/irw/config.py` and nothing else (the constant keeps its
+historical name; the `source` value it serves is `"core"`):
 
 ```python
 MAIN_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
