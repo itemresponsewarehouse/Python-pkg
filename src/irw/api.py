@@ -63,12 +63,45 @@ from .utils.redivis.table_metadata import (
     get_collections_table as _get_collections_table,
     get_collection_members_table as _get_collection_members_table,
 )
+from .utils.redivis.auth import has_credentials as _has_credentials
 from .utils.table_helpers import (
     _get_table_info_dict,
     IRWTableNotFound,
     _get_table_itemtext,
     _format_table_info
 )
+
+
+def has_credentials() -> bool:
+    """
+    Whether irw can read from the warehouse without a browser login.
+
+    The Redivis Python SDK authenticates every request, so this client needs an
+    account even though IRW is public -- the R client reads public tables
+    anonymously and ``irw_has_credentials()`` there answers the same question.
+    Call this first in a script or CI job to skip work that would otherwise
+    stop: with no credential and no terminal to log in from, an irw call raises
+    ``IRWCredentialsUnavailable`` rather than waiting on a login nobody can
+    complete.
+
+    Returns
+    -------
+    bool
+        True if a ``REDIVIS_API_TOKEN`` is set or a usable cached login is
+        present.
+
+    Notes
+    -----
+    This reports that a credential is PRESENT, not that Redivis will accept it:
+    a True here and a 401 on the next call is possible. R has the same limit.
+
+    Examples
+    --------
+    >>> import irw
+    >>> if irw.has_credentials():
+    ...     df = irw.fetch("frac20")
+    """
+    return _has_credentials()
 
 
 def _get_datasets(source: str = "main"):

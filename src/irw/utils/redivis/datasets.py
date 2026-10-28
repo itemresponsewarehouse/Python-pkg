@@ -5,6 +5,7 @@ import os
 import time
 from typing import Any, List, Optional, Tuple
 from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, CONJ_REFS, RANK_REFS
+from .auth import require_credentials
 from .cache import metadata_cache
 from .shard_discovery import effective_refs, warn_if_extended
 from .pins import (
@@ -332,6 +333,12 @@ def _init_dataset(user: str, ds_ref: str) -> Any:
     pinned handle and a current one never share an entry, even within the
     version-tag TTL.
     """
+    # Opening a dataset is the first Redivis request any irw call makes, so
+    # this is the single point where a session with no usable credential has to
+    # be stopped. Left to the SDK it prints a device-authorization URL nobody is
+    # reading and polls for ten minutes (ben-domingue/irw#3221).
+    require_credentials()
+
     version = _pinned_version(ds_ref)
     if version == ABSENT:
         raise IRWVersionUnavailable(_absent_message(ds_ref))

@@ -70,6 +70,24 @@ it is reported upstream. If you want to read IRW without an account, use the R
 client, or download a table from its page on the
 [website](https://itemresponsewarehouse.org/) (under 100 MB needs no login).
 
+In a script, a cron job or a CI runner there is nobody to complete that browser
+login, so `irw` stops with an error naming what is missing rather than waiting
+on it. Ask first with `irw.has_credentials()`, which is R's
+`irw_has_credentials()` under another name:
+
+```python
+import irw
+
+if not irw.has_credentials():
+    raise SystemExit("set REDIVIS_API_TOKEN, or log in once interactively")
+df = irw.fetch("frac20")
+```
+
+It reports that a credential is present, not that Redivis will accept it, so a
+`True` followed by an authentication error is possible. To wait on the login
+anyway — a script being run by hand through a pipe, say — set
+`IRW_ALLOW_INTERACTIVE_LOGIN=1`.
+
 ## Usage Examples
 
 See the `examples/` directory:

@@ -42,6 +42,7 @@ from .utils.rank_compress import rank_compress
 
 # Export all API functions
 from .api import (
+    has_credentials,
     list_tables,
     metadata,
     filter,
@@ -82,15 +83,18 @@ from .api import (
     set_cache,
 )
 from .operations.list_tables import IRWMetadataUnavailable
+from .utils.redivis.auth import IRWCredentialsUnavailable
 from .utils.redivis.pins import IRWVersionUnavailable
 from .utils.redivis.table_metadata import CovariateLabelsUnavailable
 from .utils.table_helpers import IRWTableNotFound
 
 __all__ = [
+    "IRWCredentialsUnavailable",
     "IRWMetadataUnavailable",
     "IRWVersionUnavailable",
     "CovariateLabelsUnavailable",
     "IRWTableNotFound",
+    "has_credentials",
     "list_tables",
     "metadata",
     "filter",
