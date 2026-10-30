@@ -31,6 +31,9 @@ dependencies = [
     # Imported directly by the on-disk table cache. redivis already requires
     # it; declared so the cache does not depend on that staying true.
     "pyarrow",
+    # Imported by irw.mcp for public downloads. redivis supplied it until
+    # 0.22.0 swapped requests for niquests; declared so the import survives.
+    "requests",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

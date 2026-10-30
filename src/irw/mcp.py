@@ -905,7 +905,7 @@ def _bound_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _http_get_text(url: str) -> str:
-    """Fetch a public text resource. `requests` is a dependency of redivis."""
+    """Fetch a public text resource. `requests` is declared in pyproject.toml."""
     import requests
 
     import time

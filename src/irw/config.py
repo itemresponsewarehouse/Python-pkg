@@ -73,6 +73,7 @@ ITEMTEXT_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "irw_text:07b6"),
     ("datapages", "irw_text_2:ae47"),
     ("datapages", "irw_text_3:9g4m"),
+    ("datapages", "irw_text_4:ez5r"),
 )
 
 # Main IRW metadata table references.
