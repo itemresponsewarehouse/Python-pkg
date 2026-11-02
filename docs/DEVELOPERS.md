@@ -172,12 +172,14 @@ not anything here.
 
 The rankings source (`source="rank"`, `RANK_REFS`) was registered as a shard
 list from day one (October 2026, ben-domingue/irw#3024): FairVote's cast vote
-records alone are 657 contests, so the 1000-table cap is a matter of time. One
-shard, `irw_rank:93f5` (the dataset's display name on Redivis is `IRW_rank`; the
-reference id is what resolves it). `_init_rank_datasets()` has the shape and
-trap of `_init_conj_datasets()` above, and the checklist is the conjoint one with
-`irw_rank_2`, `.irw_datasource_specs$rank`, `IRW_RANK_DATASETS`, `RANK_DEFAULT`
-and `18_rankings.R` in place of their conjoint twins. Rankings tables do have
+records alone are 657 contests, and they took the family past the 1000-table
+cap on 2026-11-01: `irw_rank_2:byyj` (display name `IRW_rank 2`) was added
+beside `irw_rank:93f5` (`IRW_rank`), with `irw_rank` held at about 950 tables
+and new tables going to `irw_rank_2`. The reference id is what resolves each.
+`_init_rank_datasets()` has the shape and trap of `_init_conj_datasets()` above,
+and the checklist is the conjoint one with `irw_rank_3`,
+`.irw_datasource_specs$rank`, `IRW_RANK_DATASETS`, `RANK_DEFAULT` and
+`18_rankings.R` in place of their conjoint twins. Rankings tables do have
 `id`/`item`/`resp`, so the core helpers (`long2resp`, `table_sets`) read them;
 what they need first is `rank_compress()`, and `fetch(dedup=True)` skips them
 because duplicate marks are data.

@@ -52,13 +52,15 @@ CONJ_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
 # (see rank_compress()). irw_meta publishes rank_metadata (counts plus the
 # design record per table) and rank_biblio.
 #
-# A shard list from day one, oldest-to-newest, searched newest-first: the
-# family will pass Redivis' 1000-table cap (FairVote alone is 657 contests).
-# The dataset's display name on Redivis is IRW_rank; the reference id resolves
-# it. Append the next shard only once it has a PUBLISHED release, and in Rpkg
+# A shard list, oldest-to-newest, searched newest-first: FairVote's cast vote
+# records took the family past Redivis' 1000-table cap, so irw_rank_2 was added
+# on 2026-11-01 with irw_rank held at ~950 tables. The datasets' display names
+# on Redivis are IRW_rank and IRW_rank 2; the reference id resolves each.
+# Append the next shard only once it has a PUBLISHED release, and in Rpkg
 # and ben-domingue/irw too (docs/DEVELOPERS.md, "Adding a rankings shard").
 RANK_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "irw_rank:93f5"),
+    ("datapages", "irw_rank_2:byyj"),
 )
 
 # Main IRW metadata dataset references (only for main IRW)
@@ -162,7 +164,7 @@ PACKAGE_NAME: str = "irw"
 # above happen for real (#125). A release PR replaces the suffix with the
 # number being published; `.github/scripts/check_unpublished_version.py`
 # enforces the invariant on every PR.
-VERSION: str = "0.8.0.dev0"
+VERSION: str = "0.8.0.dev1"
 DESCRIPTION: str = "A Python package for the Item Response Warehouse (IRW)"
 
 __all__ = [
