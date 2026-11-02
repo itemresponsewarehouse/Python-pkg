@@ -19,7 +19,12 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # ubuntu-24.04, not ubuntu-latest: on 2026-11-02 ubuntu-latest became 26.04,
+    # where actions/setup-python has no 3.9 build, and the 3.9 jobs failed on
+    # every PR. pyproject still declares requires-python >= 3.9, so 3.9 stays
+    # in the matrix and the runner is pinned to a release that carries it.
+    # Revisit when the floor moves to 3.10.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -81,7 +86,8 @@ jobs:
       - run: python -m pytest tests/ -q
 
   import:
-    runs-on: ubuntu-latest
+    # Pinned for the same reason as `test` above: 3.9 is in this matrix too.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
