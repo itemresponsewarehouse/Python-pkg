@@ -31,7 +31,10 @@ def clear_cache():
 
 def test_rank_refs_match_the_r_package_spec():
     """Rpkg/R/redivis-config.R: .irw_datasource_specs$rank, oldest to newest."""
-    assert RANK_REFS[0] == ("datapages", "irw_rank:93f5")
+    assert RANK_REFS == (
+        ("datapages", "irw_rank:93f5"),
+        ("datapages", "irw_rank_2:byyj"),
+    )
     assert all(ref.startswith("irw_rank") for _user, ref in RANK_REFS)
     assert "rank" in SOURCES
 
