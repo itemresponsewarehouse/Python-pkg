@@ -164,7 +164,7 @@ PACKAGE_NAME: str = "irw"
 # above happen for real (#125). A release PR replaces the suffix with the
 # number being published; `.github/scripts/check_unpublished_version.py`
 # enforces the invariant on every PR.
-VERSION: str = "0.8.0.dev1"
+VERSION: str = "0.8.0"
 DESCRIPTION: str = "A Python package for the Item Response Warehouse (IRW)"
 
 __all__ = [
