@@ -99,7 +99,7 @@ Example workflow:
 import irw
 
 # Get database information
-irw.info()
+irw.info()  # Every data family, with totals
 
 # View available tables
 tables = irw.list_tables()

@@ -41,7 +41,7 @@ from .utils.long2resp import check_resp as check_resp, resp2long as resp2long
 from .operations.fetch import fetch as _fetch
 from .operations.table_sets import table_sets as _table_sets
 from .operations.list_tables import list_tables as _list_tables, list_tables_basic
-from .operations.info import info_for
+from .operations.info import info_all_families, info_for
 from .operations.filter import filter_tables
 from .operations.filter_info import get_filters as _get_filters_func, describe_filter as _describe_filter
 from .operations.version import (
@@ -230,7 +230,7 @@ def filter(*, source: str = "core", **kwargs) -> pd.Series:
     return filter_tables(datasets, source=source, **kwargs)
 
 
-def info(table_name: Optional[str] = None, source: str = "core", return_dict: bool = False) -> Union[None, Dict]:
+def info(table_name: Optional[str] = None, source: Optional[str] = None, return_dict: bool = False) -> Union[None, Dict]:
     """
     Get information about the IRW database or a specific table.
     
@@ -238,10 +238,12 @@ def info(table_name: Optional[str] = None, source: str = "core", return_dict: bo
     ----------
     table_name : str, optional
         If provided, returns info for that table. If None, returns database info.
-    source : str, default "core"
-        The data family: "core", "nom", "sim", "comp" or "conj". For a
-        table, its family's own metadata columns and bibliography are shown (R's
-        ``irw_info(table, source = )``).
+    source : str, optional
+        The data family: "core", "nom", "sim", "comp", "conj" or "rank". With
+        no table_name, omitting it reports every family with totals across
+        them, and naming one reports that family alone. A table is looked up
+        in core unless a family is named; its family's own metadata columns
+        and bibliography are shown (R's ``irw_info(table, source = )``).
     return_dict : bool, default False
         If True and table_name provided, returns dictionary instead of formatted string.
         
@@ -251,7 +253,9 @@ def info(table_name: Optional[str] = None, source: str = "core", return_dict: bo
         Database info prints and returns None.
         Table info prints and returns None (unless return_dict=True, then returns dict).
     """
-    source = normalize_source(source)
+    if table_name is None and source is None:
+        return info_all_families(_get_datasets)
+    source = normalize_source("core" if source is None else source)
     if table_name is None:
         # Database info
         datasets = _get_datasets(source)
