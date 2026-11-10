@@ -24,6 +24,7 @@ MAIN_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "item_response_warehouse_6:fpe6"),
     ("datapages", "item_response_warehouse_7:ej0d"),
     ("datapages", "item_response_warehouse_8:8b1m"),
+    ("datapages", "item_response_warehouse_9:7e99"),
 )
 SIM_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_simsyn:0btg")
 COMP_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_competitions:cmd7")
