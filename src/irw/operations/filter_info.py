@@ -57,6 +57,7 @@ FILTER_DESCRIPTIONS = {
     'country': 'Country a conjoint table was fielded in, as ISO 3166 alpha-2 codes (e.g. "US"). Conjoint source only (source="conj"). A single string or a list (OR logic); a table pooling several countries matches each.',
     'domain': 'What a conjoint study is about: its setting, not the attribute it manipulates (a candidate conjoint that varies gender is "candidate_choice", not a gender tag). Conjoint source only (source="conj"). Closed vocabulary of 19 values, e.g. "immigration_asylum", "candidate_choice", "health_covid", "consumer_products", "other"; describe_filter lists them with counts. A table carries one or more domains (primary first) and matches when any value named is among them. A single string or a list (OR logic). Every conjoint table is tagged.',
     'choice_object': 'What one profile in a conjoint table represents: "person" (candidate, applicant, patient, neighbour), "policy", "scenario" (a situation or case), "product_service", "place", "organisation" or "message" (a text or media artefact judged as such). Conjoint source only (source="conj"). One value per table; a single string or a list (OR logic).',
+    'levels_labelled': 'Whether a conjoint table\'s attribute levels are the text respondents saw: "full" (every attribute is text), "partial" (some attributes hold only the deposit\'s codes, in columns named attr_<name>_code, because no source gives their text) or "none" (every attribute coded). Codes say which profiles share a level -- enough for position, order and heterogeneity analyses and effects within a table -- but not what a level was, so they do not compare across tables. Conjoint source only (source="conj"). A single string or a list (OR logic); omit it to keep every table.',
 }
 
 
@@ -241,9 +242,9 @@ def describe_filter(datasets: List, filter_name: str, source: str = "core") -> O
         }
         return result
     
-    # Conjoint outcome/country/domain/choice_object: tables per value, from
-    # conj_metadata. A ";"-joined cell counts once for each value it holds.
-    if filter_name in ('outcome', 'country', 'domain', 'choice_object'):
+    # Conjoint outcome/country/domain/choice_object/levels_labelled: tables per
+    # value, from conj_metadata. A ";"-joined cell counts once for each value it holds.
+    if filter_name in ('outcome', 'country', 'domain', 'choice_object', 'levels_labelled'):
         meta = get_metadata_table(source)
         col = 'outcomes' if filter_name == 'outcome' else filter_name
         if meta.empty or col not in meta.columns:

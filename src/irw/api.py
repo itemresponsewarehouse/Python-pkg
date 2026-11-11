@@ -208,7 +208,7 @@ def filter(*, source: str = "core", **kwargs) -> pd.Series:
         Tag filters need "core" or "nom"; `collection` needs "core"; "comp"
         takes only `n_responses`, `n_actors` and `license`; "conj" takes only
         `n_respondents`, `n_attributes`, `outcome`, `country`, `domain`,
-        `choice_object` and `license`. A filter the
+        `choice_object`, `levels_labelled` and `license`. A filter the
         source cannot answer raises ValueError rather than matching nothing.
     **kwargs
         Filter parameters (n_responses, construct_type, etc.). See

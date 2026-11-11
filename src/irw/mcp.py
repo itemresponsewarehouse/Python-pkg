@@ -1769,7 +1769,11 @@ class IRWTools:
                     "profile represents). They are judgement calls from the "
                     "study descriptions, so a borderline study may sit under a "
                     "neighbouring domain; try the neighbour before concluding "
-                    "there is no data.")
+                    "there is no data. Some conjoint tables hold an attribute "
+                    "only as the deposit's codes (columns attr_<name>_code): "
+                    "fine for within-table structure, not comparable across "
+                    "tables; `levels_labelled` (\"full\", \"partial\", "
+                    "\"none\") filters on it.")
         elif n_untagged is not None and n_total:
             caveats.append(
                 f"Tags are human-added and incomplete: {n_untagged} of "

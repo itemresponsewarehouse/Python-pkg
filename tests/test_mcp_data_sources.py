@@ -52,7 +52,7 @@ class SourcedBackend(FakeBackend):
     # The conj filter list is the package's (irw.get_filters("conj")); its
     # filtering is irw.filter(source="conj", ...), stood in for here.
     CONJ_FILTERS = ["license", "n_respondents", "n_attributes", "outcome", "country",
-                    "domain", "choice_object"]
+                    "domain", "choice_object", "levels_labelled"]
 
     def filter_names(self, source="core"):
         self.calls.append(("filter_names", source))
