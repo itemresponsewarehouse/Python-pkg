@@ -128,7 +128,8 @@ def _fake_conj(monkeypatch):
         "country": ["US", "AT;DE;GB", "GB", "TR"],
         "domain": ["candidate_choice", "immigration_asylum", "health_covid;consumer_products",
                    "social_identity_interpersonal"],
-        "choice_object": ["person", "person", "product_service", "person"]})
+        "choice_object": ["person", "person", "product_service", "person"],
+        "levels_labelled": ["full", "partial", "full", "none"]})
     bib = pd.DataFrame({"table": list(meta.table),
                         "Derived_License": ["CC0 1.0", "CC0 1.0", "CC BY 4.0", "CC0 1.0"]})
     monkeypatch.setattr(tm, "get_metadata_table", lambda source="core": meta)
@@ -188,6 +189,28 @@ def test_conj_topic_tag_filters_explain_an_old_release(monkeypatch):
     assert list(filter_tables([], source="conj", country="US")) == ["a_us_choice"]
 
 
+def test_conj_levels_labelled_filter(monkeypatch):
+    """ben-domingue/irw#3474: coded attributes (attr_<name>_code) and the filter that finds them."""
+    from irw.operations.filter import filter_tables
+    from irw.operations.list_tables import IRWMetadataUnavailable
+    import irw.utils.redivis.table_metadata as tm
+    _fake_conj(monkeypatch)
+
+    def f(**kw):
+        return list(filter_tables([], source="conj", **kw))
+
+    assert f(levels_labelled="full") == ["a_us_choice", "c_gb_rating"]
+    assert f(levels_labelled=["partial", "NONE"]) == ["b_pooled_both", "d_named"]
+    assert f(levels_labelled="full", outcome="choice") == ["a_us_choice"]
+    with pytest.raises(ValueError, match="full"):
+        f(levels_labelled="text")
+    old = tm.get_metadata_table("conj").drop(columns=["levels_labelled"])
+    monkeypatch.setattr(tm, "get_metadata_table", lambda source="core": old)
+    with pytest.raises(IRWMetadataUnavailable, match="no 'levels_labelled' column"):
+        f(levels_labelled="full")
+    assert f(country="US") == ["a_us_choice"]
+
+
 def test_describe_filter_counts_conj_topic_tags(monkeypatch):
     from irw.operations import filter_info
     import irw.utils.redivis.table_metadata as tm
@@ -200,6 +223,8 @@ def test_describe_filter_counts_conj_topic_tags(monkeypatch):
                             "immigration_asylum": 1, "social_identity_interpersonal": 1}
     obj = filter_info.describe_filter([], "choice_object", source="conj")["values"]
     assert dict(obj) == {"person": 3, "product_service": 1}
+    lab = filter_info.describe_filter([], "levels_labelled", source="conj")["values"]
+    assert dict(lab) == {"full": 2, "partial": 1, "none": 1}
 
 
 def test_conj_and_other_filters_do_not_cross():
@@ -215,7 +240,9 @@ def test_conj_and_other_filters_do_not_cross():
         _check_filters_for_source("core", {"domain": "health_covid"})
     _check_filters_for_source("conj", {"country": "US", "license": "CC0 1.0"})
     assert get_filters("conj") == ["license", "n_respondents", "n_attributes", "outcome", "country",
-                                   "domain", "choice_object"]
+                                   "domain", "choice_object", "levels_labelled"]
+    with pytest.raises(ValueError, match="only available when source='conj'"):
+        _check_filters_for_source("core", {"levels_labelled": "full"})
     assert "country" not in get_filters("core") and "outcome" not in get_filters("nom")
     assert "domain" not in get_filters("core") and "choice_object" not in get_filters("comp")
 

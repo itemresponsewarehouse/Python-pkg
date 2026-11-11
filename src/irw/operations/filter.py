@@ -45,10 +45,14 @@ COMP_ONLY_FILTERS = ('n_actors',)
 # carries is an error naming the values in use, since an empty result would
 # read as an absence of data.
 # ISO codes (fielded in ANY; a pooled "AT;DE;GB" counts for each); license.
+# levels_labelled: "full" / "partial" / "none", whether attributes hold the
+# displayed level text or, as attr_<name>_code, only the deposit's codes (irw
+# repo data/conjoint/README.md, "Coded attributes"; ben-domingue/irw#3474).
 CONJ_FILTERS = ('n_respondents', 'n_attributes', 'outcome', 'country',
-                'domain', 'choice_object', 'license')
+                'domain', 'choice_object', 'levels_labelled', 'license')
 CONJ_ONLY_FILTERS = ('n_respondents', 'n_attributes', 'outcome', 'country',
-                     'domain', 'choice_object')
+                     'domain', 'choice_object', 'levels_labelled')
+CONJ_LEVELS_LABELLED = ('full', 'partial', 'none')
 CONJ_TAG_FILTERS = ('domain', 'choice_object')
 CONJ_OUTCOMES = ('choice', 'rating')
 
@@ -368,6 +372,7 @@ def filter_tables(
     country: Optional[Union[str, List[str]]] = None,
     domain: Optional[Union[str, List[str]]] = None,
     choice_object: Optional[Union[str, List[str]]] = None,
+    levels_labelled: Optional[Union[str, List[str]]] = None,
     source: str = "core",
 ) -> pd.Series:
     """
@@ -547,10 +552,21 @@ def filter_tables(
         situation or case), product_service, place, organisation or message (a
         text or media artefact judged as such). Any value named matches.
 
+    levels_labelled : str or list of str, optional
+        Conjoint only: whether a table's attribute levels are the text
+        respondents saw. "full": every attribute holds displayed text.
+        "partial": some attributes hold only the deposit's codes, in columns
+        named attr_<name>_code, because no source gives their text. "none":
+        every attribute is coded. Codes say which profiles share a level
+        (enough for position, task-order and heterogeneity analyses and for
+        effects within a table) but not what a level was, so they cannot be
+        compared across tables. Any value named matches; None keeps every
+        table. Pass "full" for tables whose levels are all text.
+
     source : str, default "core"
         Table source: "core", "nom", "sim", "comp" or "conj". "conj" takes only
-        n_respondents, n_attributes, outcome, country, domain, choice_object
-        and license. The two tag columns are defined in the irw repo's
+        n_respondents, n_attributes, outcome, country, domain, choice_object,
+        levels_labelled and license. The two tag columns are defined in the irw repo's
         data/conjoint/README.md ("Topic tags").
 
     Returns
@@ -595,6 +611,7 @@ def filter_tables(
     >>> immigration = irw.filter(source="conj", domain="immigration_asylum")
     >>> candidates = irw.filter(source="conj", domain=["candidate_choice", "parties_platforms"],
     ...                         choice_object="person")
+    >>> text_levels = irw.filter(source="conj", levels_labelled="full")
     """
     params = dict(locals())
     supplied = {
@@ -616,7 +633,8 @@ def filter_tables(
     if source == 'conj':
         return _filter_conj(n_respondents=n_respondents, n_attributes=n_attributes,
                             outcome=outcome, country=country,
-                            domain=domain, choice_object=choice_object, license=license)
+                            domain=domain, choice_object=choice_object,
+                            levels_labelled=levels_labelled, license=license)
 
     # Get all tables with metadata
     df = list_tables(datasets, source=source)
@@ -764,7 +782,8 @@ def _filter_conj_tag(meta: pd.DataFrame, full: pd.DataFrame, column: str, value)
 
 
 def _filter_conj(n_respondents=None, n_attributes=None, outcome=None, country=None,
-                 domain=None, choice_object=None, license=None) -> pd.Series:
+                 domain=None, choice_object=None, levels_labelled=None,
+                 license=None) -> pd.Series:
     """filter(source="conj"): the conjoint filters over conj_metadata and conj_biblio."""
     from ..utils.redivis.table_metadata import get_biblio_table, get_metadata_table
 
@@ -783,6 +802,19 @@ def _filter_conj(n_respondents=None, n_attributes=None, outcome=None, country=No
                 f"The conjoint metadata in this irw_meta release has no '{column}' column; "
                 "topic tags were published on 2026-10-13. Use a newer release (irw.use_version).")
         meta = _filter_conj_tag(meta, full, column, value)
+
+    if levels_labelled is not None:
+        wanted = [str(v).strip().lower() for v in _as_list(levels_labelled)]
+        bad = [v for v in wanted if v not in CONJ_LEVELS_LABELLED]
+        if bad or not wanted:
+            raise ValueError("levels_labelled must be one or more of 'full', 'partial', 'none'"
+                             + (f", not: {', '.join(bad)}." if bad else "."))
+        if "levels_labelled" not in meta.columns:
+            raise IRWMetadataUnavailable(
+                "The conjoint metadata in this irw_meta release has no 'levels_labelled' column; "
+                "it was added for coded attributes (ben-domingue/irw#3474). "
+                "Use a newer release (irw.use_version).")
+        meta = meta[meta["levels_labelled"].fillna("").str.lower().isin(wanted)]
 
     if license is not None:
         bib = get_biblio_table("conj")
