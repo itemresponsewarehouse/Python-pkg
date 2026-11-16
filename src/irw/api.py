@@ -178,7 +178,9 @@ def metadata(source: str = "core") -> pd.DataFrame:
     source : str, default "core"
         The data family: "core", "nom", "sim", "comp", "conj" or "rank".
         For "rank" a row is one rankings table: the counts (``n_respondents``,
-        ``n_rows``, ``n_tasks``, ``n_items``, ``max_resp``, ``n_duplicate_marks``)
+        ``n_rows``, ``n_tasks``, ``n_items``, ``max_resp``, ``n_duplicate_marks``,
+        ``n_tied_ballots``: rankings with two items at one position, see
+        ``rank_compress()``)
         and the design record (``method``, ``seats``, ``n_positions``,
         ``n_candidates``, ``n_ballots_cast``, ``n_ballots_with_marks``, ...).
 
