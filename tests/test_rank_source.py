@@ -187,6 +187,36 @@ def test_rank_compress_without_task_and_on_a_clean_ballot():
     assert "task" not in out.columns
 
 
+def test_rank_compress_raises_on_a_tie_by_default_and_names_the_count():
+    d = _fixture("rank_fixture_ties.csv")
+    with pytest.raises(ValueError, match="^2 rankings have a tie"):
+        irw.rank_compress(d)
+    # without dropping repeats, ballot 2's second c02 mark ties with c01
+    with pytest.raises(ValueError, match="^3 rankings have a tie"):
+        irw.rank_compress(d, drop_repeats=False)
+    with pytest.raises(ValueError, match="^1 ranking has a tie"):
+        irw.rank_compress(d[d.id == 1])
+    with pytest.raises(ValueError, match="must be"):
+        irw.rank_compress(d, ties="break")
+
+
+def test_rank_compress_ties_keep_gives_tied_items_one_dense_position():
+    d = _fixture("rank_fixture_ties.csv")
+    out = irw.rank_compress(d, ties="keep")
+    pd.testing.assert_frame_equal(out, _fixture("rank_fixture_ties_keep.csv"), check_dtype=False)
+    assert pd.api.types.is_integer_dtype(out["resp"])
+    out2 = irw.rank_compress(d, drop_repeats=False, ties="keep")
+    pd.testing.assert_frame_equal(out2, _fixture("rank_fixture_ties_keep_repeats.csv"), check_dtype=False)
+
+
+def test_rank_compress_does_not_depend_on_input_row_order():
+    d = _fixture("rank_fixture_ties.csv")
+    pd.testing.assert_frame_equal(irw.rank_compress(d.iloc[::-1], ties="keep"),
+                                  irw.rank_compress(d, ties="keep"))
+    f = _fixture("rank_fixture.csv")
+    pd.testing.assert_frame_equal(irw.rank_compress(f.iloc[::-1]), irw.rank_compress(f))
+
+
 def test_rank_compress_refuses_what_is_not_a_rankings_table():
     with pytest.raises(ValueError, match="missing resp"):
         irw.rank_compress(pd.DataFrame({"id": [1], "item": ["a"]}))

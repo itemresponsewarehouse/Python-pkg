@@ -155,7 +155,7 @@ irw.save_bibtex("amboseli_baboons_g1", source="comp")  # any source: core, nom, 
 irw.metadata(source="conj")  # design counts, facts and topic tags per conjoint experiment
 irw.filter(source="conj", domain="immigration_asylum")  # the immigration conjoints; see describe_filter("domain", source="conj")
 irw.metadata(source="rank")  # rankings tables (ranked-choice ballots, jury rankings): counts and the design record per table
-irw.rank_compress(irw.fetch("eurovision_2016_final", source="rank"))  # positions renumbered 1..k per ranking, later repeat marks dropped
+irw.rank_compress(irw.fetch("eurovision_2016_final", source="rank"))  # positions renumbered 1..k per ranking, later repeat marks dropped; ties="keep" for tables with ties
 # Download table
 irw.download("agn_kay_2025", path="data.csv")
 
