@@ -62,7 +62,13 @@ def test_a_table_is_not_found_under_another_source(monkeypatch):
 
 
 def test_every_source_has_a_biblio_table():
+    # cov is registered before its cov_biblio is published; it must refuse,
+    # not borrow another source's table.
     for source in SOURCES:
+        if source == "cov":
+            with pytest.raises(ValueError, match="not available"):
+                tm._meta_table(source, "biblio")
+            continue
         assert tm._meta_table(source, "biblio")
 
 

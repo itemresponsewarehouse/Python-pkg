@@ -13,6 +13,7 @@ from ..utils.redivis import _init_main_datasets
 _FAMILY_LABELS = {
     "core": "Core", "nom": "Nominal", "sim": "Simsyn",
     "comp": "Competitions", "conj": "Conjoint", "rank": "Rankings",
+    "cov": "Covariance",
 }
 
 

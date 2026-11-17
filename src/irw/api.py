@@ -30,7 +30,7 @@ import datetime
 from typing import Any, Mapping, Optional, Union, Dict, List, Literal, Tuple
 import pandas as pd
 from .config import SOURCES, normalize_source
-from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_datasets, _init_rank_datasets
+from .utils.redivis import _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_datasets, _init_rank_datasets, _init_cov_dataset
 from .utils.redivis.item_text import (
     _list_itemtext_tables, _itemtext_disclaimer, _itemtext_licence_notice,
     itemtext_licence as itemtext_licence,
@@ -130,6 +130,8 @@ def _get_datasets(source: str = "core"):
         return _init_conj_datasets()
     elif source == "rank":
         return _init_rank_datasets()
+    elif source == "cov":
+        return [_init_cov_dataset()]
     else:
         raise ValueError(
             f"Unknown source '{source}'. Must be one of: "
@@ -268,6 +270,7 @@ def info(table_name: Optional[str] = None, source: Optional[str] = None, return_
             "nom": "IRW Nominal Response Database Information",
             "conj": "IRW Conjoint Database Information",
             "rank": "IRW Rankings Database Information",
+            "cov": "IRW Covariance Database Information",
         }.get(source, "IRW Database Information")
         return info_for(datasets, title=title)
     else:
@@ -357,9 +360,9 @@ def fetch(
     that collection's note and citation once per session per collection.
     Silence it with `disable_source_note()` or ``IRW_SOURCE_NOTE=0``.
     """
-    # source="cov" on an IRW table computes its item matrix (cov_compute()).
-    # Derived matrices are never stored in the IRW; published matrices will live
-    # in irw_cov once that dataset is released, and are not reachable yet.
+    # source="cov": a published matrix in irw_cov comes back as published; any
+    # other name is a core table whose item matrix is computed (cov_compute()).
+    # Derived matrices are never stored in the IRW (Ben, 2026-11-17).
     if source == "cov":
         if wide:
             raise ValueError('wide=True and source="cov" ask for two different things.')
@@ -369,14 +372,26 @@ def fetch(
         if cov_args is not None and not isinstance(cov_args, dict):
             raise ValueError('cov_args must be a dict, e.g. {"method": "polychoric"}.')
         from .utils.cov import cov_compute
-        # Only id/item/resp are needed, so only they are exported -- unless
-        # dedup, which groups on wave and date.
-        got = fetch(table_name, "core", dedup=dedup,
-                    columns=None if dedup else ["id", "item", "resp"])
-        if isinstance(got, pd.DataFrame):
-            return cov_compute(got, table=table_name, **(cov_args or {}))
-        return {k: (None if v is None else cov_compute(v, table=k, **(cov_args or {})))
-                for k, v in got.items()}
+        published = _cov_published_names()
+        names = [table_name] if isinstance(table_name, str) else list(table_name)
+
+        def one(name):
+            if name in published:
+                if cov_args:
+                    warnings.warn(f"'{name}' is a published matrix; cov_args is ignored.",
+                                  UserWarning, stacklevel=3)
+                got = _fetch(_get_datasets("cov"), name)
+                if got is not None:
+                    _source_note([name], "cov")
+                return got
+            # Only id/item/resp are needed, so only they are exported -- unless
+            # dedup, which groups on wave and date.
+            got = fetch(name, "core", dedup=dedup, columns=None if dedup else ["id", "item", "resp"])
+            return None if got is None else cov_compute(got, table=name, **(cov_args or {}))
+
+        if isinstance(table_name, str):
+            return one(table_name)
+        return {name: one(name) for name in names}
     source = normalize_source(source)
     from .operations.fetch import _validate_pushdown
 
@@ -1144,3 +1159,11 @@ def version(
     >>> irw.version("2026-08-01")         # doctest: +SKIP
     """
     return _version(date, version=version)
+
+
+def _cov_published_names() -> set:
+    """Names of the published matrices in irw_cov (empty if it cannot be listed)."""
+    try:
+        return set(list_tables_basic(_get_datasets("cov"))["name"])
+    except Exception:
+        return set()
