@@ -49,7 +49,7 @@ def _check_source(source: str) -> Dict[str, str]:
             + ", ".join(f"'{s}'" for s in SOURCES)
         )
     if source not in SOURCE_META_TABLES:
-        # cov: no cov_metadata / cov_biblio in irw_meta yet. Refuse rather than
+        # A registered source with nothing in irw_meta. Refuse rather than
         # answer with another source's rows.
         raise ValueError(
             f"Metadata and bibliography are not available for source '{source}' yet: they are "
