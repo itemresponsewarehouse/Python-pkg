@@ -64,6 +64,14 @@ RANK_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
     ("datapages", "irw_rank_2:byyj"),
 )
 
+# Covariance matrices: published correlation and covariance matrices, one row
+# per cell of the lower triangle (see cov2matrix()). One dataset; display name
+# "IRW cov" on Redivis, first released 2026-11-17. Matrices computed from IRW
+# tables are never stored there: fetch(source="cov") computes them
+# (cov_compute()). irw_meta has no cov_metadata or cov_biblio yet, so the
+# source is absent from SOURCE_META_TABLES and metadata calls for it refuse.
+COV_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_cov:4e2q")
+
 # Main IRW metadata dataset references (only for main IRW)
 META_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_meta:bdxt")
 
@@ -107,7 +115,7 @@ META_TABLES: ClassVar[dict[str, str]] = {
 # The table sources. "core" is the spelling both clients and the site use
 # (Rpkg's .irw_sources, overview.qmd's `source =` column); Python said "main"
 # until #138, so "main" lives on in SOURCE_ALIASES as a working alias.
-SOURCES: Tuple[str, ...] = ("core", "nom", "sim", "comp", "conj", "rank")
+SOURCES: Tuple[str, ...] = ("core", "nom", "sim", "comp", "conj", "rank", "cov")
 
 # Accepted spellings that are not canonical, mapped to the canonical one.
 # normalize_source() resolves these ONCE, at the public API boundary; nothing
@@ -175,6 +183,7 @@ __all__ = [
     "NOM_REF",
     "CONJ_REFS",
     "RANK_REFS",
+    "COV_REF",
     "META_REF",
     "ITEMTEXT_REFS",
     "META_TABLES",

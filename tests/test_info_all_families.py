@@ -19,6 +19,7 @@ FAMILIES = {
     "core": [ds(10), ds(5, created=5e11)],
     "nom": [ds(3)], "sim": [ds(2)], "comp": [ds(4)],
     "conj": [ds(6), ds(1)], "rank": [ds(7, updated=3e12)],
+    "cov": [ds(2)],
 }
 
 
@@ -39,8 +40,8 @@ def test_bare_info_reports_every_family_and_a_grand_total(opened, capsys):
     assert "All Families" in out
     assert "Core           core           15        2.00 GB" in out
     assert "Rankings       rank            7        1.00 GB" in out
-    assert "Total Table Count:        38\n" in out
-    assert "Total Data Size:          8.00 GB" in out
+    assert "Total Table Count:        40\n" in out
+    assert "Total Data Size:          9.00 GB" in out
 
 
 def test_naming_a_source_reports_that_family_alone(opened, capsys):
@@ -66,7 +67,7 @@ def test_an_unavailable_family_is_shown_not_silently_dropped(monkeypatch, capsys
         irw.info()
     out = capsys.readouterr().out
     assert "conj" in out and "unavailable" in out
-    assert "Total (available only):   31\n" in out
+    assert "Total (available only):   33\n" in out
 
 
 def test_no_family_available_raises_the_original_error(monkeypatch, recwarn):

@@ -4,7 +4,7 @@ import logging
 import os
 import time
 from typing import Any, List, Optional, Tuple
-from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, CONJ_REFS, RANK_REFS
+from ...config import MAIN_REFS, SIM_REF, COMP_REF, NOM_REF, CONJ_REFS, RANK_REFS, COV_REF
 from .auth import require_credentials
 from .cache import metadata_cache
 from .shard_discovery import effective_refs, warn_if_extended
@@ -444,6 +444,19 @@ def _init_nom_dataset() -> Any:
     
     warn_if_extended(NOM_REF, "nominal dataset")
     dataset = _init_dataset(*NOM_REF)
+    metadata_cache.set(cache_key, dataset)
+    return dataset
+
+
+def _init_cov_dataset() -> Any:
+    """Initialize the covariance-matrix dataset (cached)."""
+    cache_key = "cov_dataset" + _pins_fingerprint([COV_REF])
+    cached = metadata_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    warn_if_extended(COV_REF, "covariance dataset")
+    dataset = _init_dataset(*COV_REF)
     metadata_cache.set(cache_key, dataset)
     return dataset
 

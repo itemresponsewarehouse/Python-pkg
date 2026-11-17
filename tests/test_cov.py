@@ -129,6 +129,7 @@ def test_fetch_cov_asks_core_for_id_item_resp_and_computes():
 
     with patch("irw.api._get_datasets", return_value=[]) as gd, \
             patch("irw.api._fetch", side_effect=fake_fetch), \
+            patch("irw.api._cov_published_names", return_value=set()), \
             patch("irw.api._source_note"):
         out = irw.fetch("toy_table", source="cov", cov_args={"method": "spearman"})
     assert gd.call_args[0][0] == "core"
@@ -138,3 +139,34 @@ def test_fetch_cov_asks_core_for_id_item_resp_and_computes():
         irw.fetch("toy_table", source="cov", max_rows=10)
     with pytest.raises(ValueError, match="two different things"):
         irw.fetch("toy_table", source="cov", wide=True)
+
+
+def test_cov_is_a_registered_source_with_one_dataset():
+    from irw.config import COV_REF, SOURCES
+    assert "cov" in SOURCES
+    assert COV_REF == ("datapages", "irw_cov:4e2q")
+
+
+def test_a_published_matrix_is_returned_as_published():
+    pub = pd.DataFrame({"stat": "cor", "var1": ["a", "b", "b"], "var2": ["a", "a", "b"],
+                        "value": [1, 0.3, 1], "n": 145})
+    seen = {}
+
+    def fake_get(source="core"):
+        seen["source"] = source
+        return ["cov-dataset"]
+
+    with patch("irw.api._cov_published_names", return_value={"holzinger_1939_grantwhite9"}), \
+            patch("irw.api._get_datasets", side_effect=fake_get), \
+            patch("irw.api._fetch", return_value=pub), patch("irw.api._source_note"):
+        out = irw.fetch("holzinger_1939_grantwhite9", source="cov")
+        assert seen["source"] == "cov"
+        pd.testing.assert_frame_equal(out, pub)
+        with pytest.warns(UserWarning, match="ignored"):
+            irw.fetch("holzinger_1939_grantwhite9", source="cov", cov_args={"method": "spearman"})
+
+
+def test_metadata_for_cov_refuses_instead_of_answering_with_another_source():
+    from irw.utils.redivis.table_metadata import _check_source
+    with pytest.raises(ValueError, match="not available for source 'cov'"):
+        _check_source("cov")

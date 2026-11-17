@@ -1,6 +1,6 @@
 """Internal Redivis utilities."""
 
-from .datasets import _init_dataset, _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_datasets, _init_rank_datasets
+from .datasets import _init_dataset, _init_main_datasets, _init_sim_dataset, _init_comp_dataset, _init_nom_dataset, _init_conj_datasets, _init_rank_datasets, _init_cov_dataset
 from .tables import _get_table, _classify_error, _format_error, _search_datasets, _retry_transient
 
 __all__ = [
@@ -11,6 +11,7 @@ __all__ = [
     "_init_rank_datasets",
     "_init_comp_dataset",
     "_init_nom_dataset",
+    "_init_cov_dataset",
     "_get_table",
     "_classify_error",
     "_format_error",

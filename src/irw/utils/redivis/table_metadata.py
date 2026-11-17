@@ -48,6 +48,14 @@ def _check_source(source: str) -> Dict[str, str]:
             f"Unknown source '{source}'. Must be one of: "
             + ", ".join(f"'{s}'" for s in SOURCES)
         )
+    if source not in SOURCE_META_TABLES:
+        # cov: no cov_metadata / cov_biblio in irw_meta yet. Refuse rather than
+        # answer with another source's rows.
+        raise ValueError(
+            f"Metadata and bibliography are not available for source '{source}' yet: they are "
+            f"not published to irw_meta. list_tables(source='{source}') and "
+            f"fetch(..., source='{source}') work."
+        )
     return SOURCE_META_TABLES[source]
 
 
@@ -89,6 +97,9 @@ def _meta_cache_key(kind: str, source: str) -> str:
 
 def _source_datasets(source: str) -> List[Any]:
     """The Redivis dataset handles whose tables make up `source`."""
+    if source == "cov":
+        from .datasets import _init_cov_dataset
+        return [_init_cov_dataset()]
     _check_source(source)
     if source == "core":
         return _init_main_datasets()
