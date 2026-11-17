@@ -39,6 +39,7 @@ warnings.filterwarnings(
 
 from .utils.conj_long import conj_long
 from .utils.rank_compress import rank_compress
+from .utils.cov import cov_compute, cov2matrix
 
 # Export all API functions
 from .api import (
@@ -109,6 +110,8 @@ __all__ = [
     "long2resp",
     "conj_long",
     "rank_compress",
+    "cov_compute",
+    "cov2matrix",
     "resp2long",
     "check_resp",
     "get_filters",

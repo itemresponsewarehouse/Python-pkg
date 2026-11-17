@@ -303,6 +303,7 @@ def fetch(
     wide: bool = False,
     max_rows: Optional[int] = None,
     columns: Optional[List[str]] = None,
+    cov_args: Optional[Dict[str, Any]] = None,
 ) -> Union[pd.DataFrame, Dict[str, Optional[pd.DataFrame]]]:
     """
     Fetch one or more IRW tables.
@@ -314,6 +315,9 @@ def fetch(
     source : str, default "core"
         The data family. Options: "core", "sim", "comp", "nom", "conj", "rank".
         For "rank" ``resp`` is a position as recorded; see ``rank_compress()``.
+        "cov" fetches a core table and returns its item-by-item correlation or
+        covariance matrix in the covariance-family layout, computed by
+        ``cov_compute()`` with ``cov_args``; ``cov2matrix()`` makes it square.
     dedup : bool, default False
         Apply deduplication to responses.
     wide : bool, default False
@@ -329,6 +333,11 @@ def fetch(
         Return only these output columns, in the requested order. Pushed to
         Redivis for ordinary reads; applied after deduplication or reshaping
         when those operations need additional input columns.
+    cov_args : dict, optional
+        With ``source="cov"``, keyword arguments for ``cov_compute()``:
+        ``method`` ("pearson", "spearman", "kendall", "polychoric",
+        "tetrachoric", or a function of your own), ``type`` ("cor" or "cov"),
+        ``use`` and ``max_items``.
         
     Returns
     -------
@@ -348,6 +357,26 @@ def fetch(
     that collection's note and citation once per session per collection.
     Silence it with `disable_source_note()` or ``IRW_SOURCE_NOTE=0``.
     """
+    # source="cov" on an IRW table computes its item matrix (cov_compute()).
+    # Derived matrices are never stored in the IRW; published matrices will live
+    # in irw_cov once that dataset is released, and are not reachable yet.
+    if source == "cov":
+        if wide:
+            raise ValueError('wide=True and source="cov" ask for two different things.')
+        if max_rows is not None:
+            raise ValueError('max_rows is not allowed with source="cov": it keeps the first rows in '
+                             "stored order, not a sample, so a matrix computed from it is biased.")
+        if cov_args is not None and not isinstance(cov_args, dict):
+            raise ValueError('cov_args must be a dict, e.g. {"method": "polychoric"}.')
+        from .utils.cov import cov_compute
+        # Only id/item/resp are needed, so only they are exported -- unless
+        # dedup, which groups on wave and date.
+        got = fetch(table_name, "core", dedup=dedup,
+                    columns=None if dedup else ["id", "item", "resp"])
+        if isinstance(got, pd.DataFrame):
+            return cov_compute(got, table=table_name, **(cov_args or {}))
+        return {k: (None if v is None else cov_compute(v, table=k, **(cov_args or {})))
+                for k, v in got.items()}
     source = normalize_source(source)
     from .operations.fetch import _validate_pushdown
 
