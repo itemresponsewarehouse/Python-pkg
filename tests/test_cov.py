@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import irw
-from irw.utils.cov import cov2matrix, cov_compute
+from irw.utils.cov import cov2list, cov2matrix, cov_compute
 
 
 def long_frame(n=200, seed=1, k=4):
@@ -170,3 +170,36 @@ def test_metadata_for_cov_refuses_instead_of_answering_with_another_source():
     from irw.utils.redivis.table_metadata import _check_source
     with pytest.raises(ValueError, match="not available for source 'cov'"):
         _check_source("cov")
+
+
+def test_cov2list_returns_every_sample_padded_to_the_union_of_variables():
+    pub = pd.DataFrame({
+        "stat": ["cor", "cor", "cor", "sd"] + ["cor"] * 6,
+        "var1": ["a", "b", "b", "a", "a", "c", "c", "b", "b", "c"],
+        "var2": ["a", "a", "b", None, "a", "a", "c", "a", "b", "b"],
+        "value": [1, 0.4, 1, 2, 1, 0.3, 1, 0.5, 1, 0.2],
+        "n": [100] * 4 + [80] * 6,
+        "group": ["Conner, Warren (1999a) 1"] * 4 + ["study (2)"] * 6})
+    x = cov2list(pub)
+    assert list(x["matrices"]) == ["Conner, Warren (1999a) 1", "study (2)"]
+    assert x["n"].to_dict() == {"Conner, Warren (1999a) 1": 100, "study (2)": 80}
+    assert x["variables"] == ["a", "b", "c"] and x["type"] == "cor"
+    m1 = x["matrices"]["Conner, Warren (1999a) 1"]
+    assert list(m1.index) == ["a", "b", "c"] and list(m1.columns) == ["a", "b", "c"]
+    assert m1.loc["c"].isna().all() and m1["c"].isna().all()
+    assert m1.loc["a", "b"] == 0.4 and x["matrices"]["study (2)"].loc["c", "b"] == 0.2
+    assert x["sd"]["Conner, Warren (1999a) 1"].to_dict() == {"a": 2.0}
+    assert x["sd"]["study (2)"].empty
+
+
+def test_cov2list_handles_one_sample_cov_tables_and_mixed_types():
+    one = pd.DataFrame({"stat": "cov", "var1": ["a", "b", "b"], "var2": ["a", "a", "b"],
+                        "value": [4, 1, 9], "n": 50})
+    x = cov2list(one)
+    assert list(x["matrices"]) == ["all"] and x["type"] == "cov" and x["n"]["all"] == 50
+    g2 = one.assign(stat="cor", value=[1, 0.2, 1], group="g2")
+    mixed = pd.concat([one.assign(group="g1"), g2])
+    with pytest.raises(ValueError, match="mix correlation and covariance"):
+        cov2list(mixed)
+    with pytest.raises(ValueError, match="missing"):
+        cov2list(pd.DataFrame({"x": [1]}))
