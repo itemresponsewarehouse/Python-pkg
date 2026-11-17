@@ -174,6 +174,11 @@ def metadata(source: str = "core") -> pd.DataFrame:
     ``n_profiles``, ``n_attributes``, ``outcomes``, ``n_optout_tasks``,
     ``country``, ``display_language``, ``label_language``, ``restrictions``,
     ``restrictions_note``, ``task_source``, ``profile_source``).
+    cov has one row per matrix (table and ``group``): ``n_vars``, ``n_obs``,
+    ``stat``, ``has_sd``, ``has_mean``, ``min_eigenvalue``, ``is_pd``,
+    ``n_missing_cells`` and the matrix's record (``matrix_type``, ``missing``,
+    ``population``, ``source_citation``, ``source_location``, ``via``,
+    ``capture``, ``verified``, ``licence``, ``licence_source``, ``notes``).
 
     Parameters
     ----------

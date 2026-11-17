@@ -68,8 +68,9 @@ RANK_REFS: ClassVar[Tuple[Tuple[str, str], ...]] = (
 # per cell of the lower triangle (see cov2matrix()). One dataset; display name
 # "IRW cov" on Redivis, first released 2026-11-17. Matrices computed from IRW
 # tables are never stored there: fetch(source="cov") computes them
-# (cov_compute()). irw_meta has no cov_metadata or cov_biblio yet, so the
-# source is absent from SOURCE_META_TABLES and metadata calls for it refuse.
+# (cov_compute()). irw_meta has cov_metadata (one row per matrix, released
+# 2026-11-17) but no cov_biblio yet, so SOURCE_META_TABLES gives cov a
+# "metadata" entry only and bibliography calls for it refuse.
 COV_REF: ClassVar[Tuple[str, str]] = ("datapages", "irw_cov:4e2q")
 
 # Main IRW metadata dataset references (only for main IRW)
@@ -147,6 +148,7 @@ SOURCE_META_TABLES: ClassVar[dict[str, dict[str, str]]] = {
     "comp": {"metadata": "comps_metadata", "biblio": "comps_biblio"},
     "conj": {"metadata": "conj_metadata", "biblio": "conj_biblio"},
     "rank": {"metadata": "rank_metadata", "biblio": "rank_biblio"},
+    "cov": {"metadata": "cov_metadata"},
 }
 
 # Rpkg's .irw_tag_sources and .irw_collection_sources. Code tests membership
