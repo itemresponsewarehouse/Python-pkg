@@ -328,3 +328,43 @@ def cov2matrix(df: pd.DataFrame, group: Optional[str] = None) -> dict:
     return {"matrix": m, "type": kinds[0], "n": int(np.nanmax(npw.to_numpy())), "n_pairwise": npw,
             "sd": pick("sd"), "mean": pick("mean"), "computed": bool(attrs.get("irw_computed", False)),
             "method": attrs.get("irw_method"), "use": attrs.get("irw_use"), "table": attrs.get("irw_table")}
+
+
+def cov2list(df: pd.DataFrame) -> dict:
+    """Turn every sample of a covariance-family table into matrices on common variables.
+
+    A table holding several samples, such as a meta-analytic SEM corpus with one
+    study per ``group``, becomes a dict of matrices plus a Series of sample
+    sizes. Each matrix is built as ``cov2matrix()`` builds it, then padded to the
+    union of the variables across samples, in order of first appearance; a
+    variable a sample did not measure is NaN in that sample's matrix, diagonal
+    included (metaSEM's convention). Without a ``group`` column the result has
+    one sample, named ``"all"``.
+
+    Returns
+    -------
+    dict
+        ``matrices`` (dict of square DataFrames, keyed by ``group`` verbatim),
+        ``n`` (int Series indexed by sample), ``type`` (``"cor"``/``"cov"``, the
+        same for every sample), ``variables`` (list), and ``sd`` and ``mean``
+        (dicts of Series, empty where a sample reports none).
+    """
+    missing = [c for c in COV_COLUMNS if c not in df.columns]
+    if missing:
+        raise ValueError("Not a covariance-family table; missing: " + ", ".join(missing))
+    if "group" in df.columns:
+        groups = [g for g in pd.unique(df["group"]) if isinstance(g, str) and g != ""]
+        if not groups:
+            raise ValueError("The group column is empty; no sample to return.")
+        ms = {g: cov2matrix(df, group=g) for g in groups}
+    else:
+        ms = {"all": cov2matrix(df)}
+    kinds = {m["type"] for m in ms.values()}
+    if len(kinds) != 1:
+        raise ValueError("The samples mix correlation and covariance matrices; "
+                         "take them one at a time with cov2matrix().")
+    v = list(dict.fromkeys(x for m in ms.values() for x in m["matrix"].index))
+    return {"matrices": {g: m["matrix"].reindex(index=v, columns=v) for g, m in ms.items()},
+            "n": pd.Series({g: m["n"] for g, m in ms.items()}, dtype=int),
+            "type": kinds.pop(), "variables": v,
+            "sd": {g: m["sd"] for g, m in ms.items()}, "mean": {g: m["mean"] for g, m in ms.items()}}
