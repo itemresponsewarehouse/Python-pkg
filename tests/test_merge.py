@@ -11,8 +11,8 @@ it costs to get wrong:
 - **No prompt unless asked.** The default is R's non-interactive behaviour, so
   a script, notebook or MCP server never sits in `input()`; `confirm=True` is
   R's interactive one.
-- R's grouping rules (DOI first, BibTeX only as fallback), its column-mismatch
-  skip, and its ID/item notes.
+- R's grouping rules (DOI first, BibTeX as fallback, data DOI last), the
+  union of columns across members (Rpkg#224), and its ID/item notes.
 
 No network: biblio, metadata and fetch are all replaced.
 """
@@ -176,24 +176,46 @@ def test_columns_in_a_different_order_still_stack(world):
     assert merged["resp"].notna().all()
 
 
-def test_a_table_with_different_columns_is_skipped_not_nan_filled(world, capsys):
-    """R's rbind() errors on differing names; pd.concat would silently NaN-fill."""
+def test_a_table_with_different_columns_is_kept_on_the_union(world, capsys):
+    """Rpkg#224: members carry different cov_* columns and must not be dropped."""
     _study(world, ["s_1", "s_2", "s_3"], n=(10, 10, 10))
     world["tables"]["s_3"] = world["tables"]["s_3"].assign(wave=1)
-    merged = merge_module.merge("s_1")
-    assert set(merged["source_table"]) == {"s_1", "s_2"}
-    assert "wave" not in merged.columns
-    out = capsys.readouterr().out
-    assert "Skipping table 's_3' due to column mismatch" in out
-    assert "=== Skipped Tables ===" in out
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        merged = merge_module.merge("s_1")
+    assert set(merged["source_table"]) == {"s_1", "s_2", "s_3"}
+    assert (merged.loc[merged["source_table"] == "s_3", "wave"] == 1).all()
+    assert merged.loc[merged["source_table"] != "s_3", "wave"].isna().all()
+    assert "Columns not present in every table (NaN where absent): wave" in capsys.readouterr().out
 
 
-def test_an_unfetchable_table_is_skipped(world, capsys):
+def test_the_members_do_not_depend_on_the_anchor(world):
+    _study(world, ["s_1", "s_2", "s_3"], n=(10, 10, 10))
+    world["tables"]["s_3"] = world["tables"]["s_3"].assign(wave=1)
+    a = merge_module.merge("s_1")
+    b = merge_module.merge("s_3")
+    assert set(a["source_table"]) == set(b["source_table"])
+    assert len(a) == len(b)
+
+
+def test_an_unfetchable_table_is_skipped_with_a_warning(world, capsys):
     _study(world, ["s_1", "s_2", "s_3"], n=(10, 10, 10))
     world["tables"]["s_3"] = None
-    merged = merge_module.merge("s_1")
+    with pytest.warns(UserWarning, match="1 of 3 tables were not merged: s_3"):
+        merged = merge_module.merge("s_1")
     assert set(merged["source_table"]) == {"s_1", "s_2"}
     assert "s_3 (table could not be fetched)" in capsys.readouterr().out
+
+
+def test_the_data_doi_is_the_last_resort(world):
+    """ben-domingue/irw#3572: deposit DOI groups tables with no paper DOI."""
+    world["biblio"] = pd.DataFrame(
+        [("d_1", "NA", "NA", "10.5/dep"), ("d_2", "", "NA", "10.5/dep"), ("p_1", "10.1/p", "NA", "10.5/dep")],
+        columns=["table", "DOI__for_paper_", "BibTex", "DOI__for_data_"],
+    )
+    assert merge_module._find_merge_candidates(world["biblio"], "d_2") == ["d_2", "d_1"]
+    # a table with a paper DOI is never grouped by its data DOI
+    assert merge_module._find_merge_candidates(world["biblio"], "p_1") is None
 
 
 def test_nothing_is_returned_when_only_one_table_survives(world, capsys):

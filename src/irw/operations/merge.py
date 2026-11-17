@@ -38,6 +38,7 @@ from ..utils.redivis.table_metadata import get_biblio_table, get_metadata_table
 from .fetch import fetch as _fetch
 
 DOI_COLUMN = "DOI__for_paper_"
+DATA_DOI_COLUMN = "DOI__for_data_"
 BIBTEX_COLUMN = "BibTex"
 SOURCE_COLUMN = "source_table"
 
@@ -74,11 +75,17 @@ def _find_merge_candidates(biblio: pd.DataFrame, table_name: str) -> Optional[Li
     """The tables to merge, `table_name` first; DOI wins, BibTeX is the fallback.
 
     As in R, BibTeX is consulted only when the DOI groups `table_name` with no
-    other table -- including when its DOI is missing.
+    other table -- including when its DOI is missing -- and the data DOI only
+    when neither groups it, and only among tables with no paper DOI.
     """
     members = _group_members(biblio, DOI_COLUMN, table_name)
     if members is None:
         members = _group_members(biblio, BIBTEX_COLUMN, table_name)
+    if members is None and DATA_DOI_COLUMN in biblio.columns:
+        # Last resort, as in R: the data (deposit) DOI, among rows with no
+        # paper DOI only (ben-domingue/irw#3572).
+        no_paper = ~_is_present_biblio_value(biblio[DOI_COLUMN]) if DOI_COLUMN in biblio.columns else True
+        members = _group_members(biblio[no_paper], DATA_DOI_COLUMN, table_name)
     if members is None:
         return None
     others = [m for m in members if m.lower() != table_name.lower()]
@@ -225,8 +232,9 @@ def merge(
 
     Finds every table whose bibliography entry shares ``table_name``'s paper
     DOI -- or, when no other table shares its DOI, its BibTeX entry -- fetches
-    them, and stacks them into one long-format frame. Tables whose columns do
-    not match the first table fetched are skipped and listed.
+    them, and stacks them into one long-format frame on the union of their
+    columns: a column a table lacks is NaN for its rows (Rpkg#224). As a last
+    resort, tables with no paper DOI are grouped by their data DOI.
 
     Parameters
     ----------
@@ -253,7 +261,8 @@ def merge(
     -----
     UserWarning
         When respondent counts differ across the tables (or are missing from
-        metadata), and when the ID/item checks raise a note.
+        metadata), when the ID/item checks raise a note, and when a table could
+        not be fetched (so a partial merge is never silent).
 
     Notes
     -----
@@ -294,7 +303,6 @@ def merge(
     datasets = _init_main_datasets()
     fetched: Dict[str, pd.DataFrame] = {}
     skipped: Dict[str, str] = {}
-    columns: Optional[List[str]] = None
 
     print("\n=== Fetching Tables ===")
     for name in candidates:
@@ -308,15 +316,9 @@ def merge(
         if add_source_column:
             data = data.assign(**{SOURCE_COLUMN: name})
 
-        # R's rbind() refuses frames whose column names differ; pd.concat would
-        # quietly fill the gaps with NaN instead, so check the names explicitly.
-        if columns is None:
-            columns = list(data.columns)
-        elif set(data.columns) != set(columns):
-            skipped[name] = "columns differ from the first table fetched"
-            print(f"  - Skipping table '{name}' due to column mismatch.")
-            continue
-        fetched[name] = data[columns]
+        # Members carry different cov_* columns; they are stacked on the union
+        # below rather than dropped (Rpkg#224, as in R).
+        fetched[name] = data
 
     if len(fetched) < 2:
         print("\nMerging failed for all tables. No data merged.")
@@ -330,15 +332,24 @@ def merge(
             return None
 
     merged = pd.concat(list(fetched.values()), ignore_index=True)
+    shared = set.intersection(*(set(d.columns) for d in fetched.values()))
+    partial = [c for c in merged.columns if c not in shared]
 
     print("\n=== Processing Summary ===")
     print(f"- Merged table dimension: (Rows: {len(merged)}, Columns: {merged.shape[1]}).")
     if add_source_column:
         print(f"- The merged table includes a '{SOURCE_COLUMN}' column indicating the source of each row.")
+    if partial:
+        print(f"- Columns not present in every table (NaN where absent): {', '.join(partial)}.")
     if skipped:
         print("\n=== Skipped Tables ===")
         print("The following tables were skipped:")
         for name, reason in skipped.items():
             print(f"- {name} ({reason})")
+        warnings.warn(
+            f"merge(): {len(skipped)} of {len(candidates)} tables were not merged: {', '.join(skipped)}",
+            UserWarning,
+            stacklevel=2,
+        )
 
     return merged
