@@ -314,7 +314,8 @@ def order_rows(df: pd.DataFrame, meta, table: str) -> pd.DataFrame:
     cell = stat.isin(["cor", "cov"])
     v1 = df["var1"].astype(str)
     v2 = df["var2"].where(df["var2"].notna(), None)
-    hi = pd.Series(np.nan, index=df.index); lo = pd.Series(np.nan, index=df.index)
+    hi = pd.Series(np.nan, index=df.index)
+    lo = pd.Series(np.nan, index=df.index)
     swap = pd.Series(False, index=df.index)
     for gg in pd.unique(g):
         if gg not in recg:
