@@ -346,6 +346,41 @@ def order_rows(df: pd.DataFrame, meta, table: str) -> pd.DataFrame:
     return out
 
 
+_OVERLAP_SHOWN: set = set()
+
+
+def overlap_note(table: str, meta) -> None:
+    """Print a note when a published table's samples share data with other IRW tables.
+
+    The record field ``overlaps`` (ben-domingue/irw#3620) names them, e.g.
+    gnambs_2018_rses10's Open Psychometrics samples and the core table
+    rosenberg_selfesteem; pooling both counts the same people twice. Once per
+    session per table; never fails a fetch; silenced by IRW_OVERLAP_NOTE=0.
+    Twin of the R package's .irw_cov_overlap_note().
+    """
+    import os
+    try:
+        if os.environ.get("IRW_OVERLAP_NOTE") == "0" or table in _OVERLAP_SHOWN:
+            return
+        if meta is None or "overlaps" not in getattr(meta, "columns", []):
+            return
+        rec = meta[meta["table"] == table]
+        ov = rec["overlaps"].fillna("").astype(str).str.strip()
+        has = ov != ""
+        if not has.any():
+            return
+        others = sorted({o.strip() for v in ov[has] for o in v.split(";") if o.strip()})
+        _OVERLAP_SHOWN.add(table)
+        which = (f"{int(has.sum())} of its {len(rec)} samples" if len(rec) > 1
+                 else "its sample and the data in")
+        # A UserWarning, as the source credit note is (utils/redivis/source_note.py).
+        warnings.warn(f"{table}: {which} share data with {', '.join(others)}. Do not pool them "
+                      f"with matrices from {'those tables' if len(others) > 1 else 'that table'}, "
+                      "or the same people are counted twice.", UserWarning, stacklevel=3)
+    except Exception:
+        return
+
+
 class CovBlankWarning(UserWarning):
     """A published matrix holds cells the source did not report (NaN)."""
 

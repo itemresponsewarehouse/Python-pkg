@@ -309,3 +309,20 @@ def test_filter_cov_answers_per_table():
     with pytest.raises(ValueError, match="only available"):
         filter_tables([], source="core", n_vars=5)
     assert set(irw.get_filters("cov")) == {"n_vars", "n_obs", "n_samples", "matrix_type", "is_pd", "license"}
+
+
+def test_overlap_note_once_per_session():
+    # irw#3620: the `overlaps` record field; pooling both double-counts.
+    import warnings as _w
+    from irw.utils import cov as covmod
+    covmod._OVERLAP_SHOWN.clear()
+    meta = pd.DataFrame({"table": "g", "group": ["s1", "s2", "s3"], "overlaps": ["core_t", None, "core_t"]})
+    with pytest.warns(UserWarning, match="2 of its 3 samples share data with core_t"):
+        covmod.overlap_note("g", meta)
+    with _w.catch_warnings():
+        _w.simplefilter("error")
+        covmod.overlap_note("g", meta)                       # once per session
+        covmod._OVERLAP_SHOWN.clear()
+        covmod.overlap_note("g", meta.assign(overlaps=None))
+        covmod.overlap_note("g", None)
+    covmod._OVERLAP_SHOWN.clear()
