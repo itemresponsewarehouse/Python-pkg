@@ -391,12 +391,13 @@ def fetch(
                 got = _fetch(_get_datasets("cov"), name)
                 if got is not None:
                     _source_note([name], "cov")
-                    from .utils.cov import order_rows
+                    from .utils.cov import order_rows, overlap_note
                     try:
                         meta = metadata("cov")
                     except Exception:   # never fail a fetch over metadata
                         meta = None
                     got = order_rows(got, meta, name)
+                    overlap_note(name, meta)
                 return got
             # Only id/item/resp are needed, so only they are exported -- unless
             # dedup, which groups on wave and date.
