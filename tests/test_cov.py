@@ -158,7 +158,8 @@ def test_a_published_matrix_is_returned_as_published():
 
     with patch("irw.api._cov_published_names", return_value={"holzinger_1939_grantwhite9"}), \
             patch("irw.api._get_datasets", side_effect=fake_get), \
-            patch("irw.api._fetch", return_value=pub), patch("irw.api._source_note"):
+            patch("irw.api._fetch", return_value=pub), patch("irw.api._source_note"), \
+            patch("irw.api.metadata", return_value=None):
         out = irw.fetch("holzinger_1939_grantwhite9", source="cov")
         assert seen["source"] == "cov"
         pd.testing.assert_frame_equal(out, pub)
@@ -243,3 +244,27 @@ def test_unreported_cells_warn_and_complete_drops_the_fewest_variables():
     assert complete_drop(order, mk([("a", "c"), ("c", "e")])) == ["c"]
     assert complete_drop(order, mk([("a", "b"), ("d", "e")])) == ["b", "e"]
     assert complete_drop(order, mk([])) == []
+
+
+def test_a_published_table_is_put_in_the_order_its_record_gives():
+    # ben-domingue/irw#3594: Redivis does not keep row order; the record does.
+    # Twin of the Rpkg test.
+    from irw.utils.cov import order_rows
+    pub = pd.DataFrame({"stat": ["cor", "cor", "sd", "cor", "cor", "cor", "cor"],
+                        "var1": ["a", "a", "b", "b", "c", "c", "b"],
+                        "var2": ["a", "b", None, "b", "a", "c", "c"],
+                        "value": [1, 0.4, 2, 1, 0.3, 1, 0.5], "n": 50})
+    meta = pd.DataFrame({"table": ["t1"], "group": [None], "variables": ["c = third | b | a"]})
+    out = order_rows(pub, meta, "t1")
+    assert list(cov2matrix(out)["matrix"].index) == ["c", "b", "a"]
+    assert out["stat"].iloc[-1] == "sd"
+    assert sorted(out["value"]) == sorted(pub["value"])
+    assert cov2matrix(out)["matrix"].loc["a", "b"] == 0.4
+    assert order_rows(pub, None, "t1") is pub
+    assert order_rows(pub, meta.assign(variables=""), "t1") is pub
+    assert order_rows(pub, meta.assign(variables="a | b"), "t1") is pub
+    two = pd.concat([pub.assign(group="g2"), pub.assign(group="g1")], ignore_index=True)
+    m2 = pd.DataFrame({"table": ["t1", "t1"], "group": ["g1", "g2"], "variables": ["a | b | c", "c | b | a"]})
+    o2 = order_rows(two, m2, "t1")
+    assert list(pd.unique(o2["group"])) == ["g1", "g2"]
+    assert list(cov2matrix(o2, group="g2")["matrix"].index) == ["c", "b", "a"]
