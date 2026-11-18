@@ -204,3 +204,42 @@ def test_cov2list_handles_one_sample_cov_tables_and_mixed_types():
         cov2list(mixed)
     with pytest.raises(ValueError, match="missing"):
         cov2list(pd.DataFrame({"x": [1]}))
+
+
+def test_unreported_cells_warn_and_complete_drops_the_fewest_variables():
+    # ben-domingue/irw#3594 (Ben, 2026-11-18): a cell the source did not report
+    # is a row with an empty value. Twin of the Rpkg test.
+    import warnings as _w
+    from irw.utils.cov import CovBlankWarning, cov2list, complete_drop
+    v = ["a", "b", "c", "d"]
+    rows = [(v[i], v[j], 1.0 if i == j else 0.3) for i in range(4) for j in range(i + 1)]
+    pub = pd.DataFrame([{"stat": "cor", "var1": a, "var2": b, "value": x, "n": 120} for a, b, x in rows])
+    pub.loc[(pub.var1 == "c") & (pub.var2 == "a"), "value"] = np.nan
+    pub.loc[(pub.var1 == "d") & (pub.var2 == "c"), "value"] = np.nan
+    with pytest.warns(CovBlankWarning, match=r"2 cells.*complete=True.*\(c\)"):
+        m = cov2matrix(pub)
+    assert np.isnan(m["matrix"].loc["c", "a"]) and m["dropped"] == []
+    m2 = cov2matrix(pub, complete=True)
+    assert m2["dropped"] == ["c"] and list(m2["matrix"].index) == ["a", "b", "d"]
+    assert not m2["matrix"].isna().any().any()
+    one = pub.copy()
+    one.loc[(one.var1 == "d") & (one.var2 == "c"), "value"] = 0.3
+    assert cov2matrix(one, complete=True)["dropped"] == ["c"]
+    pub["group"] = "s1"
+    with _w.catch_warnings():
+        _w.simplefilter("error")
+        x = cov2list(pub)
+    assert np.isnan(x["matrices"]["s1"].loc["c", "a"])
+    # same cases as irw_validate.cov.complete_drop and the R twin
+    nan = np.nan
+    order = list("abcde")
+    def mk(blanks):
+        a = np.full((5, 5), 0.3)
+        for p, q in blanks:
+            i, j = order.index(p), order.index(q)
+            a[i, j] = a[j, i] = nan
+        return a
+    assert complete_drop(order, mk([("a", "b")])) == ["b"]
+    assert complete_drop(order, mk([("a", "c"), ("c", "e")])) == ["c"]
+    assert complete_drop(order, mk([("a", "b"), ("d", "e")])) == ["b", "e"]
+    assert complete_drop(order, mk([])) == []
