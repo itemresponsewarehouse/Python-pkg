@@ -13,7 +13,7 @@ from ..operations.list_tables import list_tables, IRWMetadataUnavailable
 NUMERIC_FILTERS = frozenset({
     'n_responses', 'n_categories', 'n_participants', 'n_items',
     'responses_per_participant', 'responses_per_item', 'density', 'n_actors',
-    'n_respondents', 'n_attributes',
+    'n_respondents', 'n_attributes', 'n_vars', 'n_obs', 'n_samples',
     # Tier-0 psychometric columns (ben-domingue/irw#1710), core only. Unlike
     # the structural columns these can be NaN -- a table whose responses are
     # all one value has no difficulty spread, a single-item table has no rest
@@ -22,7 +22,7 @@ NUMERIC_FILTERS = frozenset({
     'difficulty_spread', 'mean_item_rest_r', 'mean_abs_item_rest_r',
     'prop_items_extreme',
 })
-BOOLEAN_FILTERS = frozenset({'longitudinal', 'has_item_text'})
+BOOLEAN_FILTERS = frozenset({'longitudinal', 'has_item_text', 'is_pd'})
 
 # Filters that read a tags table, so exist only for a source in TAG_SOURCES.
 TAG_FILTERS = (
@@ -53,6 +53,13 @@ CONJ_FILTERS = ('n_respondents', 'n_attributes', 'outcome', 'country',
 CONJ_ONLY_FILTERS = ('n_respondents', 'n_attributes', 'outcome', 'country',
                      'domain', 'choice_object', 'levels_labelled')
 CONJ_LEVELS_LABELLED = ('full', 'partial', 'none')
+# The covariance source (Rpkg's irw_filter(source = "cov")), per table over
+# cov_metadata (one row per matrix, table x sample): n_vars (most in one
+# sample), n_obs (summed over samples), n_samples, matrix_type (ANY matrix of
+# a type named; a value no table carries is an error naming those in use),
+# is_pd (True: every matrix positive definite), license.
+COV_FILTERS = ('n_vars', 'n_obs', 'n_samples', 'matrix_type', 'is_pd', 'license')
+COV_ONLY_FILTERS = ('n_vars', 'n_obs', 'n_samples', 'matrix_type', 'is_pd')
 CONJ_TAG_FILTERS = ('domain', 'choice_object')
 CONJ_OUTCOMES = ('choice', 'rating')
 
@@ -298,6 +305,18 @@ def _check_filters_for_source(source: str, supplied: dict) -> None:
     Each is an error rather than an empty result: an empty result is
     indistinguishable from "nothing matched".
     """
+    cov_only = [name for name in COV_ONLY_FILTERS if name in supplied]
+    if cov_only and source != 'cov':
+        raise ValueError(
+            "These filters are only available when source='cov': "
+            f"{', '.join(cov_only)}.")
+    if source == 'cov':
+        unsupported = [name for name in supplied if name not in COV_FILTERS]
+        if unsupported:
+            raise ValueError(
+                "These filters are not available for source='cov': "
+                f"{', '.join(unsupported)}. Covariance filters: {', '.join(COV_FILTERS)}.")
+        return
     conj_only = [name for name in CONJ_ONLY_FILTERS if name in supplied]
     if conj_only and source != 'conj':
         raise ValueError(
@@ -373,6 +392,11 @@ def filter_tables(
     domain: Optional[Union[str, List[str]]] = None,
     choice_object: Optional[Union[str, List[str]]] = None,
     levels_labelled: Optional[Union[str, List[str]]] = None,
+    n_vars: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
+    n_obs: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
+    n_samples: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
+    matrix_type: Optional[Union[str, List[str]]] = None,
+    is_pd: Optional[bool] = None,
     source: str = "core",
 ) -> pd.Series:
     """
@@ -630,6 +654,9 @@ def filter_tables(
     for filter_name, filter_value in supplied.items():
         validate_filter_value(filter_name, filter_value)
     _check_filters_for_source(source, supplied)
+    if source == 'cov':
+        return _filter_cov(n_vars=n_vars, n_obs=n_obs, n_samples=n_samples,
+                           matrix_type=matrix_type, is_pd=is_pd, license=license)
     if source == 'conj':
         return _filter_conj(n_respondents=n_respondents, n_attributes=n_attributes,
                             outcome=outcome, country=country,
@@ -781,6 +808,45 @@ def _filter_conj_tag(meta: pd.DataFrame, full: pd.DataFrame, column: str, value)
             f"The {column} tags in use are: {', '.join(sorted(known))}.")
     has = _split_conj_tags(meta[column])
     return meta[has.map(lambda h: bool(h & wanted))]
+
+
+def _filter_cov(n_vars=None, n_obs=None, n_samples=None, matrix_type=None,
+                is_pd=None, license=None) -> pd.Series:
+    """filter(source="cov"): per-table filters over cov_metadata and cov_biblio."""
+    from ..utils.redivis.table_metadata import get_biblio_table, get_metadata_table
+
+    meta = get_metadata_table("cov").copy()
+    need = ["table", "n_vars", "n_obs", "matrix_type", "is_pd"]
+    missing = [c for c in need if c not in meta.columns]
+    if missing:
+        raise IRWMetadataUnavailable(
+            f"cov_metadata lacks column(s) {', '.join(missing)}; cannot filter source='cov'.")
+    meta["_pd"] = meta["is_pd"].astype(str).str.lower().isin(["true", "1"])
+    meta["_type"] = meta["matrix_type"].fillna("").astype(str).str.lower()
+    per = meta.groupby("table").agg(
+        n_vars=("n_vars", lambda s: pd.to_numeric(s, errors="coerce").max()),
+        n_obs=("n_obs", lambda s: pd.to_numeric(s, errors="coerce").sum()),
+        n_samples=("table", "size"),
+        all_pd=("_pd", "all"),
+        types=("_type", lambda s: set(s))).reset_index()
+    if matrix_type is not None:
+        want = [t.lower() for t in _as_list(matrix_type)]
+        known = sorted(set(meta["_type"]) - {""})
+        unknown = [t for t in want if t not in known]
+        if unknown:
+            raise ValueError(f"Unknown matrix_type value(s): {', '.join(unknown)}. "
+                             f"In use: {', '.join(known)}.")
+        per = per[per["types"].map(lambda ts: bool(ts & set(want)))]
+    if is_pd is not None:
+        per = per[per["all_pd"] == bool(is_pd)]
+    for column, value in (("n_vars", n_vars), ("n_obs", n_obs), ("n_samples", n_samples)):
+        per = _apply_numeric_filter(per, column, value)
+    if license is not None:
+        bib = get_biblio_table("cov")
+        lic = set(_as_list(license))
+        keep = set(bib.loc[bib["Derived_License"].isin(lic), "table"])
+        per = per[per["table"].isin(keep)]
+    return pd.Series(sorted(per["table"].unique()), dtype=str, name="name")
 
 
 def _filter_conj(n_respondents=None, n_attributes=None, outcome=None, country=None,
