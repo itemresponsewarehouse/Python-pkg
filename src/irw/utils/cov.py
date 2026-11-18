@@ -17,6 +17,7 @@ exactly.
 from __future__ import annotations
 
 import math
+import warnings
 from typing import Callable, Optional, Union
 
 import numpy as np
@@ -281,18 +282,63 @@ def cov_compute(
     return out
 
 
-def cov2matrix(df: pd.DataFrame, group: Optional[str] = None) -> dict:
+class CovBlankWarning(UserWarning):
+    """A published matrix holds cells the source did not report (NaN)."""
+
+
+def complete_drop(order, m, exact_max: int = 20) -> list:
+    """The fewest variables to drop so ``m`` has no NaN off the diagonal.
+
+    Exact (smallest set) when at most ``exact_max`` variables touch a blank,
+    else greedy; ties keep the variables listed first (candidates are tried
+    latest-first). Mirrors irw_validate.cov.complete_drop and 22_cov.R in
+    ben-domingue/irw and .irw_cov_complete_drop in the R package.
+    """
+    from itertools import combinations
+    a = np.asarray(m, dtype=float)
+    k = len(order)
+    pairs = [(order[i], order[j]) for i in range(k) for j in range(i) if np.isnan(a[i, j])]
+    if not pairs:
+        return []
+    pos = {v: i for i, v in enumerate(order)}
+    involved = sorted({v for p in pairs for v in p}, key=lambda v: -pos[v])
+
+    def covers(drop):
+        return all(x in drop or y in drop for x, y in pairs)
+
+    if len(involved) <= exact_max:
+        for size in range(1, len(involved) + 1):
+            for drop in combinations(involved, size):
+                if covers(set(drop)):
+                    return sorted(drop, key=pos.get)
+    drop, left = [], list(pairs)
+    while left:
+        count = {v: sum(v in p for p in left) for v in involved}
+        best = max(involved, key=lambda v: (count[v], pos[v]))
+        drop.append(best)
+        left = [p for p in left if best not in p]
+    return sorted(drop, key=pos.get)
+
+
+def cov2matrix(df: pd.DataFrame, group: Optional[str] = None, complete: bool = False) -> dict:
     """Turn a covariance-family table into a square matrix.
 
     Works on tables from ``fetch(..., source="cov")`` and ``cov_compute()``,
     and on published tables with a ``group`` column.
+
+    A published matrix can hold cells the source did not report: rows with an
+    empty ``value``, which come back as NaN with a ``CovBlankWarning``.
+    ``complete=True`` returns the complete part instead: the matrix after
+    dropping the fewest variables that leaves no blank cell (ties keep the
+    variables listed first), with the dropped variables in ``dropped``.
 
     Returns
     -------
     dict
         ``matrix`` (square DataFrame), ``type`` (``"cor"``/``"cov"``), ``n``
         (the largest cell n), ``n_pairwise`` (DataFrame), ``sd`` and ``mean``
-        (Series, empty when the table has none), ``computed`` and, when
+        (Series, empty when the table has none), ``dropped`` (the variables
+        ``complete=True`` left out; empty otherwise), ``computed`` and, when
         computed, ``method``, ``use`` and ``table``.
     """
     missing = [c for c in COV_COLUMNS if c not in df.columns]
@@ -325,8 +371,25 @@ def cov2matrix(df: pd.DataFrame, group: Optional[str] = None) -> dict:
         r = df[df["stat"] == s]
         return pd.Series(r["value"].to_numpy(dtype=float), index=r["var1"].to_numpy())
 
+    sd, mu, dropped = pick("sd"), pick("mean"), []
+    lower = m.to_numpy(dtype=float)[np.tril_indices(len(v), -1)]
+    n_blank = int(np.isnan(lower).sum())
+    if n_blank:
+        drop = complete_drop(v, m.to_numpy(dtype=float))
+        if complete:
+            keep = [x for x in v if x not in set(drop)]
+            m, npw = m.loc[keep, keep], npw.loc[keep, keep]
+            sd, mu = sd[sd.index.isin(keep)], mu[mu.index.isin(keep)]
+            dropped = drop
+        else:
+            warnings.warn(
+                f"{n_blank} {'cell' if n_blank == 1 else 'cells'} of this matrix the source did not "
+                f"report {'is' if n_blank == 1 else 'are'} NaN. complete=True returns the complete part, "
+                f"dropping {len(drop)} {'variable' if len(drop) == 1 else 'variables'} ({', '.join(drop)}).",
+                CovBlankWarning, stacklevel=2)
+
     return {"matrix": m, "type": kinds[0], "n": int(np.nanmax(npw.to_numpy())), "n_pairwise": npw,
-            "sd": pick("sd"), "mean": pick("mean"), "computed": bool(attrs.get("irw_computed", False)),
+            "sd": sd, "mean": mu, "dropped": dropped, "computed": bool(attrs.get("irw_computed", False)),
             "method": attrs.get("irw_method"), "use": attrs.get("irw_use"), "table": attrs.get("irw_table")}
 
 
@@ -356,9 +419,14 @@ def cov2list(df: pd.DataFrame) -> dict:
         groups = [g for g in pd.unique(df["group"]) if isinstance(g, str) and g != ""]
         if not groups:
             raise ValueError("The group column is empty; no sample to return.")
-        ms = {g: cov2matrix(df, group=g) for g in groups}
+        # Unreported cells stay NaN, which metaSEM takes; no warning here.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", CovBlankWarning)
+            ms = {g: cov2matrix(df, group=g) for g in groups}
     else:
-        ms = {"all": cov2matrix(df)}
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", CovBlankWarning)
+            ms = {"all": cov2matrix(df)}
     kinds = {m["type"] for m in ms.values()}
     if len(kinds) != 1:
         raise ValueError("The samples mix correlation and covariance matrices; "
