@@ -282,6 +282,70 @@ def cov_compute(
     return out
 
 
+def parse_variables(field) -> list:
+    """Names in the record's ``variables`` field, in published order ([] when blank).
+
+    Entries are separated by " | "; each is a name, optionally followed by
+    " = description" (ben-domingue/irw data/covariance/README.md).
+    """
+    if field is None or (isinstance(field, float) and np.isnan(field)) or not str(field).strip():
+        return []
+    return [e.partition(" = ")[0].strip() for e in str(field).split(" | ")]
+
+
+def order_rows(df: pd.DataFrame, meta, table: str) -> pd.DataFrame:
+    """Sort a published cov table into its source's variable order.
+
+    Redivis does not keep row order, so the order lives in the record:
+    cov_metadata's ``variables`` (ben-domingue/irw#3594). Each sample's cells
+    come back as the lower triangle row by row (var1 the later variable), then
+    its sd rows, then its mean rows; values are untouched. A table whose record
+    has no ``variables``, or whose names do not match, is returned as it was.
+    Twin of the R package's .irw_cov_order_rows().
+    """
+    if meta is None or "variables" not in getattr(meta, "columns", []) or df is None or df.empty:
+        return df
+    rec = meta[meta["table"] == table]
+    if rec.empty:
+        return df
+    recg = rec["group"].fillna("").astype(str).tolist() if "group" in rec else [""] * len(rec)
+    g = df["group"].fillna("").astype(str) if "group" in df.columns else pd.Series("", index=df.index)
+    stat = df["stat"].astype(str)
+    cell = stat.isin(["cor", "cov"])
+    v1 = df["var1"].astype(str)
+    v2 = df["var2"].where(df["var2"].notna(), None)
+    hi = pd.Series(np.nan, index=df.index)
+    lo = pd.Series(np.nan, index=df.index)
+    swap = pd.Series(False, index=df.index)
+    for gg in pd.unique(g):
+        if gg not in recg:
+            return df
+        order = parse_variables(rec["variables"].iloc[recg.index(gg)])
+        if not order:
+            return df
+        pos = {v: i for i, v in enumerate(order)}
+        idx = g[g == gg].index
+        p1 = v1[idx].map(pos)
+        p2 = v2[idx].map(lambda x: pos.get(x) if x is not None else None)
+        c = cell[idx]
+        if p1.isna().any() or p2[c].isna().any():
+            return df
+        p2n = p2.astype(float)
+        hi[idx] = np.where(c, np.fmax(p1, p2n), p1)
+        lo[idx] = np.where(c, np.fmin(p1, p2n), 0)
+        swap[idx] = c & (p2n > p1)
+    out = df.copy()
+    if swap.any():
+        a, b = out.loc[swap, "var1"].copy(), out.loc[swap, "var2"].copy()
+        out.loc[swap, "var1"], out.loc[swap, "var2"] = b.values, a.values
+    grp_rank = g.map({x: i for i, x in enumerate(dict.fromkeys(recg + list(pd.unique(g))))})
+    stat_rank = np.where(cell, 0, np.where(stat == "sd", 1, 2))
+    key = pd.DataFrame({"g": grp_rank, "s": stat_rank, "h": hi, "l": lo}, index=df.index)
+    out = out.loc[key.sort_values(["g", "s", "h", "l"], kind="stable").index]
+    out.attrs = dict(df.attrs)
+    return out
+
+
 class CovBlankWarning(UserWarning):
     """A published matrix holds cells the source did not report (NaN)."""
 
