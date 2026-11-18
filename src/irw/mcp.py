@@ -251,6 +251,56 @@ class IRWBackend(Protocol):
     def version_stamp(self) -> Optional[Tuple[int, str]]: ...
 
 
+def _collapse_cov_metadata(meta: pd.DataFrame) -> pd.DataFrame:
+    """cov_metadata has one row per matrix (table x sample); search wants one per table.
+
+    A 123-study corpus would otherwise be listed 123 times (Python-pkg#154).
+    Per table: n_samples, n_vars (most in one sample), n_obs (summed), stat,
+    matrix_type (joined), is_pd as "k/n" positive definite, and whether SDs,
+    means and reliabilities are given anywhere.
+    """
+    if meta is None or meta.empty or "table" not in meta.columns:
+        return meta
+
+    def joined(values: pd.Series) -> str:
+        vals = sorted({str(v) for v in values.dropna() if str(v).strip()})
+        return "; ".join(vals)
+
+    rows = []
+    for table, d in meta.groupby("table", sort=True):
+        pd_flags = d["is_pd"].astype(str).str.lower().isin(["true", "1"]) if "is_pd" in d else pd.Series(dtype=bool)
+        row = {
+            "table": table,
+            "n_samples": int(len(d)),
+            "n_vars": pd.to_numeric(d.get("n_vars"), errors="coerce").max() if "n_vars" in d else None,
+            "n_obs": pd.to_numeric(d.get("n_obs"), errors="coerce").sum() if "n_obs" in d else None,
+            "stat": joined(d["stat"]) if "stat" in d else None,
+            "matrix_type": joined(d["matrix_type"]) if "matrix_type" in d else None,
+            "is_pd": f"{int(pd_flags.sum())}/{len(d)}" if "is_pd" in d else None,
+        }
+        for flag in ("has_sd", "has_mean", "has_rel"):
+            if flag in d:
+                row[flag] = bool(d[flag].astype(str).str.lower().isin(["true", "1"]).any())
+        for col in ("population", "licence"):
+            if col in d:
+                row[col] = joined(d[col])
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+# What each column of a covariance-family table means (ben-domingue/irw
+# data/covariance/README.md); the layout is fixed, so describe_columns answers
+# from here rather than from a script scan.
+COV_LAYOUT = {
+    "stat": "The kind of row: 'cor' or 'cov' for a cell of the matrix; 'sd', 'mean' or 'rel' (reliability) for one variable. One sample's matrix is all cor or all cov.",
+    "var1": "A variable, named as the source names it. For a cell, the row variable of the lower triangle.",
+    "var2": "The second variable of a cell; blank on sd, mean and rel rows.",
+    "value": "The number as published, never rounded, smoothed or corrected. Empty only for a cell the source did not report.",
+    "n": "The sample size behind the cell: the pairwise n when the source reports one, otherwise the matrix N. Never blank.",
+    "group": "Present only when the table holds several samples' matrices (e.g. one per study in a meta-analytic corpus); each group is its own matrix.",
+}
+
+
 class PackageBackend:
     """Default backend that delegates to the public ``irw`` API."""
 
@@ -313,6 +363,8 @@ class PackageBackend:
         from .utils.redivis.table_metadata import get_biblio_table
 
         meta = irw.metadata(source=source)
+        if source == "cov":
+            meta = _collapse_cov_metadata(meta)
         keep = ("table", "Description", "Derived_License", "Original_License",
                 "DOI__for_paper_", "Reference_x")
         bib = get_biblio_table(source)
@@ -1989,6 +2041,18 @@ class IRWTools:
                 'Use the Python package for larger exports.',
             )
         max_rows: Optional[int] = None if needs_whole_table else offset + limit
+        if source == "cov":
+            # A prefix of a matrix is not a matrix, and fetch(source="cov")
+            # refuses max_rows for that reason. The tables are small (the
+            # largest is a few thousand rows), so the whole table is fetched
+            # and the page is cut from it; total_rows is then exact.
+            max_rows = None
+            guard_warnings.append(
+                "This is a covariance-family table (a published matrix, one row per "
+                "cell of the lower triangle), so it was fetched whole and this page "
+                "cut from it. Use the package's cov2matrix()/cov2list() to turn it "
+                "into square matrices."
+            )
         if needs_whole_table:
             reason = "wide=true" if wide else "dedup=true"
             if facts is None:
@@ -2198,6 +2262,7 @@ class IRWTools:
 
     def get_processing_notes(self, table_name: str) -> Dict[str, Any]:
         table_name = _validate_table_name(table_name)
+        source = self._source_for(table_name)
         state = _ConversionState()
         try:
             scripts = self.source.data_scripts()
@@ -2284,24 +2349,31 @@ class IRWTools:
             )
         return self._stamp(
             {
-                "source": SOURCE,
+                "source": source,
                 "table": table_name,
                 "match": match,
                 "candidate_paths": paths,
                 "scripts": notes,
                 "validator_overrides": overrides,
                 "data_notes": data_notes,
-                "guides": {
+                "guides": ({
+                    # A cov table's standard, and its per-matrix record
+                    # (citation, where in the source, capture, licence).
+                    "data_standard": IRW_REPO_BLOB_URL + "data/covariance/README.md",
+                    "matrix_records": IRW_REPO_BLOB_URL + "data/covariance/matrices.csv",
+                } if source == "cov" else {
                     "data_standard": IRW_REPO_BLOB_URL + "datastandard.md",
                     "processing_instructions": IRW_REPO_BLOB_URL
                     + "processing_notes/DataProcessingInstructions.md",
-                },
+                }),
                 "warnings": state.warnings,
             }
         )
 
     def describe_columns(self, table_name: str) -> Dict[str, Any]:
         table_name = _validate_table_name(table_name)
+        if self._source_for(table_name) == "cov":
+            return self._describe_cov_columns(table_name)
         details, package_warnings = self._call(self.backend.describe_table, table_name)
         if details is None or details == {}:
             raise IRWMCPError(
@@ -2415,6 +2487,45 @@ class IRWTools:
                 "codebook_url": source_url,
                 "source_codebooks": source_codebooks,
                 "guides": {"data_standard": IRW_REPO_BLOB_URL + DATA_STANDARD_PATH},
+                "warnings": state.warnings,
+            }
+        )
+
+    def _describe_cov_columns(self, table_name: str) -> Dict[str, Any]:
+        """describe_columns for a covariance-family table: the fixed layout,
+        plus the matrix's own variables from the record's `variables` field
+        (published order, with descriptions where the source gives them)."""
+        details, package_warnings = self._call(self.backend.describe_table, table_name, source="cov")
+        if details is None or details == {}:
+            raise IRWMCPError("not_found", f"No metadata was found for table '{table_name}'.")
+        state = _ConversionState()
+        for message in package_warnings:
+            state.add(message)
+        stats = details.get("stats") if isinstance(details, Mapping) else None
+        field = stats.get("variables") if isinstance(stats, Mapping) else None
+        matrix_variables: List[Dict[str, Optional[str]]] = []
+        if field is not None and str(field).strip() and str(field).lower() != "nan":
+            for entry in str(field).split(" | "):
+                name, _, desc = entry.partition(" = ")
+                matrix_variables.append({"name": name.strip(), "description": desc.strip() or None})
+        else:
+            state.add(
+                "The record lists no variables for this table yet, so the matrix's "
+                "variables are not described here; fetch_table shows their names "
+                "in var1/var2."
+            )
+        columns = [
+            {"name": name, "defined_by": "standard", "definition": definition, "documented": True}
+            for name, definition in COV_LAYOUT.items()
+        ]
+        return self._stamp(
+            {
+                "source": "cov",
+                "table": table_name,
+                "columns_source": "covariance_standard",
+                "columns": columns,
+                "matrix_variables": matrix_variables,
+                "guides": {"data_standard": IRW_REPO_BLOB_URL + "data/covariance/README.md"},
                 "warnings": state.warnings,
             }
         )
