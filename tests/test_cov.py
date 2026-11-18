@@ -326,3 +326,19 @@ def test_overlap_note_once_per_session():
         covmod.overlap_note("g", meta.assign(overlaps=None))
         covmod.overlap_note("g", None)
     covmod._OVERLAP_SHOWN.clear()
+
+
+def test_mcp_search_lists_a_cov_table_once():
+    # Python-pkg#154: cov_metadata is one row per matrix; search wants one per table.
+    from irw.mcp import COV_LAYOUT, _collapse_cov_metadata
+    meta = pd.DataFrame({"table": ["corp", "corp", "corp", "one"], "n_vars": [4, 5, 3, 9],
+                         "n_obs": [100, 200, 300, 145], "stat": "cor",
+                         "matrix_type": ["unknown", "unknown", "pearson", "pearson"],
+                         "is_pd": [True, False, True, True], "has_sd": [False, True, False, False]})
+    out = _collapse_cov_metadata(meta).set_index("table")
+    assert list(out.index) == ["corp", "one"]
+    assert out.loc["corp", "n_samples"] == 3 and out.loc["corp", "n_vars"] == 5
+    assert out.loc["corp", "n_obs"] == 600 and out.loc["corp", "is_pd"] == "2/3"
+    assert out.loc["corp", "matrix_type"] == "pearson; unknown" and bool(out.loc["corp", "has_sd"])
+    assert out.loc["one", "is_pd"] == "1/1"
+    assert set(COV_LAYOUT) == {"stat", "var1", "var2", "value", "n", "group"}
