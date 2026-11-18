@@ -339,7 +339,7 @@ def order_rows(df: pd.DataFrame, meta, table: str) -> pd.DataFrame:
         a, b = out.loc[swap, "var1"].copy(), out.loc[swap, "var2"].copy()
         out.loc[swap, "var1"], out.loc[swap, "var2"] = b.values, a.values
     grp_rank = g.map({x: i for i, x in enumerate(dict.fromkeys(recg + list(pd.unique(g))))})
-    stat_rank = np.where(cell, 0, np.where(stat == "sd", 1, 2))
+    stat_rank = np.where(cell, 0, np.where(stat == "sd", 1, np.where(stat == "mean", 2, 3)))
     key = pd.DataFrame({"g": grp_rank, "s": stat_rank, "h": hi, "l": lo}, index=df.index)
     out = out.loc[key.sort_values(["g", "s", "h", "l"], kind="stable").index]
     out.attrs = dict(df.attrs)
@@ -400,8 +400,9 @@ def cov2matrix(df: pd.DataFrame, group: Optional[str] = None, complete: bool = F
     -------
     dict
         ``matrix`` (square DataFrame), ``type`` (``"cor"``/``"cov"``), ``n``
-        (the largest cell n), ``n_pairwise`` (DataFrame), ``sd`` and ``mean``
-        (Series, empty when the table has none), ``dropped`` (the variables
+        (the largest cell n), ``n_pairwise`` (DataFrame), ``sd``, ``mean`` and
+        ``rel`` (Series of standard deviations, means and reliabilities, empty
+        when the table has none), ``dropped`` (the variables
         ``complete=True`` left out; empty otherwise), ``computed`` and, when
         computed, ``method``, ``use`` and ``table``.
     """
@@ -435,7 +436,7 @@ def cov2matrix(df: pd.DataFrame, group: Optional[str] = None, complete: bool = F
         r = df[df["stat"] == s]
         return pd.Series(r["value"].to_numpy(dtype=float), index=r["var1"].to_numpy())
 
-    sd, mu, dropped = pick("sd"), pick("mean"), []
+    sd, mu, rel, dropped = pick("sd"), pick("mean"), pick("rel"), []
     lower = m.to_numpy(dtype=float)[np.tril_indices(len(v), -1)]
     n_blank = int(np.isnan(lower).sum())
     if n_blank:
@@ -443,7 +444,7 @@ def cov2matrix(df: pd.DataFrame, group: Optional[str] = None, complete: bool = F
         if complete:
             keep = [x for x in v if x not in set(drop)]
             m, npw = m.loc[keep, keep], npw.loc[keep, keep]
-            sd, mu = sd[sd.index.isin(keep)], mu[mu.index.isin(keep)]
+            sd, mu, rel = sd[sd.index.isin(keep)], mu[mu.index.isin(keep)], rel[rel.index.isin(keep)]
             dropped = drop
         else:
             warnings.warn(
@@ -453,7 +454,7 @@ def cov2matrix(df: pd.DataFrame, group: Optional[str] = None, complete: bool = F
                 CovBlankWarning, stacklevel=2)
 
     return {"matrix": m, "type": kinds[0], "n": int(np.nanmax(npw.to_numpy())), "n_pairwise": npw,
-            "sd": sd, "mean": mu, "dropped": dropped, "computed": bool(attrs.get("irw_computed", False)),
+            "sd": sd, "mean": mu, "rel": rel, "dropped": dropped, "computed": bool(attrs.get("irw_computed", False)),
             "method": attrs.get("irw_method"), "use": attrs.get("irw_use"), "table": attrs.get("irw_table")}
 
 
@@ -473,8 +474,10 @@ def cov2list(df: pd.DataFrame) -> dict:
     dict
         ``matrices`` (dict of square DataFrames, keyed by ``group`` verbatim),
         ``n`` (int Series indexed by sample), ``type`` (``"cor"``/``"cov"``, the
-        same for every sample), ``variables`` (list), and ``sd`` and ``mean``
-        (dicts of Series, empty where a sample reports none).
+        same for every sample), ``variables`` (list), and ``sd``, ``mean`` and
+        ``rel`` (dicts of Series, empty where a sample reports none). The
+        reliabilities are what a correction for attenuation needs, matched to
+        each study's matrix.
     """
     missing = [c for c in COV_COLUMNS if c not in df.columns]
     if missing:
@@ -499,4 +502,5 @@ def cov2list(df: pd.DataFrame) -> dict:
     return {"matrices": {g: m["matrix"].reindex(index=v, columns=v) for g, m in ms.items()},
             "n": pd.Series({g: m["n"] for g, m in ms.items()}, dtype=int),
             "type": kinds.pop(), "variables": v,
-            "sd": {g: m["sd"] for g, m in ms.items()}, "mean": {g: m["mean"] for g, m in ms.items()}}
+            "sd": {g: m["sd"] for g, m in ms.items()}, "mean": {g: m["mean"] for g, m in ms.items()},
+            "rel": {g: m["rel"] for g, m in ms.items()}}
