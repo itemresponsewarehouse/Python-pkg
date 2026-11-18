@@ -750,7 +750,9 @@ def filter_tables(
     if df.empty:
         return pd.Series([], dtype=str, name='name')
     
-    result = df['name'].sort_values().reset_index(drop=True)
+    # drop_duplicates: cov_metadata has one row per matrix (table x sample), so a
+    # multi-sample table would otherwise be listed once per sample.
+    result = df['name'].drop_duplicates().sort_values().reset_index(drop=True)
     return result
 
 

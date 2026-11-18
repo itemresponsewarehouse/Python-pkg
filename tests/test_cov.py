@@ -166,11 +166,12 @@ def test_a_published_matrix_is_returned_as_published():
             irw.fetch("holzinger_1939_grantwhite9", source="cov", cov_args={"method": "spearman"})
 
 
-def test_cov_metadata_reads_cov_metadata_and_biblio_still_refuses():
+def test_cov_metadata_and_biblio_read_their_irw_meta_tables():
     from irw.utils.redivis.table_metadata import _meta_table
     assert _meta_table("cov", "metadata") == "cov_metadata"
-    with pytest.raises(ValueError, match="biblio is not available for source 'cov'"):
-        _meta_table("cov", "biblio")
+    assert _meta_table("cov", "biblio") == "cov_biblio"
+    with pytest.raises(ValueError, match="not available for source 'cov'"):
+        _meta_table("cov", "tags")
 
 
 def test_cov2list_returns_every_sample_padded_to_the_union_of_variables():

@@ -213,7 +213,10 @@ def filter(*, source: str = "core", **kwargs) -> pd.Series:
     Parameters
     ----------
     source : str, default "core"
-        The data family to filter. Options: "core", "nom", "sim", "comp", "conj".
+        The data family to filter. Options: "core", "nom", "sim", "comp",
+        "conj", "rank", "cov". For "cov" the usable filter is `license`; a
+        matrix's size, N, kind of correlation and is_pd are in
+        metadata(source="cov").
         Tag filters need "core" or "nom"; `collection` needs "core"; "comp"
         takes only `n_responses`, `n_actors` and `license`; "conj" takes only
         `n_respondents`, `n_attributes`, `outcome`, `country`, `domain`,
