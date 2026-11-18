@@ -20,6 +20,8 @@ from ..operations.filter import (
     TAG_FILTERS,
     _check_filters_for_source,
     _split_tags,
+    COV_FILTERS,
+    COV_ONLY_FILTERS,
 )
 from ..config import COLLECTION_SOURCES, SOURCES, TAG_SOURCES
 
@@ -58,6 +60,11 @@ FILTER_DESCRIPTIONS = {
     'domain': 'What a conjoint study is about: its setting, not the attribute it manipulates (a candidate conjoint that varies gender is "candidate_choice", not a gender tag). Conjoint source only (source="conj"). Closed vocabulary of 19 values, e.g. "immigration_asylum", "candidate_choice", "health_covid", "consumer_products", "other"; describe_filter lists them with counts. A table carries one or more domains (primary first) and matches when any value named is among them. A single string or a list (OR logic). Every conjoint table is tagged.',
     'choice_object': 'What one profile in a conjoint table represents: "person" (candidate, applicant, patient, neighbour), "policy", "scenario" (a situation or case), "product_service", "place", "organisation" or "message" (a text or media artefact judged as such). Conjoint source only (source="conj"). One value per table; a single string or a list (OR logic).',
     'levels_labelled': 'Whether a conjoint table\'s attribute levels are the text respondents saw: "full" (every attribute is text), "partial" (some attributes hold only the deposit\'s codes, in columns named attr_<name>_code, because no source gives their text) or "none" (every attribute coded). Codes say which profiles share a level -- enough for position, order and heterogeneity analyses and effects within a table -- but not what a level was, so they do not compare across tables. Conjoint source only (source="conj"). A single string or a list (OR logic); omit it to keep every table.',
+    'n_vars': 'Most variables in any one sample\'s matrix. Covariance source only (source="cov"). A single number or a list [min, max] (None for no upper limit).',
+    'n_obs': 'Observations summed over a covariance table\'s samples. Covariance source only (source="cov"). A single number or a list [min, max].',
+    'n_samples': 'Number of matrices in a covariance table; [2, None] keeps the multi-sample tables, such as the meta-analytic SEM corpora. Covariance source only (source="cov").',
+    'matrix_type': 'Kind of correlation as recorded (pearson, spearman, polychoric, ..., unknown); a table matches when ANY of its matrices is of a type named. A value no table carries is an error listing those in use. Covariance source only (source="cov").',
+    'is_pd': 'True keeps covariance tables whose every matrix is positive definite (judged on the complete part where cells are blank); False keeps tables with at least one that is not. Covariance source only (source="cov").',
 }
 
 
@@ -97,8 +104,11 @@ def get_filters(source: str = "core") -> List[str]:
         return [name for name in FILTER_DESCRIPTIONS if name in COMP_FILTERS]
     if source == "conj":
         return [name for name in FILTER_DESCRIPTIONS if name in CONJ_FILTERS]
+    if source == "cov":
+        return [name for name in FILTER_DESCRIPTIONS if name in COV_FILTERS]
     names = [name for name in FILTER_DESCRIPTIONS
-             if name not in COMP_ONLY_FILTERS and name not in CONJ_ONLY_FILTERS]
+             if name not in COMP_ONLY_FILTERS and name not in CONJ_ONLY_FILTERS
+             and name not in COV_ONLY_FILTERS]
     if source not in TAG_SOURCES:
         names = [name for name in names if name not in TAG_FILTERS]
     if source not in COLLECTION_SOURCES:

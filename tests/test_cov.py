@@ -281,3 +281,31 @@ def test_reliability_rows_come_back_as_rel():
     m = cov2matrix(pub)
     assert m["rel"].to_dict() == {"a": 0.81, "b": 0.77} and m["sd"].to_dict() == {"a": 2.0}
     assert cov2list(pub.assign(group="s1"))["rel"]["s1"].to_dict() == {"a": 0.81, "b": 0.77}
+
+
+def test_filter_cov_answers_per_table():
+    # Twin of the Rpkg test: per-table filters over cov_metadata (row per matrix).
+    from irw.operations.filter import filter_tables
+    meta = pd.DataFrame({"table": ["a1", "corp", "corp", "corp", "b2"],
+                         "n_vars": [9, 4, 5, 3, 20], "n_obs": [145, 100, 200, 300, 50],
+                         "matrix_type": ["pearson", "unknown", "unknown", "polychoric", "polychoric"],
+                         "is_pd": [True, True, False, True, True]})
+    bib = pd.DataFrame({"table": ["a1", "corp", "b2"], "Derived_License": ["GPL-3", "CC BY 4.0", "GPL-3"]})
+    with patch("irw.utils.redivis.table_metadata.get_metadata_table", return_value=meta), \
+            patch("irw.utils.redivis.table_metadata.get_biblio_table", return_value=bib):
+        def f(**kw):
+            return list(filter_tables([], source="cov", **kw))
+
+        assert f(n_samples=[2, None]) == ["corp"]
+        assert f(n_vars=[5, 10]) == ["a1", "corp"]
+        assert f(n_obs=600) == ["corp"]
+        assert f(matrix_type="polychoric") == ["b2", "corp"]
+        assert f(is_pd=True) == ["a1", "b2"] and f(is_pd=False) == ["corp"]
+        assert f(license="GPL-3", is_pd=True) == ["a1", "b2"]
+        with pytest.raises(ValueError, match="Unknown matrix_type"):
+            f(matrix_type="spearman")
+        with pytest.raises(ValueError, match="not available"):
+            f(n_items=5)
+    with pytest.raises(ValueError, match="only available"):
+        filter_tables([], source="core", n_vars=5)
+    assert set(irw.get_filters("cov")) == {"n_vars", "n_obs", "n_samples", "matrix_type", "is_pd", "license"}
