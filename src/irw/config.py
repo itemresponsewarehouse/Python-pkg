@@ -148,7 +148,8 @@ SOURCE_META_TABLES: ClassVar[dict[str, dict[str, str]]] = {
     "comp": {"metadata": "comps_metadata", "biblio": "comps_biblio"},
     "conj": {"metadata": "conj_metadata", "biblio": "conj_biblio"},
     "rank": {"metadata": "rank_metadata", "biblio": "rank_biblio"},
-    "cov": {"metadata": "cov_metadata"},
+    # cov_biblio first published 2026-11-18.
+    "cov": {"metadata": "cov_metadata", "biblio": "cov_biblio"},
 }
 
 # Rpkg's .irw_tag_sources and .irw_collection_sources. Code tests membership
