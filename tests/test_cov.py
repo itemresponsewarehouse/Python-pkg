@@ -269,3 +269,15 @@ def test_a_published_table_is_put_in_the_order_its_record_gives():
     o2 = order_rows(two, m2, "t1")
     assert list(pd.unique(o2["group"])) == ["g1", "g2"]
     assert list(cov2matrix(o2, group="g2")["matrix"].index) == ["c", "b", "a"]
+
+
+def test_reliability_rows_come_back_as_rel():
+    # ben-domingue/irw#3607: per-variable reliability is a stat = "rel" row.
+    from irw.utils.cov import cov2list
+    pub = pd.DataFrame({"stat": ["cor", "cor", "cor", "sd", "rel", "rel"],
+                        "var1": ["a", "b", "b", "a", "a", "b"],
+                        "var2": ["a", "a", "b", None, None, None],
+                        "value": [1, 0.4, 1, 2, 0.81, 0.77], "n": 90})
+    m = cov2matrix(pub)
+    assert m["rel"].to_dict() == {"a": 0.81, "b": 0.77} and m["sd"].to_dict() == {"a": 2.0}
+    assert cov2list(pub.assign(group="s1"))["rel"]["s1"].to_dict() == {"a": 0.81, "b": 0.77}
