@@ -204,6 +204,7 @@ CODEBOOK_LINKS_CSV = (
     "doc_names_columns,1,https://journals.plos.org/plosone/article?id=x,\"names 3/9: treat, male, math\",2026-10-02\n"
     "alpha_depression,https://journals.plos.org/plosone/article/file?type=supplementary&id=x.s003,S1_Questionnaire.pdf,plos,"
     "questionnaire,1,https://journals.plos.org/plosone/article?id=x,caption: Questionnaire. (PDF),2026-10-02\n"
+    "alpha_depression,https://example.org/f/3,S1_Data.sav,zenodo,labelled_data,1,https://example.org/d,,2026-10-02\n"
     + "".join(f"alpha_depression,https://example.org/ddi/{i},d{i}.tab,dataverse,dataverse_ddi,,https://example.org/d,,2026-10-02\n"
               for i in range(7))
 )
@@ -237,6 +238,7 @@ def test_source_codebooks_are_listed_with_how_each_was_found():
     assert books[5]["how_found"] == "readme_names_columns"
     assert books[5]["evidence"].startswith("names 4/9")
     assert [b["how_found"] for b in books[6:8]] == ["doc_names_columns", "questionnaire"]
+    assert [b["file_name"] for b in books if b["how_found"] == "labelled_data"] == ["S1_Data.sav"]
     assert [b["how_found"] for b in books].count("dataverse_ddi") == 5   # capped per kind
     assert any("dataverse_ddi files; the first 5" in w for w in result["warnings"])
     assert any("open a file before relying on it" in w for w in result["warnings"])

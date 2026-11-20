@@ -1052,7 +1052,9 @@ DATA_STANDARD_PATH = "datastandard.md"
 COLUMN_DOCS_PATH = "metadata/column_docs.csv"
 # The source's own codebook files, found by NAME in each deposit's file list
 # (ben-domingue/irw#2766, metadata/find_codebook_links.py). how_found says how:
-# a codebook-named file, a README, or a Dataverse DDI variable export.
+# a codebook-named file, a README, a Dataverse DDI variable export, or an
+# SPSS/Stata file whose embedded labels document the variables (labelled_data,
+# ben-domingue/irw#3675).
 CODEBOOK_LINKS_PATH = "metadata/codebook_links.csv"
 # Per kind, per table: a Dataverse deposit can carry one DDI export per data
 # file, and one deposit held 19 per-scale codebooks.
@@ -2554,7 +2556,7 @@ class IRWTools:
             kind = (row.get("how_found") or "").strip()
             if kind not in ("recorded_at_ingest", "recorded_by_review", "typed_codebook", "package_doc", "name_codebook",
                             "readme_names_columns", "doc_names_columns", "name_readme",
-                            "questionnaire", "dataverse_ddi"):
+                            "questionnaire", "dataverse_ddi", "labelled_data"):
                 continue
             shown[kind] = shown.get(kind, 0) + 1
             if shown[kind] > SOURCE_CODEBOOKS_MAX_PER_KIND:
@@ -2588,8 +2590,10 @@ class IRWTools:
                 "columns (readme_names_columns; evidence lists them), a journal "
                 "supplementary document whose text names them (doc_names_columns), a "
                 "README that does not (name_readme), the article's questionnaire "
-                "(questionnaire: it shows the items, not how they were coded), or "
-                "Dataverse's DDI variable export. Only the READMEs and journal "
+                "(questionnaire: it shows the items, not how they were coded), "
+                "Dataverse's DDI variable export, or an SPSS/Stata data file "
+                "(labelled_data: .sav/.dta carry the source's own variable and value "
+                "labels; read them with pyreadstat or haven). Only the READMEs and journal "
                 "documents were read, and only to match names: open a file before "
                 "relying on it."
             )
