@@ -131,7 +131,7 @@ class SourceCodebook(BaseModel):
     url: str
     how_found: Literal["recorded_at_ingest", "recorded_by_review", "typed_codebook", "package_doc", "name_codebook",
                        "readme_names_columns", "doc_names_columns", "name_readme",
-                       "questionnaire", "dataverse_ddi"]
+                       "questionnaire", "dataverse_ddi", "labelled_data"]
     host: Optional[str] = None
     n_same_kind_in_deposit: Optional[int] = None
     deposit_url: Optional[str] = None
