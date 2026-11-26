@@ -64,6 +64,7 @@ FILTER_DESCRIPTIONS = {
     'n_obs': 'Observations summed over a covariance table\'s samples. Covariance source only (source="cov"). A single number or a list [min, max].',
     'n_samples': 'Number of matrices in a covariance table; [2, None] keeps the multi-sample tables, such as the meta-analytic SEM corpora. Covariance source only (source="cov").',
     'matrix_type': 'Kind of correlation as recorded (pearson, spearman, polychoric, ..., unknown); a table matches when ANY of its matrices is of a type named. A value no table carries is an error listing those in use. Covariance source only (source="cov").',
+    'framework': 'The theory a covariance matrix was assembled to test, e.g. "TPB", "TAM", "HAPA" (closed list in the irw repo\'s data/covariance/README.md, "Subject tags"); most tables have none. Covariance source only (source="cov"). A single string or a list (OR logic). For covariance tables, construct_type and sample also work, with core\'s values.',
     'is_pd': 'True keeps covariance tables whose every matrix is positive definite (judged on the complete part where cells are blank); False keeps tables with at least one that is not. Covariance source only (source="cov").',
 }
 

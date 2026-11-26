@@ -308,7 +308,40 @@ def test_filter_cov_answers_per_table():
             f(n_items=5)
     with pytest.raises(ValueError, match="only available"):
         filter_tables([], source="core", n_vars=5)
-    assert set(irw.get_filters("cov")) == {"n_vars", "n_obs", "n_samples", "matrix_type", "is_pd", "license"}
+    assert set(irw.get_filters("cov")) == {"n_vars", "n_obs", "n_samples", "matrix_type", "is_pd",
+                                           "construct_type", "sample", "framework", "license"}
+
+
+def test_filter_cov_subject_tags():
+    # Twin of the Rpkg test (irw#3645): construct_type, sample, framework.
+    from irw.operations.filter import filter_tables
+    meta = pd.DataFrame({"table": ["a1", "corp", "corp", "b2", "new"],
+                         "n_vars": [9, 4, 5, 20, 3], "n_obs": [145, 100, 200, 50, 80],
+                         "matrix_type": "pearson", "is_pd": True,
+                         "construct_type": ["Personality", "Attitudes/beliefs, Behavioral",
+                                            "Attitudes/beliefs, Behavioral", "Affective/mental health", None],
+                         "sample": ["Educational", None, None, "Clinical, Internet-based", None],
+                         "framework": [None, "TPB", "TPB", None, None]})
+    with patch("irw.utils.redivis.table_metadata.get_metadata_table", return_value=meta):
+        def f(**kw):
+            return list(filter_tables([], source="cov", **kw))
+
+        assert f(construct_type="Behavioral") == ["corp"]
+        assert f(construct_type=["Personality", "Behavioral"]) == ["a1", "corp"]
+        assert f(sample="Clinical") == ["b2"]
+        assert f(framework="TPB") == ["corp"]
+        assert f(framework="TPB", n_vars=5) == ["corp"]
+        with pytest.raises(ValueError, match="Unknown framework"):
+            f(framework="TAM")
+        with pytest.raises(ValueError, match="Unknown sample"):
+            f(sample="nan")
+        with pytest.raises(ValueError, match="not available"):
+            f(item_format="Likert")
+    with pytest.raises(ValueError, match="only available"):
+        filter_tables([], source="core", framework="TPB")
+    with patch("irw.utils.redivis.table_metadata.get_metadata_table", return_value=meta.iloc[:, :5]):
+        with pytest.raises(Exception, match="no 'framework' column"):
+            filter_tables([], source="cov", framework="TPB")
 
 
 def test_overlap_note_once_per_session():

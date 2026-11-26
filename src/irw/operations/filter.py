@@ -57,9 +57,14 @@ CONJ_LEVELS_LABELLED = ('full', 'partial', 'none')
 # cov_metadata (one row per matrix, table x sample): n_vars (most in one
 # sample), n_obs (summed over samples), n_samples, matrix_type (ANY matrix of
 # a type named; a value no table carries is an error naming those in use),
-# is_pd (True: every matrix positive definite), license.
-COV_FILTERS = ('n_vars', 'n_obs', 'n_samples', 'matrix_type', 'is_pd', 'license')
-COV_ONLY_FILTERS = ('n_vars', 'n_obs', 'n_samples', 'matrix_type', 'is_pd')
+# is_pd (True: every matrix positive definite), the subject tags
+# construct_type and sample (core's values, comma-joined) and framework (a
+# closed cov-only list; ben-domingue/irw#3645), each matching when ANY value
+# named is among a table's tags, and license.
+COV_FILTERS = ('n_vars', 'n_obs', 'n_samples', 'matrix_type', 'is_pd',
+               'construct_type', 'sample', 'framework', 'license')
+COV_ONLY_FILTERS = ('n_vars', 'n_obs', 'n_samples', 'matrix_type', 'is_pd', 'framework')
+COV_TAG_FILTERS = ('construct_type', 'sample', 'framework')
 CONJ_TAG_FILTERS = ('domain', 'choice_object')
 CONJ_OUTCOMES = ('choice', 'rating')
 
@@ -397,6 +402,7 @@ def filter_tables(
     n_samples: Optional[Union[float, int, List[Optional[Union[float, int]]]]] = None,
     matrix_type: Optional[Union[str, List[str]]] = None,
     is_pd: Optional[bool] = None,
+    framework: Optional[Union[str, List[str]]] = None,
     source: str = "core",
 ) -> pd.Series:
     """
@@ -656,7 +662,9 @@ def filter_tables(
     _check_filters_for_source(source, supplied)
     if source == 'cov':
         return _filter_cov(n_vars=n_vars, n_obs=n_obs, n_samples=n_samples,
-                           matrix_type=matrix_type, is_pd=is_pd, license=license)
+                           matrix_type=matrix_type, is_pd=is_pd,
+                           construct_type=construct_type, sample=sample,
+                           framework=framework, license=license)
     if source == 'conj':
         return _filter_conj(n_respondents=n_respondents, n_attributes=n_attributes,
                             outcome=outcome, country=country,
@@ -811,7 +819,8 @@ def _filter_conj_tag(meta: pd.DataFrame, full: pd.DataFrame, column: str, value)
 
 
 def _filter_cov(n_vars=None, n_obs=None, n_samples=None, matrix_type=None,
-                is_pd=None, license=None) -> pd.Series:
+                is_pd=None, construct_type=None, sample=None, framework=None,
+                license=None) -> pd.Series:
     """filter(source="cov"): per-table filters over cov_metadata and cov_biblio."""
     from ..utils.redivis.table_metadata import get_biblio_table, get_metadata_table
 
@@ -839,6 +848,25 @@ def _filter_cov(n_vars=None, n_obs=None, n_samples=None, matrix_type=None,
         per = per[per["types"].map(lambda ts: bool(ts & set(want)))]
     if is_pd is not None:
         per = per[per["all_pd"] == bool(is_pd)]
+    for column, value in (("construct_type", construct_type), ("sample", sample),
+                          ("framework", framework)):
+        if value is None:
+            continue
+        if column not in meta.columns:
+            raise IRWMetadataUnavailable(
+                f"The covariance metadata in this irw_meta release has no '{column}' column; "
+                "subject tags were first published after 2026-11-19. "
+                "Use a newer release (irw.use_version).")
+        tags_of = {t: set().union(*[set(_split_tags(c)) for c in cells])
+                   for t, cells in meta.groupby("table")[column].apply(lambda x: list(x.dropna())).items()}
+        known = sorted(set().union(*tags_of.values())) if tags_of else []
+        wanted = _as_list(value)
+        unknown = [v for v in wanted if v not in known]
+        if unknown:
+            raise ValueError(f"Unknown {column} value(s): {', '.join(repr(u) for u in unknown)}. "
+                             f"In use: {', '.join(known)}.")
+        hit = {t for t, h in tags_of.items() if h & set(wanted)}
+        per = per[per["table"].isin(hit)]
     for column, value in (("n_vars", n_vars), ("n_obs", n_obs), ("n_samples", n_samples)):
         per = _apply_numeric_filter(per, column, value)
     if license is not None:
